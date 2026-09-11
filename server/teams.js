@@ -1,15 +1,24 @@
 // Diretório de clubes e seleções com os emblemas que a ESPN disponibiliza nas suas listas de equipas.
 // Os emblemas não são copiados para o projeto: o site mostra-os a partir do servidor de imagens da ESPN.
 // Serve para pôr ao lado de cada notícia os emblemas dos clubes ou seleções de que ela trata.
+import fs from "node:fs";
 import { norm, sleep } from "./util.js";
 
 const SITE = process.env.ESPN_BASE || "https://site.api.espn.com/apis/site/v2/sports";
-// ligas consultadas só para completar o diretório (além das que o VAR acompanha nos resultados)
-const EXTRA = [
-  "soccer/fifa.world", "soccer/uefa.euro", "soccer/conmebol.america",
+const CORE = process.env.ESPN_CORE_BASE || "https://sports.core.api.espn.com/v2/sports";
+const FILE = new URL("../data/emblemas.json", import.meta.url);
+const PACE = Number(process.env.EMBLEMAS_PAUSA_MS) || 1200; // ritmo do varrimento de fundo
+const MAX_AGE = (Number(process.env.EMBLEMAS_DIAS) || 30) * 86400e3;
+// ligas carregadas logo no arranque (as do VAR entram à frente destas)
+const PRIORITY = [
+  "soccer/por.1", "soccer/por.2", "soccer/por.taca.portugal", "soccer/por.taca_liga",
+  "soccer/eng.1", "soccer/esp.1", "soccer/ita.1", "soccer/ger.1", "soccer/fra.1",
+  "soccer/uefa.champions", "soccer/uefa.europa", "soccer/uefa.europa.conf",
+  "soccer/fifa.world", "soccer/uefa.euro", "soccer/conmebol.america", "soccer/fifa.friendly",
+  "soccer/ned.1", "soccer/tur.1", "soccer/ksa.1", "soccer/bra.1", "soccer/usa.1",
   "soccer/eng.2", "soccer/esp.2", "soccer/ita.2", "soccer/ger.2", "soccer/fra.2",
   "soccer/bel.1", "soccer/sco.1", "soccer/gre.1", "soccer/sui.1", "soccer/aut.1", "soccer/den.1",
-  "soccer/arg.1", "soccer/mex.1", "soccer/uefa.super_cup", "basketball/nba",
+  "soccer/arg.1", "soccer/mex.1", "basketball/nba", "basketball/wnba",
 ];
 // palavras que não ajudam a distinguir clubes («FC Porto» e «Porto» são o mesmo)
 const STOP = new Set(["fc", "cf", "sc", "afc", "ac", "as", "ss", "sl", "cd", "ud", "rc", "rcd", "sad", "club", "clube", "de", "da", "do", "del", "futebol", "football", "calcio", "the"]);
@@ -28,10 +37,34 @@ const ALIASES = {
 export function createTeams({ log }) {
   const byKey = new Map(); // chave normalizada → equipa
   let keys = [];
+  const done = new Set(); // ligas já lidas
+  let dirty = false;
 
-  const put = (k, t) => { if (k && !byKey.has(k)) byKey.set(k, t); };
+  const put = (k, t) => { if (k && !byKey.has(k)) { byKey.set(k, t); dirty = true; } };
+
+  // o diretório é guardado em disco: no arranque seguinte fica pronto de imediato
+  function loadCache() {
+    try {
+      const c = JSON.parse(fs.readFileSync(FILE, "utf8"));
+      if (!c.at || Date.now() - c.at > MAX_AGE) return false;
+      for (const [k, t] of Object.entries(c.teams || {})) byKey.set(k, t);
+      (c.done || []).forEach((x) => done.add(x));
+      keys = [...byKey.keys()];
+      dirty = false;
+      return byKey.size > 0;
+    } catch { return false; }
+  }
+  function saveCache() {
+    if (!dirty) return;
+    try {
+      fs.mkdirSync(new URL("../data", import.meta.url), { recursive: true });
+      fs.writeFileSync(FILE, JSON.stringify({ at: Date.now(), teams: Object.fromEntries(byKey), done: [...done] }));
+      dirty = false;
+    } catch { /* disco cheio ou sem permissão: o diretório fica só em memória */ }
+  }
 
   async function loadLeague(slugPath) {
+    done.add(slugPath);
     const res = await fetch(`${SITE}/${slugPath}/teams`, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error(`ESPN respondeu ${res.status}`);
     const body = await res.json();
@@ -46,16 +79,50 @@ export function createTeams({ log }) {
     return list.length;
   }
 
+  // todos os slugs de ligas que a ESPN conhece (uma só chamada; o slug vem no próprio endereço)
+  async function allLeagueSlugs(sport) {
+    const res = await fetch(`${CORE}/${sport}/leagues?limit=1000`, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`ESPN respondeu ${res.status}`);
+    const body = await res.json();
+    return (body.items || []).map((x) => x.$ref?.match(/\/leagues\/([^?/]+)/)?.[1]).filter(Boolean).map((s) => `${sport}/${s}`);
+  }
+
+  // varrimento lento de todas as ligas, em segundo plano, uma vez por mês
+  async function sweep() {
+    let slugs = [];
+    for (const sport of ["soccer", "basketball"]) {
+      try { slugs.push(...await allLeagueSlugs(sport)); } catch (e) { log(`[Emblemas] lista de ligas de ${sport}: ${e.message}`); }
+      await sleep(PACE);
+    }
+    const pending = slugs.filter((p) => !done.has(p));
+    if (!pending.length) return;
+    log(`[Emblemas] a completar o diretório com ${pending.length} liga(s), em segundo plano`);
+    let fails = 0;
+    for (const p of pending) {
+      try { await loadLeague(p); fails = 0; } catch (e) {
+        if (/40[13]|429/.test(e.message) && ++fails >= 5) { log("[Emblemas] a ESPN está a recusar pedidos; paro o varrimento"); break; }
+      }
+      keys = [...byKey.keys()];
+      if (byKey.size % 200 < 5) saveCache();
+      await sleep(PACE);
+    }
+    saveCache();
+    log(`[Emblemas] diretório completo: ${byKey.size} nomes de clubes e seleções`);
+  }
+
   // ordem de prioridade: em nomes iguais, fica a equipa da liga que aparece primeiro
   async function load(leagues) {
-    const order = [...new Set([...leagues.map((l) => l.espn), ...EXTRA])];
-    let total = 0;
+    const cached = loadCache();
+    const order = [...new Set([...leagues.map((l) => l.espn), ...PRIORITY])].filter((p) => !cached || !done.has(p));
     for (const p of order) {
-      try { total += await loadLeague(p); } catch { /* competições sem lista de equipas */ }
-      await sleep(300);
+      try { await loadLeague(p); } catch { /* competições sem lista de equipas */ }
+      await sleep(cached ? PACE : 300);
     }
     keys = [...byKey.keys()];
-    log(`[Emblemas] ${byKey.size} nomes de clubes e seleções com emblema (${total} equipas lidas)`);
+    saveCache();
+    log(`[Emblemas] ${byKey.size} nomes de clubes e seleções com emblema${cached ? " (do ficheiro guardado)" : ""}`);
+    setTimeout(() => sweep().catch((e) => log(`[Emblemas] ${e.message}`)), 30000);
+    setInterval(saveCache, 60000).unref();
   }
 
   function find(name) {

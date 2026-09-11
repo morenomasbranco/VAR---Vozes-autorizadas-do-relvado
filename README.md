@@ -4,7 +4,7 @@ Feed de notícias de desporto em tempo real, feito só com serviços gratuitos.
 
 ## De onde vêm as notícias
 
-- **Sites com RSS** (Record, A Bola, O Jogo, Maisfutebol, zerozero, Bola na Rede, Foot Mercato, B/R Football, Flashscore, Canal 11, SAPO Desporto). O servidor verifica cada feed a cada 15 segundos.
+- **Sites com RSS** (zerozero e zerozero Transferências, RTP Desporto, SAPO, Notícias ao Minuto, Observador, Record, A Bola, O Jogo, Maisfutebol, Bola na Rede, Canal 11, Flashscore, Renascença, Foot Mercato, B/R Football, BBC Sport, The Guardian, Sky Sports, ESPN, Marca, AS, Gazzetta, L'Équipe, kicker e três comunidades do Reddit). O servidor verifica ao segundo os feeds das fontes marcadas com `"rapido": true` no `fontes.json`, e a cada 15 segundos os restantes. Se um site pedir calma (resposta 429), abranda sozinho e volta ao ritmo normal quando o site deixar de se queixar.
 - **Canais do Telegram** (Fabrizio Romano, B24). As mensagens chegam em um ou dois segundos. Quando o canal republica um post do X, o botão do site abre esse post no X.
 - **Contas do Bluesky** (David Ornstein), pelo stream público do Bluesky, também em segundos.
 - **Resultados em direto** (GOAL API): início, golos, intervalo e final dos jogos das ligas do `ligas.json`, publicados como notícias. No site, a secção Resultados tem um botão para cada visitante escolher as ligas que quer ver.

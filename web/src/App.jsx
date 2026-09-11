@@ -148,7 +148,7 @@ const TIPO_TOM = { surpresa: "negativa", reviravolta: "positiva", tardio: "posit
 const toneOf = (s) => s.tom || TIPO_TOM[s.tipo] || "neutra";
 
 // emblema de um clube ou seleção (a imagem vem da ESPN; se não carregar, fica o nome)
-function Crest({ e, theme, size = 22 }) {
+function Crest({ e, theme, size = 34 }) {
   const [bad, setBad] = useState(false);
   const src = theme === "dark" && e.logoDark ? e.logoDark : e.logo;
   if (!src || bad) return <span className="crest-txt">{e.nome}</span>;
@@ -376,12 +376,13 @@ const CSS = `
 @media(min-width:1000px){.apito .mobpanel{display:none}}
 .apito .flag{width:18px;height:13px;border-radius:2px;box-shadow:0 0 0 1px var(--line);vertical-align:-1px;flex:none}
 .apito .textbtn.on{color:var(--accent)}
-.apito .crests{display:flex;align-items:center;gap:8px;margin:2px 0 4px;color:var(--muted)}
+.apito .crests{display:flex;align-items:center;gap:10px;margin:4px 0 8px;color:var(--muted)}
+.apito .crests.transfer{gap:12px}
 .apito .crest{object-fit:contain;flex:none;vertical-align:middle}
-.apito .crest-txt{font-size:12px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+.apito .crest-txt{font-size:13px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
 .apito .match .team{display:inline-flex;align-items:center;gap:8px;min-width:0}
 .apito .match .team.h{justify-content:flex-end}
-.apito .evcrests{display:inline-flex;gap:3px;margin-right:6px;vertical-align:-3px}
+.apito .evcrests{display:inline-flex;gap:5px;margin-right:7px;vertical-align:-7px}
 .apito .about{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-right:2px}
 .apito .stories{max-width:820px}
 .apito .feedhead h1.hist{color:var(--hist)}
@@ -667,7 +668,7 @@ export default function App() {
                 <span className="muted">{leagueName(it.liga) || it.score?.comp}</span>
                 <span className="muted evt">{agoText(it.ts, now, ui)}</span>
               </div>
-              <p className="evtitle">{it.equipas?.some((e) => e.logo) && <span className="evcrests">{it.equipas.map((e) => e.logo && <Crest key={e.nome} e={e} theme={theme} size={16} />)}</span>}<Rich text={it.t[lang]} /></p>
+              <p className="evtitle">{it.equipas?.some((e) => e.logo) && <span className="evcrests">{it.equipas.map((e) => e.logo && <Crest key={e.nome} e={e} theme={theme} size={24} />)}</span>}<Rich text={it.t[lang]} /></p>
               {it.b[lang].filter((b) => !leagueLabels(it).includes(b)).map((b, i) => <p key={i} className="evb"><Rich text={b} /></p>)}
             </li>
           ))}
@@ -810,9 +811,9 @@ export default function App() {
                     return (
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
                         <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
-                        <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}</span>
+                        <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={30} />}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
-                        <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}{sc.a}</span>
+                        <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={30} />}{sc.a}</span>
                         <span className="st">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{sc.min || ui.live}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
                         <span className="upd">{ui.updated(agoText(it.upd || it.ts, now, ui), srcName(s))}</span>
                       </li>
@@ -860,11 +861,11 @@ export default function App() {
 
                         {it.score && (
                           <div className="score">
-                            {it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}
+                            {it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={28} />}
                             <span>{it.score.h}</span>
                             <span className="n">{it.score.hs}–{it.score.as}</span>
                             <span>{it.score.a}</span>
-                            {it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}
+                            {it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={28} />}
                             {it.score.ft
                               ? <span className="m muted">{ui.ft}</span>
                               : <span className="m live">{it.score.min || ""}</span>}

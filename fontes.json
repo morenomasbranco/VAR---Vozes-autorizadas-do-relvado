@@ -31,9 +31,12 @@
     {
       "id": "zerozero",
       "nome": "zerozero",
-      "site": "https://www.zerozero.pt",
+      "site": "https://www.zerozero.pt/",
       "lang": "pt",
-      "pais": "pt"
+      "pais": "pt",
+      "feed": "https://www.zerozero.pt/rss/noticias.php",
+      "google": "site:zerozero.pt",
+      "rapido": true
     },
     {
       "id": "bolanarede",
@@ -47,14 +50,16 @@
       "nome": "Foot Mercato",
       "site": "https://www.footmercato.net",
       "lang": "fr",
-      "pais": "fr"
+      "pais": "fr",
+      "rapido": true
     },
     {
       "id": "brfootball",
       "nome": "B/R Football",
       "site": "https://bleacherreport.com",
       "lang": "en",
-      "pais": "us"
+      "pais": "us",
+      "rapido": true
     },
     {
       "id": "flashscore",
@@ -71,13 +76,15 @@
       "pais": "pt"
     },
     {
-      "id": "sapodesporto",
-      "nome": "SAPO Desporto",
-      "site": "https://sapo.pt/desporto",
-      "feed": "http://services.sapo.pt/RSS/Feed/sapo/desporto/teasers",
-      "google": "site:desporto.sapo.pt",
+      "id": "sapo",
+      "nome": "SAPO",
+      "site": "https://sapo.pt/",
+      "feed": "https://sapo.pt/rss/destaques",
       "lang": "pt",
-      "pais": "pt"
+      "pais": "pt",
+      "soDesporto": true,
+      "rapido": true,
+      "google": "site:sapo.pt desporto"
     },
     {
       "id": "observador",
@@ -86,15 +93,17 @@
       "feed": "https://observador.pt/seccao/desporto/feed/",
       "pais": "pt",
       "google": "site:observador.pt desporto",
-      "lang": "pt"
+      "lang": "pt",
+      "rapido": true
     },
     {
       "id": "rtpdesporto",
       "nome": "RTP Desporto",
       "site": "https://www.rtp.pt/noticias/desporto",
       "pais": "pt",
-      "google": "site:rtp.pt desporto",
-      "lang": "pt"
+      "lang": "pt",
+      "feed": "https://www.rtp.pt/noticias/rss/desporto",
+      "rapido": true
     },
     {
       "id": "renascenca",
@@ -110,7 +119,8 @@
       "site": "https://www.bbc.com/sport/football",
       "feed": "https://feeds.bbci.co.uk/sport/football/rss.xml",
       "pais": "gb",
-      "lang": "en"
+      "lang": "en",
+      "rapido": true
     },
     {
       "id": "guardian",
@@ -118,7 +128,8 @@
       "site": "https://www.theguardian.com/football",
       "feed": "https://www.theguardian.com/football/rss",
       "pais": "gb",
-      "lang": "en"
+      "lang": "en",
+      "rapido": true
     },
     {
       "id": "skysports",
@@ -126,7 +137,8 @@
       "site": "https://www.skysports.com/football",
       "feed": "https://www.skysports.com/rss/12040",
       "pais": "gb",
-      "lang": "en"
+      "lang": "en",
+      "rapido": true
     },
     {
       "id": "espnfc",
@@ -135,7 +147,8 @@
       "feed": "https://www.espn.com/espn/rss/soccer/news",
       "pais": "us",
       "google": "site:espn.com soccer",
-      "lang": "en"
+      "lang": "en",
+      "rapido": true
     },
     {
       "id": "marca",
@@ -206,6 +219,26 @@
       "intervalo": 60,
       "semGoogle": true,
       "lang": "en"
+    },
+    {
+      "id": "zerozero-transfers",
+      "nome": "zerozero Transferências",
+      "site": "https://www.zerozero.pt/transfers.php",
+      "feed": "https://www.zerozero.pt/rss/transfers.php",
+      "lang": "pt",
+      "pais": "pt",
+      "semGoogle": true,
+      "rapido": true
+    },
+    {
+      "id": "aominuto",
+      "nome": "Notícias ao Minuto",
+      "site": "https://www.noticiasaominuto.com/desporto",
+      "feed": "https://www.noticiasaominuto.com/rss/desporto",
+      "lang": "pt",
+      "pais": "pt",
+      "rapido": true,
+      "google": "site:noticiasaominuto.com desporto"
     }
   ],
   "telegram": [

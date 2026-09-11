@@ -5,7 +5,7 @@
 import { sleep, norm, slug } from "../util.js";
 
 const BASE = process.env.ESPN_BASE || "https://site.api.espn.com/apis/site/v2/sports";
-const LIVE_MS = Math.max(10, Number(process.env.ESPN_SEGUNDOS) || 15) * 1000;
+const LIVE_MS = Math.max(5, Number(process.env.ESPN_SEGUNDOS) || 10) * 1000; // ritmo dos jogos a decorrer
 const IDLE_MAX = 10 * 60e3;
 const NOTHING_TODAY = 30 * 60e3;
 const BIG3 = [["benfica", /\bbenfica\b/], ["porto", /\bporto\b/], ["sporting", /^sporting( cp| lisbon| clube de portugal)?$/]];
