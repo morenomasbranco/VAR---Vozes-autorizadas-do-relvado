@@ -1,0 +1,31 @@
+{
+  "name": "var",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c yellow,cyan \"node --watch server/index.js\" \"vite web\"",
+    "build": "vite build web",
+    "start": "node server/index.js",
+    "telegram-login": "node scripts/telegram-login.js",
+    "verificar-fontes": "node scripts/verificar-fontes.js",
+    "ligas": "node scripts/ligas.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "rss-parser": "^3.13.0",
+    "telegram": "^2.26.22",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "lucide-react": "^0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.0"
+  }
+}

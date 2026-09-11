@@ -1,0 +1,94 @@
+{
+  "rss": [
+    {
+      "id": "record",
+      "nome": "Record",
+      "site": "https://www.record.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "abola",
+      "nome": "A Bola",
+      "site": "https://www.abola.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "ojogo",
+      "nome": "O Jogo",
+      "site": "https://www.ojogo.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "maisfutebol",
+      "nome": "Maisfutebol",
+      "site": "https://maisfutebol.iol.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "zerozero",
+      "nome": "zerozero",
+      "site": "https://www.zerozero.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "bolanarede",
+      "nome": "Bola na Rede",
+      "site": "https://www.bolanarede.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "footmercato",
+      "nome": "Foot Mercato",
+      "site": "https://www.footmercato.net",
+      "lang": "fr"
+    },
+    {
+      "id": "brfootball",
+      "nome": "B/R Football",
+      "site": "https://bleacherreport.com",
+      "lang": "en"
+    },
+    {
+      "id": "flashscore",
+      "nome": "Flashscore",
+      "site": "https://www.flashscore.pt/noticias/",
+      "lang": "pt"
+    },
+    {
+      "id": "canal11",
+      "nome": "Canal 11",
+      "site": "https://canal11.pt",
+      "lang": "pt"
+    },
+    {
+      "id": "sapodesporto",
+      "nome": "SAPO Desporto",
+      "site": "https://sapo.pt/desporto",
+      "feed": "http://services.sapo.pt/RSS/Feed/sapo/desporto/teasers",
+      "lang": "pt"
+    }
+  ],
+  "telegram": [
+    {
+      "id": "fabrizioromano",
+      "nome": "Fabrizio Romano",
+      "canal": "FabrizioRomanoTG",
+      "lang": "en"
+    },
+    {
+      "id": "b24",
+      "nome": "B24",
+      "canal": "B24PT",
+      "lang": "pt"
+    }
+  ],
+  "bluesky": [
+    {
+      "id": "ornstein",
+      "nome": "David Ornstein",
+      "handle": "david-ornstein.bsky.social",
+      "lang": "en"
+    }
+  ],
+  "listaX": ""
+}

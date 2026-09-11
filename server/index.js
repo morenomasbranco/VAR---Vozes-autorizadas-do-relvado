@@ -1,0 +1,113 @@
+import "dotenv/config";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import express from "express";
+import * as store from "./store.js";
+import { createEnricher, fallback } from "./enrich.js";
+import { startRss } from "./sources/rss.js";
+import { startTelegram } from "./sources/telegram.js";
+import { startBluesky } from "./sources/bluesky.js";
+import { startResults } from "./sources/results.js";
+import { slug } from "./util.js";
+
+const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
+const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
+const LIGAS = readJson(new URL("../ligas.json", import.meta.url), []);
+const PORT = Number(process.env.PORT) || 3001;
+const log = (...a) => console.log(...a);
+
+const RSS = FONTES.rss || [];
+const TELEGRAM = FONTES.telegram || [];
+const BLUESKY = FONTES.bluesky || [];
+const SOURCES = [
+  ...[...RSS, ...TELEGRAM, ...BLUESKY].map((s) => ({ handle: s.id, name: s.nome })),
+  ...(process.env.GOAL_API_KEY ? [{ handle: "resultados", name: "Resultados em direto" }] : []),
+];
+
+store.load();
+const clients = new Set();
+const status = { x: "ligado", fila: 0, publicadas: 0, juntas: 0, ignoradas: 0, semTraducao: 0 };
+
+function broadcast(event, data) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of clients) res.write(msg);
+}
+const clamp = (n, a, b) => Math.min(b, Math.max(a, Math.round(Number(n) || a)));
+
+function publish(item) {
+  if (store.get(item.id)) return;
+  store.add({ also: [], ...item, postId: item.postId || item.id });
+  status.publicadas++;
+  broadcast("item", store.get(item.id));
+}
+
+// Publicar primeiro, tratar depois: cada post aparece no site no segundo em que chega, com o texto original.
+// Quando o Gemini responde (poucos segundos depois), o cartão é atualizado com título, secções e tradução;
+// se afinal não for notícia, ou já existir noutra fonte, o cartão sai e junta-se ao existente.
+const toItem = (post, ai) => ({
+  orig: ai.idioma,
+  raw: !!ai.bruto,
+  cats: [...new Set(ai.seccoes || [])],
+  t: { pt: ai.titulo_pt, en: ai.titulo_en },
+  b: { pt: ai.pontos_pt || [], en: ai.pontos_en || [] },
+  imp: clamp(ai.importancia, 1, 5),
+});
+
+function refine(post, ai) {
+  const it = store.get(post.postId);
+  if (!it) return;
+  const drop = () => { store.remove(it.id); broadcast("remove", { id: it.id }); };
+  if (!ai || !ai.relevante) { status.ignoradas++; return drop(); }
+  if (ai.bruto) status.semTraducao++;
+  if (ai.igual_a && ai.igual_a !== it.id) {
+    const merged = store.attach(ai.igual_a, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
+    if (merged) { status.juntas++; drop(); broadcast("update", merged); return; }
+  }
+  Object.assign(it, toItem(post, ai), { pending: false });
+  store.touch();
+  broadcast("update", it);
+}
+
+// só as notícias já tratadas servem de referência para detetar repetidos
+const enrich = createEnricher({ recent: () => store.recent().filter((i) => !i.pending), log });
+const seen = new Set(); // posts já recebidos (recolha inicial, religações)
+function onPost(post) {
+  if (seen.has(post.postId) || store.has(post.postId)) return;
+  if (seen.size > 20000) seen.clear();
+  seen.add(post.postId);
+  publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pending: true, ...toItem(post, fallback(post)) });
+  status.fila++;
+  enrich(post).then((ai) => { status.fila--; refine(post, ai); });
+}
+
+const app = express();
+const ORIGINS = (process.env.ALLOWED_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ORIGINS.includes(origin)) res.set({ "Access-Control-Allow-Origin": origin, Vary: "Origin" });
+  next();
+});
+app.get("/api/items", (req, res) => res.json(store.all(Number(req.query.limit) || 400)));
+app.get("/api/sources", (req, res) => res.json(SOURCES));
+app.get("/api/leagues", (req, res) => res.json(process.env.GOAL_API_KEY ? LIGAS.map((l) => ({ key: slug(l.nome), nome: l.nome })) : []));
+app.get("/api/config", (req, res) => res.json({ listaX: FONTES.listaX || "" }));
+app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
+app.get("/api/stream", (req, res) => {
+  res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+  res.flushHeaders();
+  res.write(`event: status\ndata: ${JSON.stringify({ x: status.x })}\n\n`);
+  clients.add(res);
+  req.on("close", () => clients.delete(res));
+});
+setInterval(() => { for (const res of clients) res.write(": ping\n\n"); }, 25000).unref();
+
+// em produção (npm run build), o próprio servidor entrega o site
+const dist = fileURLToPath(new URL("../web/dist", import.meta.url));
+if (fs.existsSync(dist)) app.use(express.static(dist));
+
+app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
+
+startRss(RSS, onPost, log);
+startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
+startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
+startResults(LIGAS, publish, log);

@@ -1,0 +1,136 @@
+[
+  {
+    "nome": "Liga Portugal",
+    "procurar": [
+      "primeira liga",
+      "liga portugal"
+    ],
+    "pais": "portugal",
+    "evitar": [
+      "2",
+      "3"
+    ]
+  },
+  {
+    "nome": "Liga 2",
+    "procurar": [
+      "liga 2",
+      "segunda liga",
+      "liga portugal 2"
+    ],
+    "pais": "portugal"
+  },
+  {
+    "nome": "Taça de Portugal",
+    "procurar": [
+      "taca de portugal"
+    ],
+    "pais": "portugal"
+  },
+  {
+    "nome": "Liga dos Campeões",
+    "procurar": [
+      "uefa champions league"
+    ]
+  },
+  {
+    "nome": "Liga Europa",
+    "procurar": [
+      "uefa europa league"
+    ]
+  },
+  {
+    "nome": "Liga Conferência",
+    "procurar": [
+      "conference league"
+    ]
+  },
+  {
+    "nome": "Premier League",
+    "procurar": [
+      "premier league"
+    ],
+    "pais": "england",
+    "seccao": "big5"
+  },
+  {
+    "nome": "LaLiga",
+    "procurar": [
+      "laliga",
+      "la liga",
+      "primera division"
+    ],
+    "pais": "spain",
+    "seccao": "big5"
+  },
+  {
+    "nome": "Serie A",
+    "procurar": [
+      "serie a"
+    ],
+    "pais": "italy",
+    "seccao": "big5"
+  },
+  {
+    "nome": "Bundesliga",
+    "procurar": [
+      "bundesliga"
+    ],
+    "pais": "germany",
+    "seccao": "big5",
+    "evitar": [
+      "2."
+    ]
+  },
+  {
+    "nome": "Ligue 1",
+    "procurar": [
+      "ligue 1"
+    ],
+    "pais": "france",
+    "seccao": "big5"
+  },
+  {
+    "nome": "Eredivisie",
+    "procurar": [
+      "eredivisie"
+    ],
+    "pais": "netherlands",
+    "seccao": "perifericos"
+  },
+  {
+    "nome": "Süper Lig",
+    "procurar": [
+      "super lig"
+    ],
+    "pais": "turkey",
+    "seccao": "perifericos"
+  },
+  {
+    "nome": "Liga Saudita",
+    "procurar": [
+      "pro league",
+      "saudi"
+    ],
+    "pais": "saudi",
+    "seccao": "perifericos"
+  },
+  {
+    "nome": "Brasileirão",
+    "procurar": [
+      "serie a",
+      "brasileirao"
+    ],
+    "pais": "brazil",
+    "seccao": "perifericos"
+  },
+  {
+    "nome": "MLS",
+    "procurar": [
+      "major league soccer",
+      "mls"
+    ],
+    "pais": "usa",
+    "seccao": "perifericos"
+  }
+]
