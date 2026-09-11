@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import * as store from "./store.js";
-import { createEnricher, fallback } from "./enrich.js";
+import { createEnricher, fallback, RULES, NAO_FUTEBOL } from "./enrich.js";
 import { startRss } from "./sources/rss.js";
 import { startTelegram } from "./sources/telegram.js";
 import { startBluesky } from "./sources/bluesky.js";
@@ -69,10 +69,19 @@ const teams = createTeams({ log });
 // sem Gemini, os três grandes ainda recebem o emblema a partir das secções
 const BIG3_NAMES = { porto: "FC Porto", sporting: "Sporting CP", benfica: "Benfica" };
 const equipasOf = (ai) => teams.resolve(ai.equipas?.length ? ai.equipas : (ai.seccoes || []).filter((c) => BIG3_NAMES[c]).map((c) => ({ nome: BIG3_NAMES[c], papel: "envolvido" })));
+// rede de segurança: junta às secções do Gemini as que as regras reconhecem no texto,
+// para uma notícia do Sporting ou do Porto não ficar de fora da secção do clube
+function secoes(post, ai) {
+  const texto = `${post.text} ${ai.titulo_pt || ""} ${(ai.pontos_pt || []).join(" ")}`;
+  const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
+  if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
+  if (cats.has("modalidades")) { cats.delete("big5"); cats.delete("perifericos"); }
+  return [...cats];
+}
 const toItem = (post, ai) => ({
   orig: ai.idioma,
   raw: !!ai.bruto,
-  cats: [...new Set(ai.seccoes || [])],
+  cats: secoes(post, ai),
   t: { pt: ai.titulo_pt, en: ai.titulo_en },
   b: { pt: ai.pontos_pt || [], en: ai.pontos_en || [] },
   imp: clamp(ai.importancia, 1, 5),

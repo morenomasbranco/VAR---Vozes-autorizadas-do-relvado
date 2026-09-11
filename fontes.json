@@ -59,7 +59,8 @@
       "site": "https://bleacherreport.com",
       "lang": "en",
       "pais": "us",
-      "rapido": true
+      "rapido": true,
+      "soFutebol": true
     },
     {
       "id": "flashscore",
@@ -135,10 +136,11 @@
       "id": "skysports",
       "nome": "Sky Sports",
       "site": "https://www.skysports.com/football",
-      "feed": "https://www.skysports.com/rss/12040",
+      "feed": "https://www.skysports.com/rss/11095",
       "pais": "gb",
       "lang": "en",
-      "rapido": true
+      "rapido": true,
+      "soFutebol": true
     },
     {
       "id": "espnfc",
@@ -148,7 +150,8 @@
       "pais": "us",
       "google": "site:espn.com soccer",
       "lang": "en",
-      "rapido": true
+      "rapido": true,
+      "soFutebol": true
     },
     {
       "id": "marca",

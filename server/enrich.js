@@ -62,7 +62,8 @@ Secções (pode haver várias)
 - modalidades: tudo o que não seja futebol de onze (futsal, andebol, hóquei em patins, basquetebol, voleibol…).
 - estatisticas: posts centrados em números, rankings, xG ou notas.
 - premios: distinções, jogador do mês, Bola de Ouro, equipas do ano.
-- portugueses: jogadores ou treinadores portugueses em clubes estrangeiros.
+- portugueses: SÓ quando a notícia trata de um jogador, treinador, árbitro ou equipa portuguesa fora de Portugal. Não marques por o texto vir de um site português.
+- Uma notícia que não seja de futebol de onze leva sempre "modalidades", mesmo que fale de uma liga ou de um clube conhecido (ténis, golfe, críquete, corridas de cavalos, futebol americano, basquetebol, Fórmula 1, ciclismo, râguebi…).
 
 Importância, do ponto de vista de um adepto português
 - 5: última hora de grande impacto (lesão grave de uma figura, contratação ou saída de peso em Porto, Sporting ou Benfica, despedimento de treinador de um grande).
@@ -91,15 +92,18 @@ Não é notícia (relevante = false)
 - Publicidade, apostas, passatempos, pedidos para seguir ou ver um canal, grelha de programação sem notícia, posts só com link ou emojis e tudo o que não seja desporto.`;
 
 // classificação de recurso, sem modelo
-const RULES = [
+export const RULES = [
   ["porto", /\b(fc )?porto\b|drag[aã]o|drag[oõ]es|azuis e brancos/i],
-  ["sporting", /\bsporting\b(?! (de )?braga)|le[oõ]es|alvalade/i],
-  ["benfica", /\bbenfica\b|[aá]guias|encarnados/i],
-  ["mercado", /here we go|transfer|contrat|renov|empr[eé]stimo|cl[aá]usula|assina|rescis|mercado|signs?\b|loan/i],
-  ["modalidades", /futsal|andebol|h[oó]quei|basquet|voleibol|handball|volleyball/i],
-  ["premios", /pr[eé]mio|bola de ouro|ballon d'or|jogador do m[eê]s|player of the month/i],
-  ["big5", /premier league|laliga|la liga|serie a|bundesliga|ligue 1/i],
+  ["sporting", /\bsporting\b(?! (de |clube de )?braga)|le[oõ]es|alvalade|sporting cp/i],
+  ["benfica", /\bbenfica\b|[aá]guias|encarnados|luz\b/i],
+  ["mercado", /here we go|transfer|contrat|renov|empr[eé]stimo|cl[aá]usula|assina|rescis|mercado|signs?\b|loan\b|fichaje/i],
+  ["modalidades", /futsal|andebol|h[oó]quei|basquet|voleibol|handball|volleyball|basketball|nba\b|t[eé]nis|tennis|golfe|golf\b|ciclismo|cycling|atletismo|athletics|nata[cç][aã]o|r[aá]guebi|rugby|cricket|f[oó]rmula ?1|formula ?1|\bf1\b|motogp|nfl\b|padel|p[aá]del|corrida de cavalos|horse racing|us open|solheim|ryder cup|ehf|euroleague|liga betclic de basquetebol|final four|superta[cç]a de andebol/i],
+  ["premios", /pr[eé]mio|bola de ouro|ballon d'or|jogador do m[eê]s|player of the month|melhor jogador|troféu|hall of fame/i],
+  ["big5", /premier league|laliga|la liga|serie a|bundesliga|ligue 1|championship/i],
+  ["estatisticas", /estat[ií]stica|statistics|ranking|xg\b|m[eé]dia de idades|n[uú]meros e curiosidades/i],
 ];
+// palavras que marcam uma notícia como sendo de outra modalidade, e não de futebol de onze
+export const NAO_FUTEBOL = /cricket|horse racing|doncaster|st leger|nfl\b|quarterback|touchdown|college football|super league|rugby|nba\b|golf|padel|p[aá]del|t[eé]nis|tennis|us open|f[oó]rmula ?1|formula ?1|\bf1\b|grand prix|motogp|ciclismo|cycling|volta a espanha|atletismo|nata[cç][aã]o|voleibol|volleyball|andebol|handball|futsal|h[oó]quei|ehf|euroleague|final four/i;
 export function fallback(post) {
   const lines = post.text.split("\n").map((l) => l.trim()).filter(Boolean);
   const title = (lines[0] || post.text).replace(/\s+/g, " ").slice(0, 140);

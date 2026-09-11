@@ -25,6 +25,9 @@ const unmark = (t) => t.replace(/\{[A-Z_]+\|\d+\|([^}]*)\}/g, "$1").replace(/\{[
 const clean = (html = "") => unmark(decode(String(html).replace(/<[^>]+>/g, " "))).replace(/\s+/g, " ").trim();
 // feeds gerais (ex. destaques do SAPO): só entram as notícias de desporto
 const DESPORTO = /(despo?rt|futebol|f[uú]tsal|andebol|basquete|v[oó]lei|h[oó]quei|at[ée]t?ismo|atletismo|ciclismo|t[ée]nis|nata[cç][aã]o|r[aá]guebi|rugby|automobilismo|f[oó]rmula ?1|motogp|golfe|benfica|sporting|fc porto|braga|vit[oó]ria|liga|sele[cç][aã]o|sele[cç][aã]o|mundial|campeonato|jogador|treinador|clube|est[aá]dio|golo|golos|transfer[eê]ncia)/i;
+// feeds de um jornal desportivo inteiro (ex. Sky Sports, B/R): só entra futebol de onze
+const OUTRAS = /cricket|horse racing|\bracing\b|doncaster|st leger|\bnfl\b|quarterback|touchdown|college football|super league|rugby|\bnba\b|\bwnba\b|golf|p[aá]del|tennis|t[eé]nis|us open|formula ?1|f[oó]rmula ?1|\bf1\b|grand prix|motogp|cycling|ciclismo|athletics|swimming|boxing|ufc|darts|snooker|netball|nhl\b|mlb\b/i;
+const FUTEBOL = /football|soccer|futebol|premier league|laliga|la liga|serie a|bundesliga|ligue 1|champions league|europa league|transfer|\bfc\b|\bcf\b|goalkeeper|midfielder|striker|golo|golos/i;
 const fail = (message, extra) => Object.assign(new Error(message), extra);
 
 // feed do Google News com as notícias do último dia de um site (ou de uma pesquisa indicada em "google")
@@ -119,6 +122,11 @@ export function startRss(sources, onPost, log) {
             // no Google News o título vem com « - Nome do jornal» no fim e a descrição repete o título
             const title = google ? clean(it.title).replace(/\s+-\s+[^-]+$/, "") : clean(it.title);
             // num feed geral, deixar passar só o que é desporto (categoria, endereço ou texto)
+            if (s.soFutebol) {
+              const alvo = `${(it.categories || []).join(" ")} ${it.link || ""} ${title} ${it.contentSnippet || ""}`;
+              if (OUTRAS.test(alvo) && !FUTEBOL.test(alvo)) continue;
+              if (/\/(cricket|rugby|racing|golf|tennis|nfl|nba|f1|boxing|darts|netball|athletics)\//i.test(it.link || "")) continue;
+            }
             if (s.soDesporto) {
               const alvo = `${(it.categories || []).join(" ")} ${it.link || ""} ${title} ${it.contentSnippet || ""}`;
               if (!DESPORTO.test(alvo)) continue;

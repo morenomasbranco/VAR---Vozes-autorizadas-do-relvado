@@ -343,7 +343,7 @@ export function createStories({ broadcast, log }) {
 
   // no arranque, recupera as pistas dos jogos terminados nos últimos dias, para a secção não ficar vazia
   async function backfill(leagues) {
-    const days = Number(process.env.HISTORIAS_DIAS) || 3;
+    const days = Number(process.env.HISTORIAS_DIAS) || 7;
     const d = (n) => new Date(Date.now() - n * 86400e3).toISOString().slice(0, 10).replace(/-/g, "");
     let total = 0;
     for (const lg of leagues.filter((l) => l.sport === "soccer")) {
