@@ -7,11 +7,11 @@ const KEY = process.env.GEMINI_API_KEY;
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 const MIN_GAP = Number(process.env.GEMINI_INTERVALO_MS) || 6000; // ~10 pedidos por minuto
-const BATCH_WAIT = 800;
-const BATCH_MAX = 8;
+const BATCH_WAIT = Number(process.env.GEMINI_ESPERA_MS) || 4000;
+const BATCH_MAX = 12;
 
 const SECCOES = ["porto", "sporting", "benfica", "mercado", "big5", "perifericos", "modalidades", "estatisticas", "premios", "portugueses"];
-const IDIOMAS = ["pt", "en", "es", "it", "fr", "tr", "outro"];
+const IDIOMAS = ["pt", "en", "es", "it", "fr", "de", "tr", "outro"];
 
 const SCHEMA = {
   type: "ARRAY",
@@ -28,6 +28,7 @@ const SCHEMA = {
       pontos_pt: { type: "ARRAY", items: { type: "STRING" } },
       pontos_en: { type: "ARRAY", items: { type: "STRING" } },
       importancia: { type: "INTEGER" },
+      pais_tema: { type: "STRING", nullable: true },
     },
     required: ["i", "relevante", "idioma", "seccoes", "titulo_pt", "titulo_en", "pontos_pt", "pontos_en", "importancia"],
   },
@@ -65,6 +66,12 @@ Importância, do ponto de vista de um adepto português
 - 3: interesse geral (portugueses no estrangeiro em destaque, grandes jogos europeus, prémios).
 - 2: rotina (antevisões, rumores fracos, estatísticas).
 - 1: marginal.
+
+País a que a notícia se refere (pais_tema)
+- Código do país do clube, da competição ou da seleção de que a notícia trata, em minúsculas: pt, es, fr, it, de, nl, br, us, sa, tr…
+- Inglaterra gb-eng, Escócia gb-sct, País de Gales gb-wls. Competições da UEFA: eu. Competições mundiais ou notícias sobre vários países: un.
+- Um português num clube estrangeiro conta como o país desse clube. Um jogo entre seleções conta como a seleção de que a notícia trata.
+- Se não for possível saber, null.
 
 Repetidos (igual_a)
 - Se o post relata o mesmo facto de uma notícia da lista recente (a mesma transferência, a mesma lesão), devolve o id dessa notícia.

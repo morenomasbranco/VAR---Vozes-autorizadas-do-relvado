@@ -141,7 +141,7 @@ export function startResults(leagues, publish, log) {
       orig: "multi",
       cats: cats(m, lg),
       liga: lg.key,
-      pais: lg.bandeira,
+      paisTema: lg.bandeira,
       t: { pt: T[0], en: T[1] },
       b: bullets,
       imp: T[2],

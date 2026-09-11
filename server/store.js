@@ -12,7 +12,7 @@ export function load() {
 }
 
 export const count = () => items.length;
-export const all = (limit = 400) => items.slice(0, limit);
+export const all = (limit = 400) => [...items].sort((a, b) => b.ts - a.ts).slice(0, limit);
 export const get = (id) => items.find((i) => i.id === id);
 
 // true se o post já foi tratado (como notícia principal ou como fonte adicional)

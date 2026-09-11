@@ -49,7 +49,7 @@ function publish(item) {
 function upsert(item) {
   const cur = store.get(item.id);
   if (!cur) return publish(item);
-  Object.assign(cur, item);
+  Object.assign(cur, item, { ts: cur.ts, upd: Date.now() });
   store.touch();
   broadcast("update", cur);
 }
@@ -69,6 +69,7 @@ const toItem = (post, ai) => ({
   t: { pt: ai.titulo_pt, en: ai.titulo_en },
   b: { pt: ai.pontos_pt || [], en: ai.pontos_en || [] },
   imp: clamp(ai.importancia, 1, 5),
+  paisTema: /^[a-z]{2}(-[a-z]{3})?$/.test(ai.pais_tema || "") ? ai.pais_tema : undefined,
 });
 
 function refine(post, ai) {
@@ -132,3 +133,4 @@ startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log);
 const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
 stories.watch(espnLeagues);
+setTimeout(() => stories.backfill(espnLeagues), 15000); // depois de as fontes arrancarem

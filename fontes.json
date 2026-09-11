@@ -78,6 +78,134 @@
       "google": "site:desporto.sapo.pt",
       "lang": "pt",
       "pais": "pt"
+    },
+    {
+      "id": "observador",
+      "nome": "Observador",
+      "site": "https://observador.pt/seccao/desporto/",
+      "feed": "https://observador.pt/seccao/desporto/feed/",
+      "pais": "pt",
+      "google": "site:observador.pt desporto",
+      "lang": "pt"
+    },
+    {
+      "id": "rtpdesporto",
+      "nome": "RTP Desporto",
+      "site": "https://www.rtp.pt/noticias/desporto",
+      "pais": "pt",
+      "google": "site:rtp.pt desporto",
+      "lang": "pt"
+    },
+    {
+      "id": "renascenca",
+      "nome": "Renascença (Bola Branca)",
+      "site": "https://rr.pt",
+      "pais": "pt",
+      "google": "site:rr.pt desporto",
+      "lang": "pt"
+    },
+    {
+      "id": "bbcsport",
+      "nome": "BBC Sport",
+      "site": "https://www.bbc.com/sport/football",
+      "feed": "https://feeds.bbci.co.uk/sport/football/rss.xml",
+      "pais": "gb",
+      "lang": "en"
+    },
+    {
+      "id": "guardian",
+      "nome": "The Guardian",
+      "site": "https://www.theguardian.com/football",
+      "feed": "https://www.theguardian.com/football/rss",
+      "pais": "gb",
+      "lang": "en"
+    },
+    {
+      "id": "skysports",
+      "nome": "Sky Sports",
+      "site": "https://www.skysports.com/football",
+      "feed": "https://www.skysports.com/rss/12040",
+      "pais": "gb",
+      "lang": "en"
+    },
+    {
+      "id": "espnfc",
+      "nome": "ESPN",
+      "site": "https://www.espn.com/soccer/",
+      "feed": "https://www.espn.com/espn/rss/soccer/news",
+      "pais": "us",
+      "google": "site:espn.com soccer",
+      "lang": "en"
+    },
+    {
+      "id": "marca",
+      "nome": "Marca",
+      "site": "https://www.marca.com/futbol.html",
+      "pais": "es",
+      "google": "site:marca.com futbol",
+      "lang": "es"
+    },
+    {
+      "id": "as",
+      "nome": "AS",
+      "site": "https://as.com/futbol/",
+      "pais": "es",
+      "google": "site:as.com futbol",
+      "lang": "es"
+    },
+    {
+      "id": "gazzetta",
+      "nome": "La Gazzetta dello Sport",
+      "site": "https://www.gazzetta.it/Calcio/",
+      "pais": "it",
+      "google": "site:gazzetta.it calcio",
+      "lang": "it"
+    },
+    {
+      "id": "lequipe",
+      "nome": "L'Équipe",
+      "site": "https://www.lequipe.fr/Football/",
+      "pais": "fr",
+      "google": "site:lequipe.fr football",
+      "lang": "fr"
+    },
+    {
+      "id": "kicker",
+      "nome": "kicker",
+      "site": "https://www.kicker.de/fussball",
+      "pais": "de",
+      "google": "site:kicker.de",
+      "lang": "de"
+    },
+    {
+      "id": "reddit-soccer",
+      "nome": "Reddit r/soccer",
+      "site": "https://www.reddit.com/r/soccer/",
+      "feed": "https://www.reddit.com/r/soccer/new/.rss",
+      "pais": "un",
+      "intervalo": 60,
+      "semGoogle": true,
+      "lang": "en"
+    },
+    {
+      "id": "reddit-sports",
+      "nome": "Reddit r/sports",
+      "site": "https://www.reddit.com/r/sports/",
+      "feed": "https://www.reddit.com/r/sports/new/.rss",
+      "pais": "un",
+      "intervalo": 60,
+      "semGoogle": true,
+      "lang": "en"
+    },
+    {
+      "id": "reddit-primeiraliga",
+      "nome": "Reddit r/PrimeiraLiga",
+      "site": "https://www.reddit.com/r/PrimeiraLiga/",
+      "feed": "https://www.reddit.com/r/PrimeiraLiga/new/.rss",
+      "pais": "pt",
+      "intervalo": 60,
+      "semGoogle": true,
+      "lang": "en"
     }
   ],
   "telegram": [

@@ -37,7 +37,8 @@ const UI = {
   pt: {
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
-    share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", tr: "Traduzido do turco" },
+    share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco" },
+    about: "Sobre", aboutTitle: (c) => `Notícia sobre: ${c}`, fromTitle: (c) => `Origem: ${c}`,
     pending: (n) => `Mostrar ${n} ${n === 1 ? "nova notícia" : "novas notícias"}`,
     empty: "Sem notícias nesta secção para as fontes ativas. Ativa mais fontes ou escolhe outra secção.",
     connecting: "A ligar ao X", offline: "Sem ligação", offlineNote: "O servidor não responde. A tentar ligar de novo…",
@@ -61,7 +62,8 @@ const UI = {
   en: {
     live: "Live", paused: "Paused", nSources: (n) => `${n} sources`, markRead: "Mark all as read",
     pause: "Pause", resume: "Resume", search: "Search news", copy: "Copy", copied: "Copied",
-    share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", tr: "Translated from Turkish" },
+    share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish" },
+    about: "About", aboutTitle: (c) => `Story about: ${c}`, fromTitle: (c) => `Source: ${c}`,
     pending: (n) => `Show ${n} new ${n === 1 ? "story" : "stories"}`,
     empty: "No stories in this section from the active sources. Turn on more sources or pick another section.",
     connecting: "Connecting to X", offline: "Offline", offlineNote: "The server is not responding. Trying to reconnect…",
@@ -88,6 +90,7 @@ const isHot = (it) => (it.imp || 0) >= 4;
 // relevância = importância a perder peso com o tempo (metade ao fim de 3 horas)
 const relevance = (it, now) => (it.imp || 1) / (1 + (now - it.ts) / 3600000 / 3);
 const TOP_N = 8;
+const byTime = (a, b) => b.ts - a.ts; // mais recente primeiro
 const MAX_ITEMS = 500;
 
 /* ───────── Utilitários ───────── */
@@ -114,10 +117,74 @@ const COUNTRIES = {
   tr: ["Turquia", "Turkey"], sa: ["Arábia Saudita", "Saudi Arabia"], br: ["Brasil", "Brazil"], us: ["Estados Unidos", "United States"],
   eu: ["Europa", "Europe"], un: ["Internacional", "International"],
 };
-function Flag({ code, lang }) {
+const GB_PARTS = { "gb-sct": ["Escócia", "Scotland"], "gb-wls": ["País de Gales", "Wales"], "gb-nir": ["Irlanda do Norte", "Northern Ireland"] };
+function countryName(code, lang) {
+  const own = COUNTRIES[code] || GB_PARTS[code];
+  if (own) return own[lang === "en" ? 1 : 0];
+  try { return new Intl.DisplayNames([lang === "en" ? "en" : "pt-PT"], { type: "region" }).of(code.toUpperCase()); } catch { return code.toUpperCase(); }
+}
+function Flag({ code, lang, title }) {
   if (!code) return null;
-  const name = COUNTRIES[code]?.[lang === "en" ? 1 : 0] || code.toUpperCase();
-  return <img className="flag" src={`https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`} alt={name} title={name} width="18" height="13" loading="lazy" />;
+  const name = countryName(code, lang);
+  return <img className="flag" src={`https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`} alt={name} title={title ? title(name) : name} width="18" height="13" loading="lazy" />;
+}
+
+// pistas antigas, guardadas antes de existir o tom, recebem-no pelo tipo
+const TIPO_TOM = { surpresa: "negativa", reviravolta: "positiva", tardio: "positiva", goleada: "positiva", serie: "positiva", crise: "negativa", derrotas: "negativa", fimserie: "negativa", primeira: "positiva", lider: "positiva", descida: "negativa" };
+const toneOf = (s) => s.tom || TIPO_TOM[s.tipo] || "neutra";
+
+// possíveis histórias, da mais recente para a mais antiga, com filtros de nível e de tom
+function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais }) {
+  const [lvl, setLvl] = useState("todos");
+  const [tone, setTone] = useState("todas");
+  const list = stories
+    .filter((s) => lvl === "todos" || s.nivel === lvl)
+    .filter((s) => tone === "todas" || toneOf(s) === tone)
+    .sort((a, b) => b.ts - a.ts);
+  return (
+    <div className="stories">
+      <p className="xnote">{ui.storiesNote}</p>
+      <div className="filters">
+        <div className="seg lvls" role="group" aria-label={ui.levelLabel}>
+          {["todos", "alto", "medio", "baixo"].map((k) => (
+            <button key={k} aria-pressed={lvl === k} onClick={() => setLvl(k)}>{k === "todos" ? ui.allLevels : ui.levels[k]}</button>
+          ))}
+        </div>
+        <div className="seg lvls" role="group" aria-label={ui.toneLabel}>
+          {["todas", "positiva", "negativa", "neutra"].map((k) => (
+            <button key={k} aria-pressed={tone === k} onClick={() => setTone(k)}>{k === "todas" ? ui.allTones : ui.tones[k]}</button>
+          ))}
+        </div>
+      </div>
+      {list.length === 0 ? <p className="empty">{ui.noStories}</p> : (
+        <ul className="storylist">
+          {list.map((s) => (
+            <li key={s.id} className={`story lv-${s.nivel}`}>
+              <div className="mrow">
+                <span className="lvl">{ui.levels[s.nivel]}</span>
+                <span className={`tone t-${toneOf(s)}`}>{toneOf(s) === "positiva" ? "▲" : toneOf(s) === "negativa" ? "▼" : "●"} {ui.tones[toneOf(s)]}</span>
+                <Flag code={s.pais || leaguePais(s.liga)} lang={lang} />
+                {s.ligaNome && <span className="muted">{leagueName(s.liga) || s.ligaNome}</span>}
+                <span className="muted">{agoText(s.ts, now, ui)}</span>
+              </div>
+              <h3 className="title">{s.t[lang]}</h3>
+              <p className="angle"><b>{ui.angle}:</b> {s.angulo[lang]}</p>
+              {s.dados?.[lang]?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {s.dados[lang].join(" · ")}</p>}
+              {s.verificar?.[lang]?.length > 0 && (
+                <div className="check"><b>{ui.check}:</b><ul className="bul">{s.verificar[lang].map((v, i) => <li key={i}>{v}</li>)}</ul></div>
+              )}
+              <div className="chips crit">
+                {s.crit.map((c) => <span key={c.id} className="chip">{c[lang]}</span>)}
+                {s.noticia && items.some((x) => x.id === s.noticia) && (
+                  <button className="textbtn" onClick={() => onOpen(s.noticia)}><ExternalLink size={14} />{ui.seeNews}</button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function Rich({ text }) {
@@ -234,6 +301,7 @@ const CSS = `
 @media(min-width:1000px){.apito .mobpanel{display:none}}
 .apito .flag{width:18px;height:13px;border-radius:2px;box-shadow:0 0 0 1px var(--line);vertical-align:-1px;flex:none}
 .apito .textbtn.on{color:var(--accent)}
+.apito .about{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-right:2px}
 .apito .stories{max-width:760px}
 .apito .filters{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 0 16px}
 .apito .lvls{margin:0}
@@ -352,7 +420,7 @@ export default function App() {
       if (pausedRef.current) {
         setPending((p) => (p.some((x) => x.id === item.id) ? p : [item, ...p]));
       } else {
-        setItems((l) => (l.some((x) => x.id === item.id) ? l : [item, ...l].slice(0, MAX_ITEMS)));
+        setItems((l) => (l.some((x) => x.id === item.id) ? l : [item, ...l].sort(byTime).slice(0, MAX_ITEMS)));
         unfresh([item.id]);
       }
     });
@@ -383,7 +451,7 @@ export default function App() {
   const flush = () => {
     if (!pending.length) return;
     const fresh = pending.map((p) => ({ ...p, ts: p.ts, fresh: true }));
-    setItems((l) => [...fresh, ...l].slice(0, MAX_ITEMS));
+    setItems((l) => [...fresh, ...l].sort(byTime).slice(0, MAX_ITEMS));
     unfresh(fresh.map((f) => f.id));
     setPending([]);
   };
@@ -392,11 +460,12 @@ export default function App() {
   };
 
   const isOn = (h) => enabled === null || enabled.has(h);
-  const srcName = (s) => (s.handle === "resultados" ? ui.resultsSource : s.name === s.handle ? `@${s.handle}` : s.name);
+  const srcName = (s) => (s.handle === "resultados" ? ui.resultsSource : s.name);
   const leagueByKey = useMemo(() => Object.fromEntries(leagues.map((l) => [l.key, l])), [leagues]);
   const leagueName = (k) => { const l = leagueByKey[k]; return l ? (lang === "en" ? l.nome_en || l.nome : l.nome) : null; };
   const srcPais = useMemo(() => Object.fromEntries(sourceList.map(([h, , p]) => [h, p])), [sourceList]);
-  const flagOf = (it) => it.pais || srcPais[it.src] || leagueByKey[it.liga]?.pais;
+  const flagOf = (it) => (it.src === "resultados" ? null : it.pais || srcPais[it.src]); // país da fonte
+  const topicOf = (it) => it.paisTema || (it.src === "resultados" ? leagueByKey[it.liga]?.pais || it.pais : null); // país de que a notícia trata
   // resultados em direto: só as ligas escolhidas (a escolha fica guardada neste browser)
   const ligaOn = (it) => !it.liga || ligasOn === null || ligasOn.has(it.liga);
   const srcOn = (it) => ligaOn(it) && (isOn(it.src) || (it.also || []).some((a) => isOn(a.src)));
@@ -415,9 +484,9 @@ export default function App() {
   };
 
   const visible = useMemo(() => {
-    if (section === "favoritos") return [...favs].filter(matches).sort((a, b) => b.favAt - a.favAt);
+    if (section === "favoritos") return [...favs].filter(matches).sort(byTime);
     const list = items.filter((it) => srcOn(it) && inSection(it, section) && matches(it));
-    if (section !== "destaque") return list;
+    if (section !== "destaque") return list.sort(byTime);
     // nos Destaques, cada jogo aparece uma só vez (o estado mais recente) e a ordem é por relevância
     const seen = new Set();
     return list
@@ -429,7 +498,8 @@ export default function App() {
         return true;
       })
       .sort((a, b) => relevance(b, now) - relevance(a, now))
-      .slice(0, TOP_N);
+      .slice(0, TOP_N)
+      .sort(byTime);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, favs, enabled, ligasOn, section, query, lang, section === "destaque" ? now : 0]);
 
@@ -445,11 +515,11 @@ export default function App() {
     for (const it of items) {
       if (!it.score || !srcOn(it)) continue;
       const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
-      if (map.has(k) && map.get(k).ts >= it.ts) continue;
+      if (map.has(k) && (map.get(k).upd || map.get(k).ts) >= (it.upd || it.ts)) continue;
       if (q && !`${it.score.comp} ${it.score.h} ${it.score.a}`.toLowerCase().includes(q)) continue;
       map.set(k, it);
     }
-    return [...map.values()].sort((a, b) => (isLive(b.score, b.ts, now) - isLive(a.score, a.ts, now)) || b.ts - a.ts);
+    return [...map.values()].sort((a, b) => (isLive(b.score, b.upd || b.ts, now) - isLive(a.score, a.upd || a.ts, now)) || (b.upd || b.ts) - (a.upd || a.ts));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
 
@@ -502,7 +572,7 @@ export default function App() {
             <li key={h}>
               <button className="srcrow" aria-pressed={on} onClick={() => toggleSource(h)}>
                 <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
-                <span className="nm">{h === "resultados" ? ui.resultsSource : n === h ? `@${h}` : n}</span>
+                <span className="nm">{h === "resultados" ? ui.resultsSource : n}</span>
                 <span className="ct">{srcCounts[h] || 0}</span>
               </button>
             </li>
@@ -617,13 +687,13 @@ export default function App() {
                   {games.map((it) => {
                     const sc = it.score, s = srcOf(it);
                     return (
-                      <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.ts, now) ? "on" : ""}`}>
-                        <span className="comp"><Flag code={flagOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
+                      <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
+                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
                         <span className="team h">{sc.h}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
                         <span className="team">{sc.a}</span>
-                        <span className="st">{isLive(sc, it.ts, now) ? <span className="pulse"><i />{sc.min || ui.live}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
-                        <span className="upd">{ui.updated(agoText(it.ts, now, ui), srcName(s))}</span>
+                        <span className="st">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{sc.min || ui.live}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
+                        <span className="upd">{ui.updated(agoText(it.upd || it.ts, now, ui), srcName(s))}</span>
                       </li>
                     );
                   })}
@@ -644,13 +714,14 @@ export default function App() {
                       <div className="rail"><span className="dot" /></div>
                       <article className="body" onClick={() => markRead(it.id)}>
                         <div className="mrow">
-                          <Flag code={flagOf(it)} lang={lang} />
+                          <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
                           <span className="src">{srcName(s)}</span>
                           {it.via && <span className="muted">{it.via}</span>}
                           {it.also?.length > 0 && (
                             <span className="muted" title={it.also.map((a) => a.name || `@${a.src}`).join(", ")}>{ui.moreSources(it.also.length)}</span>
                           )}
                           <span className="chips">
+                            {topicOf(it) && <span className="about" title={ui.aboutTitle(countryName(topicOf(it), lang))}>{ui.about} <Flag code={topicOf(it)} lang={lang} title={ui.aboutTitle} /></span>}
                             {it.unread && <span className="chip new">{ui.fresh}</span>}
                             {it.hot && <span className="chip hot">{ui.hot}</span>}
                             {it.cats.filter((c) => CAT[c]).map((c) => (

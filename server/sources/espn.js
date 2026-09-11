@@ -65,7 +65,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
   };
   const minute = (m, lg) => (lg.sport === "soccer" ? (m.clock.match(/^\d+(\+\d+)?'/)?.[0] || null) : m.clock || null);
   const score = (m, lg, ft = false) => ({ comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: ft ? null : minute(m, lg), ft });
-  const base = (m, lg) => ({ src: "resultados", name: "Resultados em direto", orig: "multi", liga: lg.key, pais: lg.bandeira, cats: cats(m, lg) });
+  const base = (m, lg) => ({ src: "resultados", name: "Resultados em direto", orig: "multi", liga: lg.key, paisTema: lg.bandeira, cats: cats(m, lg) });
   const sc = (m) => `${m.home} ${m.hs}–${m.as} ${m.away}`;
 
   // um cartão por jogo que se vai atualizando enquanto o jogo decorre

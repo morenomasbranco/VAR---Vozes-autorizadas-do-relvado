@@ -10,7 +10,7 @@ const UA = "Mozilla/5.0 (compatible; VAR-feed/1.0; agregador de notícias de des
 const INTERVAL = Math.max(5, Number(process.env.RSS_SEGUNDOS) || 15) * 1000;
 const GOOGLE_INTERVAL = 60000; // o Google News só muda de minuto a minuto; mais do que isto seria desperdício
 const GOOGLE_BASE = process.env.GOOGLE_NEWS_BASE || "https://news.google.com/rss/search";
-const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it" };
+const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it", de: "hl=de&gl=DE&ceid=DE:de" };
 const STALE_MS = 7 * 86400e3;
 const clean = (html = "") => html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 const fail = (message, extra) => Object.assign(new Error(message), extra);
@@ -84,7 +84,7 @@ export function startRss(sources, onPost, log) {
             if (Date.now() - ts > BACKFILL_MS) continue;
             // no Google News o título vem com « - Nome do jornal» no fim e a descrição repete o título
             const title = google ? clean(it.title).replace(/\s+-\s+[^-]+$/, "") : clean(it.title);
-            const body = google ? "" : clean(it.contentSnippet || it.content || it.summary || "");
+            const body = google ? "" : clean(it.contentSnippet || it.content || it.summary || "").replace(/\s*submitted by\s+\/u\/\S+[\s\S]*$/i, "");
             onPost({
               postId: `${s.id}:${hash(key)}`,
               src: s.id,
@@ -102,7 +102,12 @@ export function startRss(sources, onPost, log) {
         wait = every();
       } catch (e) {
         const blocked = [401, 403, 404, 410, 451].includes(e.status) || e.notFound || e.parse || e.stale;
-        if (!google && (blocked || ++fails >= 3)) {
+        if (s.semGoogle && (blocked || ++fails >= 3)) {
+          // fontes que o Google News não cobre (Reddit): se recusarem, tenta de novo daqui a 15 minutos
+          log(`[RSS] ${s.nome}: ${e.message}; nova tentativa daqui a 15 min`);
+          fails = 0;
+          wait = 15 * 60e3;
+        } else if (!google && (blocked || ++fails >= 3)) {
           useGoogle(e.message);
           wait = 1000;
         } else {
