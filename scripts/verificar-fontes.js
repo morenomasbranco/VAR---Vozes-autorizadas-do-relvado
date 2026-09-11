@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { discover, readFeed } from "../server/sources/rss.js";
 import { resolveHandle, recentPosts } from "../server/sources/bluesky.js";
 import { fetchLive, normalizeMatch, matchLeague } from "../server/sources/results.js";
+import { scoreboardUrl, normalizeEvent } from "../server/sources/espn.js";
 
 const fontes = JSON.parse(fs.readFileSync(new URL("../fontes.json", import.meta.url), "utf8"));
 const ligas = JSON.parse(fs.readFileSync(new URL("../ligas.json", import.meta.url), "utf8"));
@@ -51,7 +52,18 @@ else {
   await client.disconnect();
 }
 
-console.log("\nResultados em direto (GOAL API)");
+console.log("\nResultados em direto (ESPN)");
+for (const lg of ligas.filter((l) => l.espn)) {
+  try {
+    const res = await fetch(scoreboardUrl(lg));
+    if (!res.ok) { row(false, lg.nome, `a ESPN respondeu ${res.status}`); continue; }
+    const events = ((await res.json()).events || []).map(normalizeEvent);
+    const live = events.filter((e) => e.state === "in").length;
+    row(true, lg.nome, `${events.length} jogo(s) hoje, ${live} a decorrer`);
+  } catch (e) { row(false, lg.nome, e.message); }
+}
+
+console.log("\nResultados em direto (GOAL API, para as ligas sem ESPN)");
 if (!process.env.GOAL_API_KEY) console.log("  ✗ falta GOAL_API_KEY no .env");
 else {
   try {
@@ -67,7 +79,7 @@ else {
 console.log("\nGemini");
 if (!process.env.GEMINI_API_KEY) console.log("  ✗ falta GEMINI_API_KEY no .env");
 else {
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },

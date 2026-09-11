@@ -4,7 +4,7 @@
 import { sleep } from "./util.js";
 
 const KEY = process.env.GEMINI_API_KEY;
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 const MIN_GAP = Number(process.env.GEMINI_INTERVALO_MS) || 6000; // ~10 pedidos por minuto
 const BATCH_WAIT = 800;

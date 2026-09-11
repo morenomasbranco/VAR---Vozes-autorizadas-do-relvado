@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter } from "lucide-react";
+import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
 const SOURCES = []; // a lista de fontes vem do servidor (/api/sources)
@@ -13,7 +13,8 @@ const CATS = [
   { id: "destaque", pt: "Destaques", en: "Top stories" },
   { id: "live", pt: "Live", en: "Live" },
   { id: "resultados", pt: "Resultados", en: "Results" },
-  { id: "x", pt: "Só no X", en: "Only on X" },
+  { id: "historias", pt: "Possíveis histórias", en: "Story leads" },
+  { id: "favoritos", pt: "Favoritos", en: "Saved" },
   { id: "futebol", pt: "Futebol", en: "Football" },
   { id: "porto", pt: "Porto", en: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", club: true },
@@ -29,7 +30,7 @@ const CATS = [
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
 const inSection = (it, s) =>
-  s === "x" ? false : s === "live" ? true : s === "resultados" ? !!it.score : s === "destaque" ? (it.imp || 0) >= 3 : s === "futebol" ? !it.cats.includes("modalidades") : it.cats.includes(s);
+  s === "historias" || s === "favoritos" ? false : s === "live" ? true : s === "resultados" ? !!it.score : s === "destaque" ? (it.imp || 0) >= 3 : s === "futebol" ? !it.cats.includes("modalidades") : it.cats.includes(s);
 
 /* ───────── Textos da interface ───────── */
 const UI = {
@@ -45,12 +46,16 @@ const UI = {
     all: "Todas", none: "Nenhuma", sources: "Fontes", hot: "Destaque", fresh: "Novo", ft: "Final",
     toLight: "Mudar para modo claro", toDark: "Mudar para modo escuro", locale: "pt-PT",
     tagline: "Vozes Autorizadas do Relvado",
+    docTitle: "VAR — Vozes Autorizadas do Relvado", langLabel: "Idioma", sectionsLabel: "Secções", resultsSource: "Resultados em direto",
+    save: "Guardar", saved: "Guardado", noFavs: "Ainda não guardaste notícias. Carrega em «Guardar» numa notícia para a encontrares aqui.",
     now: "agora", noResults: "Ainda não há resultados das fontes ativas.",
     noPost: "Esta notícia não tem link para a fonte.", viewSrc: "Ver na fonte",
     pickLeagues: "Escolher ligas", leaguesTitle: "Ligas com resultados em direto", processing: "A traduzir…",
-    xNote: "Publicações das contas que só existem no X, mostradas pelo próprio X. Aparecem tal como foram publicadas, sem tradução, e não entram nas outras secções.",
-    xNoList: "Ainda não há uma lista do X configurada. Cria uma lista pública no X com estas contas e põe o link no campo listaX do fontes.json.",
-    xFailed: "O X não mostrou a lista. Pode estar a pedir sessão iniciada no X.", xOpen: "Abrir a lista no X", xLoading: "A carregar as publicações do X…",
+    levels: { alto: "Interesse alto", medio: "Interesse médio", baixo: "Interesse baixo" }, allLevels: "Todos",
+    tones: { positiva: "Positiva", negativa: "Negativa", neutra: "Neutra" }, allTones: "Todas", toneLabel: "Tom", levelLabel: "Nível",
+    angle: "Ângulo", data: "Dados", check: "A verificar", seeNews: "Ver a notícia",
+    noStories: "Ainda não há pistas. Aparecem quando os resultados, as classificações ou as notícias mostram algo fora do normal.",
+    storiesNote: "Pistas para notícias encontradas nos dados. O nível de interesse vem dos critérios de noticiabilidade que cada pista cumpre.",
     updated: (t, src) => `Atualizado ${t} por ${src}`, agoWord: (t) => `há ${t}`,
   },
   en: {
@@ -65,12 +70,16 @@ const UI = {
     all: "All", none: "None", sources: "Sources", hot: "Top story", fresh: "New", ft: "FT",
     toLight: "Switch to light mode", toDark: "Switch to dark mode", locale: "en-GB",
     tagline: "Voices, Action & Reports",
+    docTitle: "VAR — Voices, Action & Reports", langLabel: "Language", sectionsLabel: "Sections", resultsSource: "Live results",
+    save: "Save", saved: "Saved", noFavs: "No saved stories yet. Tap «Save» on a story to find it here.",
     now: "now", noResults: "No results from the active sources yet.",
     noPost: "This story has no link to its source.", viewSrc: "View source",
     pickLeagues: "Choose leagues", leaguesTitle: "Leagues with live results", processing: "Translating…",
-    xNote: "Posts from accounts that only publish on X, shown by X itself. They appear as posted, untranslated, and are not included in the other sections.",
-    xNoList: "No X list has been set up yet. Create a public list on X with these accounts and put its link in the listaX field of fontes.json.",
-    xFailed: "X did not load the list. It may be asking visitors to sign in.", xOpen: "Open the list on X", xLoading: "Loading posts from X…",
+    levels: { alto: "High interest", medio: "Medium interest", baixo: "Low interest" }, allLevels: "All",
+    tones: { positiva: "Positive", negativa: "Negative", neutra: "Neutral" }, allTones: "All", toneLabel: "Tone", levelLabel: "Level",
+    angle: "Angle", data: "Data", check: "To check", seeNews: "See the story",
+    noStories: "No leads yet. They appear when results, tables or news show something out of the ordinary.",
+    storiesNote: "Story leads found in the data. The interest level comes from the news values each lead meets.",
     updated: (t, src) => `Updated ${t} by ${src}`, agoWord: (t) => `${t} ago`,
   },
 };
@@ -99,41 +108,16 @@ function ago(ts, now) {
 const agoText = (ts, now, ui) => { const a = ago(ts, now); return a ? ui.agoWord(`${a[0]} ${a[1]}`) : ui.now; };
 // um jogo sem atualizações há mais de 150 minutos deixa de contar como em curso
 const isLive = (sc, ts, now) => !sc.ft && now - ts < 150 * 60000;
-// lista pública do X mostrada pelo widget oficial do X (gratuito, sem API)
-function XEmbed({ url, theme, lang, ui }) {
-  const ref = useRef(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!url || !el) return;
-    el.innerHTML = "";
-    setFailed(false);
-    const a = document.createElement("a");
-    a.className = "twitter-timeline";
-    a.href = url;
-    Object.assign(a.dataset, { theme, lang, dnt: "true", chrome: "noheader nofooter transparent", height: "1600" });
-    a.textContent = ui.xLoading;
-    el.appendChild(a);
-    const load = () => window.twttr?.widgets?.load(el);
-    let script = document.getElementById("x-widgets");
-    if (window.twttr?.widgets) load();
-    else if (script) script.addEventListener("load", load);
-    else {
-      script = Object.assign(document.createElement("script"), { id: "x-widgets", src: "https://platform.twitter.com/widgets.js", async: true });
-      script.addEventListener("load", load);
-      document.body.appendChild(script);
-    }
-    const t = setTimeout(() => { if (!el.querySelector("iframe")) setFailed(true); }, 12000);
-    return () => clearTimeout(t);
-  }, [url, theme, lang, ui.xLoading]);
-  if (!url) return <p className="empty">{ui.xNoList}</p>;
-  return (
-    <div className="xembed">
-      <p className="xnote">{ui.xNote}</p>
-      <div ref={ref} />
-      {failed && <p className="xnote">{ui.xFailed} <a href={url} target="_blank" rel="noreferrer">{ui.xOpen}</a></p>}
-    </div>
-  );
+const COUNTRIES = {
+  pt: ["Portugal", "Portugal"], gb: ["Reino Unido", "United Kingdom"], "gb-eng": ["Inglaterra", "England"], es: ["Espanha", "Spain"],
+  fr: ["França", "France"], it: ["Itália", "Italy"], de: ["Alemanha", "Germany"], nl: ["Países Baixos", "Netherlands"],
+  tr: ["Turquia", "Turkey"], sa: ["Arábia Saudita", "Saudi Arabia"], br: ["Brasil", "Brazil"], us: ["Estados Unidos", "United States"],
+  eu: ["Europa", "Europe"], un: ["Internacional", "International"],
+};
+function Flag({ code, lang }) {
+  if (!code) return null;
+  const name = COUNTRIES[code]?.[lang === "en" ? 1 : 0] || code.toUpperCase();
+  return <img className="flag" src={`https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`} alt={name} title={name} width="18" height="13" loading="lazy" />;
 }
 
 function Rich({ text }) {
@@ -248,7 +232,25 @@ const CSS = `
 .apito .mobpanel{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;background:var(--raise)}
 .apito .mobpanel .panel{position:static}
 @media(min-width:1000px){.apito .mobpanel{display:none}}
-.apito .xembed{max-width:560px}
+.apito .flag{width:18px;height:13px;border-radius:2px;box-shadow:0 0 0 1px var(--line);vertical-align:-1px;flex:none}
+.apito .textbtn.on{color:var(--accent)}
+.apito .stories{max-width:760px}
+.apito .filters{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 0 16px}
+.apito .lvls{margin:0}
+.apito .tone{font-size:13px;font-weight:600}
+.apito .tone.t-positiva{color:var(--sporting)}
+.apito .tone.t-negativa{color:var(--benfica)}
+.apito .tone.t-neutra{color:var(--muted)}
+.apito .storylist{list-style:none;margin:0;padding:0}
+.apito .story{border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:8px;padding:12px 16px;margin-bottom:12px;background:var(--raise)}
+.apito .story.lv-alto{border-left-color:var(--live)}
+.apito .story.lv-medio{border-left-color:var(--accent)}
+.apito .story .lvl{font-weight:700;font-size:13px}
+.apito .story.lv-alto .lvl{color:var(--live)}
+.apito .story .angle,.apito .story .sdata{margin:6px 0;max-width:68ch}
+.apito .story .check{margin:6px 0}
+.apito .story .check .bul{margin-top:2px}
+.apito .chips.crit{margin:10px 0 0;align-items:center}
 .apito .xnote{font-size:14px;color:var(--muted);margin:0 0 12px;max-width:60ch}
 .apito .leagues .srclist.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));max-height:none}
 @media(min-width:1000px){.apito .mobpanel.leagues{display:block}}
@@ -286,7 +288,20 @@ export default function App() {
     try { const v = JSON.parse(localStorage.getItem("var-ligas")); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
   });
   const [showLeagues, setShowLeagues] = useState(false);
-  const [listaX, setListaX] = useState("");
+  const [stories, setStories] = useState([]);
+  const [favs, setFavs] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  useEffect(() => { try { localStorage.setItem("var-favoritos", JSON.stringify(favs)); } catch { /* sem armazenamento */ } }, [favs]);
+  const isFav = (id) => favs.some((f) => f.id === id);
+  const toggleFav = (it) => setFavs((f) => (f.some((x) => x.id === it.id)
+    ? f.filter((x) => x.id !== it.id)
+    : [{ ...it, unread: false, fresh: false, favAt: Date.now() }, ...f]));
+  // título da página e língua do documento acompanham o botão PT/EN
+  useEffect(() => {
+    document.documentElement.lang = lang === "en" ? "en" : "pt-PT";
+    document.title = UI[lang].docTitle;
+  }, [lang]);
   const [showSources, setShowSources] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
@@ -311,11 +326,11 @@ export default function App() {
       .then((r) => r.json())
       .then((list) => {
         if (stop || !list.length) return;
-        setSourceList(list.map((x) => [x.handle, x.name]));
+        setSourceList(list.map((x) => [x.handle, x.name, x.pais]));
       })
       .catch(() => {});
     fetch(`${API}/api/leagues`).then((r) => r.json()).then((l) => !stop && setLeagues(l)).catch(() => {});
-    fetch(`${API}/api/config`).then((r) => r.json()).then((c) => !stop && setListaX(c.listaX || "")).catch(() => {});
+    fetch(`${API}/api/stories`).then((r) => r.json()).then((l) => !stop && setStories(l)).catch(() => {});
 
     fetch(`${API}/api/items`)
       .then((r) => r.json())
@@ -342,6 +357,10 @@ export default function App() {
       }
     });
     // o post afinal não era notícia, ou juntou-se a outra: sai do feed
+    es.addEventListener("story", (e) => {
+      const st = JSON.parse(e.data);
+      setStories((l) => (l.some((x) => x.id === st.id) ? l : [st, ...l]));
+    });
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
       setItems((l) => l.filter((x) => x.id !== id));
@@ -352,6 +371,7 @@ export default function App() {
       const it = JSON.parse(e.data);
       const up = (x) => (x.id === it.id ? { ...x, ...it, hot: isHot(it) } : x);
       setItems((l) => l.map(up));
+      setFavs((f) => (f.some((x) => x.id === it.id) ? f.map((x) => (x.id === it.id ? { ...x, ...it, hot: isHot(it) } : x)) : f));
       setPending((p) => p.map(up));
     });
     return () => { stop = true; es.close(); };
@@ -372,6 +392,11 @@ export default function App() {
   };
 
   const isOn = (h) => enabled === null || enabled.has(h);
+  const srcName = (s) => (s.handle === "resultados" ? ui.resultsSource : s.name === s.handle ? `@${s.handle}` : s.name);
+  const leagueByKey = useMemo(() => Object.fromEntries(leagues.map((l) => [l.key, l])), [leagues]);
+  const leagueName = (k) => { const l = leagueByKey[k]; return l ? (lang === "en" ? l.nome_en || l.nome : l.nome) : null; };
+  const srcPais = useMemo(() => Object.fromEntries(sourceList.map(([h, , p]) => [h, p])), [sourceList]);
+  const flagOf = (it) => it.pais || srcPais[it.src] || leagueByKey[it.liga]?.pais;
   // resultados em direto: só as ligas escolhidas (a escolha fica guardada neste browser)
   const ligaOn = (it) => !it.liga || ligasOn === null || ligasOn.has(it.liga);
   const srcOn = (it) => ligaOn(it) && (isOn(it.src) || (it.also || []).some((a) => isOn(a.src)));
@@ -390,6 +415,7 @@ export default function App() {
   };
 
   const visible = useMemo(() => {
+    if (section === "favoritos") return [...favs].filter(matches).sort((a, b) => b.favAt - a.favAt);
     const list = items.filter((it) => srcOn(it) && inSection(it, section) && matches(it));
     if (section !== "destaque") return list;
     // nos Destaques, cada jogo aparece uma só vez (o estado mais recente) e a ordem é por relevância
@@ -405,7 +431,7 @@ export default function App() {
       .sort((a, b) => relevance(b, now) - relevance(a, now))
       .slice(0, TOP_N);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, enabled, ligasOn, section, query, lang, section === "destaque" ? now : 0]);
+  }, [items, favs, enabled, ligasOn, section, query, lang, section === "destaque" ? now : 0]);
 
   const unreadBy = useMemo(() => {
     const out = {};
@@ -419,7 +445,7 @@ export default function App() {
     for (const it of items) {
       if (!it.score || !srcOn(it)) continue;
       const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
-      if (map.has(k)) continue;
+      if (map.has(k) && map.get(k).ts >= it.ts) continue;
       if (q && !`${it.score.comp} ${it.score.h} ${it.score.a}`.toLowerCase().includes(q)) continue;
       map.set(k, it);
     }
@@ -440,7 +466,7 @@ export default function App() {
 
   const postText = (it) => {
     const s = srcOf(it);
-    return [strip(it.t[lang]), ...it.b[lang].map((b) => `• ${strip(b)}`), s.name, postUrl(it)].filter(Boolean).join("\n");
+    return [strip(it.t[lang]), ...it.b[lang].map((b) => `• ${strip(b)}`), srcName(s), postUrl(it)].filter(Boolean).join("\n");
   };
   const copy = async (it) => {
     const text = postText(it);
@@ -476,7 +502,7 @@ export default function App() {
             <li key={h}>
               <button className="srcrow" aria-pressed={on} onClick={() => toggleSource(h)}>
                 <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
-                <span className="nm">{n === h ? `@${h}` : n}</span>
+                <span className="nm">{h === "resultados" ? ui.resultsSource : n === h ? `@${h}` : n}</span>
                 <span className="ct">{srcCounts[h] || 0}</span>
               </button>
             </li>
@@ -512,7 +538,7 @@ export default function App() {
                 <Search size={15} aria-hidden="true" />
                 <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={ui.search} aria-label={ui.search} />
               </label>
-              <div className="seg" role="group" aria-label="Idioma / Language">
+              <div className="seg" role="group" aria-label={ui.langLabel}>
                 <button aria-pressed={lang === "pt"} onClick={() => setLang("pt")}>PT</button>
                 <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
               </div>
@@ -525,7 +551,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <nav className="tabs" aria-label="Secções">
+          <nav className="tabs" aria-label={ui.sectionsLabel}>
             {CATS.map((c) => (
               <button key={c.id} className="tab" aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
                 style={c.club ? { "--tabc": `var(--${c.id})` } : undefined}>
@@ -570,7 +596,7 @@ export default function App() {
                       <li key={l.key}>
                         <button className="srcrow" aria-pressed={on} onClick={() => toggleLiga(l.key)}>
                           <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
-                          <span className="nm">{l.nome}</span>
+                          <span className="nm">{lang === "en" ? l.nome_en || l.nome : l.nome}</span>
                         </button>
                       </li>
                     );
@@ -583,8 +609,8 @@ export default function App() {
               <button className="pending" onClick={() => { setPaused(false); flush(); }}>{ui.pending(pending.length)}</button>
             )}
 
-            {section === "x" ? (
-              <XEmbed url={listaX} theme={theme} lang={lang} ui={ui} />
+            {section === "historias" ? (
+              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (
               games.length === 0 ? <p className="empty">{ui.noResults}</p> : (
                 <ul className="board" aria-live="polite">
@@ -592,33 +618,34 @@ export default function App() {
                     const sc = it.score, s = srcOf(it);
                     return (
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.ts, now) ? "on" : ""}`}>
-                        <span className="comp">{sc.comp}</span>
+                        <span className="comp"><Flag code={flagOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
                         <span className="team h">{sc.h}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
                         <span className="team">{sc.a}</span>
                         <span className="st">{isLive(sc, it.ts, now) ? <span className="pulse"><i />{sc.min || ui.live}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
-                        <span className="upd">{ui.updated(agoText(it.ts, now, ui), s.name === s.handle ? `@${s.handle}` : s.name)}</span>
+                        <span className="upd">{ui.updated(agoText(it.ts, now, ui), srcName(s))}</span>
                       </li>
                     );
                   })}
                 </ul>
               )
             ) : visible.length === 0 ? (
-              <p className="empty">{items.length === 0 ? ui.waiting : ui.empty}</p>
+              <p className="empty">{section === "favoritos" ? ui.noFavs : items.length === 0 ? ui.waiting : ui.empty}</p>
             ) : (
               <ol className="feed" aria-live="polite">
                 {visible.map((it) => {
                   const s = srcOf(it);
                   const cls = ["item", it.unread && "unread", it.fresh && "fresh", it.hot && "hot"].filter(Boolean).join(" ");
                   return (
-                    <li key={it.id} className={cls}>
+                    <li key={it.id} id={`n-${it.id}`} className={cls}>
                       <div className="gut" title={new Date(it.ts).toLocaleTimeString(ui.locale)}>
                         {(() => { const a = ago(it.ts, now); return a ? <><span className="n">{a[0]}</span><span className="u">{a[1]}</span></> : <span className="u">{ui.now}</span>; })()}
                       </div>
                       <div className="rail"><span className="dot" /></div>
                       <article className="body" onClick={() => markRead(it.id)}>
                         <div className="mrow">
-                          <span className="src">{s.name === s.handle ? `@${s.handle}` : s.name}</span>
+                          <Flag code={flagOf(it)} lang={lang} />
+                          <span className="src">{srcName(s)}</span>
                           {it.via && <span className="muted">{it.via}</span>}
                           {it.also?.length > 0 && (
                             <span className="muted" title={it.also.map((a) => a.name || `@${a.src}`).join(", ")}>{ui.moreSources(it.also.length)}</span>
@@ -659,6 +686,9 @@ export default function App() {
                             {copiedId === it.id ? ui.copied : ui.copy}
                           </button>
                           <button className="textbtn" onClick={() => share(it)}><Share2 size={14} />{ui.share}</button>
+                          <button className={`textbtn ${isFav(it.id) ? "on" : ""}`} aria-pressed={isFav(it.id)} onClick={(e) => { e.stopPropagation(); toggleFav(it); }}>
+                            <Star size={14} fill={isFav(it.id) ? "currentColor" : "none"} />{isFav(it.id) ? ui.saved : ui.save}
+                          </button>
                           {postUrl(it) ? (
                             <a className="textbtn" href={postUrl(it)} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
                               <ExternalLink size={14} />{isXUrl(postUrl(it)) ? ui.viewX : ui.viewSrc}

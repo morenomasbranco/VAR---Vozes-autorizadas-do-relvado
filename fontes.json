@@ -4,68 +4,80 @@
       "id": "record",
       "nome": "Record",
       "site": "https://www.record.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "abola",
       "nome": "A Bola",
       "site": "https://www.abola.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "ojogo",
       "nome": "O Jogo",
       "site": "https://www.ojogo.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "maisfutebol",
       "nome": "Maisfutebol",
       "site": "https://maisfutebol.iol.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "zerozero",
       "nome": "zerozero",
       "site": "https://www.zerozero.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "bolanarede",
       "nome": "Bola na Rede",
       "site": "https://www.bolanarede.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "footmercato",
       "nome": "Foot Mercato",
       "site": "https://www.footmercato.net",
-      "lang": "fr"
+      "lang": "fr",
+      "pais": "fr"
     },
     {
       "id": "brfootball",
       "nome": "B/R Football",
       "site": "https://bleacherreport.com",
-      "lang": "en"
+      "lang": "en",
+      "pais": "us"
     },
     {
       "id": "flashscore",
       "nome": "Flashscore",
       "site": "https://www.flashscore.pt/noticias/",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "canal11",
       "nome": "Canal 11",
       "site": "https://canal11.pt",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     },
     {
       "id": "sapodesporto",
       "nome": "SAPO Desporto",
       "site": "https://sapo.pt/desporto",
       "feed": "http://services.sapo.pt/RSS/Feed/sapo/desporto/teasers",
-      "lang": "pt"
+      "google": "site:desporto.sapo.pt",
+      "lang": "pt",
+      "pais": "pt"
     }
   ],
   "telegram": [
@@ -73,13 +85,15 @@
       "id": "fabrizioromano",
       "nome": "Fabrizio Romano",
       "canal": "FabrizioRomanoTG",
-      "lang": "en"
+      "lang": "en",
+      "pais": "it"
     },
     {
       "id": "b24",
       "nome": "B24",
       "canal": "B24PT",
-      "lang": "pt"
+      "lang": "pt",
+      "pais": "pt"
     }
   ],
   "bluesky": [
@@ -87,8 +101,8 @@
       "id": "ornstein",
       "nome": "David Ornstein",
       "handle": "david-ornstein.bsky.social",
-      "lang": "en"
+      "lang": "en",
+      "pais": "gb"
     }
-  ],
-  "listaX": ""
+  ]
 }

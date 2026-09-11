@@ -8,7 +8,6 @@ Feed de notícias de desporto em tempo real, feito só com serviços gratuitos.
 - **Canais do Telegram** (Fabrizio Romano, B24). As mensagens chegam em um ou dois segundos. Quando o canal republica um post do X, o botão do site abre esse post no X.
 - **Contas do Bluesky** (David Ornstein), pelo stream público do Bluesky, também em segundos.
 - **Resultados em direto** (GOAL API): início, golos, intervalo e final dos jogos das ligas do `ligas.json`, publicados como notícias. No site, a secção Resultados tem um botão para cada visitante escolher as ligas que quer ver.
-- **Contas que só existem no X**: aparecem na secção «Só no X», através do widget oficial e gratuito do X para listas públicas.
 
 Cada notícia (exceto os resultados) passa pelo Gemini, que decide se é notícia, escolhe as secções, escreve título e pontos em português e inglês, dá a nota de importância e junta as notícias repetidas de várias fontes.
 
@@ -18,7 +17,6 @@ Cada notícia (exceto os resultados) passa pelo Gemini, que decide se é notíci
 - Uma chave do Gemini, criada em aistudio.google.com, sem cartão.
 - Uma conta Telegram, e as credenciais `api_id` e `api_hash`, criadas em my.telegram.org › API development tools.
 - Uma chave da GOAL API, com o plano gratuito de goal-api.com.
-- Uma conta no X para criar a lista pública das contas que só publicam no X.
 
 ## Arrancar
 
@@ -41,7 +39,6 @@ Tudo está em `fontes.json`:
 - `rss`: basta o endereço do site; o servidor encontra o feed sozinho. Se o `verificar-fontes` disser que não o encontrou, procura o link do feed no site e põe-no no campo `feed`.
 - `telegram`: o nome público do canal (o que aparece em t.me/…).
 - `bluesky`: o nome da conta (…bsky.social).
-- `listaX`: o link de uma lista pública do X com as contas que só publicam no X (SPORT TV, Sofascore, DAZN, GoalPoint, DataMB, Playmaker, V Sports, visaomercado, DTransferencias, Pedro Sepúlveda, CabineSport, sebsousapinto, Ekrem Konur). Cria a lista em x.com › Listas e copia o link.
 
 ## Ligas dos resultados
 
@@ -53,7 +50,6 @@ O plano gratuito da GOAL API tem 1.000 pedidos por dia. O servidor lê o calend�
 
 - O plano gratuito do Gemini tem limites por minuto e por dia. O servidor junta várias notícias por pedido. Se o limite se esgotar, as notícias saem na mesma, classificadas por palavras-chave e sem tradução, até o limite voltar. No plano gratuito, a Google pode usar o conteúdo enviado para melhorar os modelos.
 - Nos feeds RSS, o atraso depende também de o site atualizar o feed. O `verificar-fontes` mostra a idade da notícia mais recente de cada feed.
-- A secção «Só no X» mostra os posts dentro do widget do X: tal como foram publicados, sem tradução e fora das outras secções. O X pode pedir sessão iniciada para mostrar a lista; nesse caso, o site mostra um link para a lista.
 - Com `npm run verificar-fontes` vês também um exemplo de jogo lido da GOAL API. Se aparecer «formato por reconhecer», o formato da API mudou e é preciso ajustar os nomes dos campos em `server/sources/results.js`.
 
 ## Pôr online

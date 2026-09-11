@@ -8,6 +8,8 @@ import { startRss } from "./sources/rss.js";
 import { startTelegram } from "./sources/telegram.js";
 import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
+import { startEspn } from "./sources/espn.js";
+import { createStories } from "./stories.js";
 import { slug } from "./util.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
@@ -19,12 +21,14 @@ const log = (...a) => console.log(...a);
 const RSS = FONTES.rss || [];
 const TELEGRAM = FONTES.telegram || [];
 const BLUESKY = FONTES.bluesky || [];
+const PAIS = Object.fromEntries([...RSS, ...TELEGRAM, ...BLUESKY].map((s) => [s.id, s.pais])); // país de cada fonte, para a bandeira
 const SOURCES = [
-  ...[...RSS, ...TELEGRAM, ...BLUESKY].map((s) => ({ handle: s.id, name: s.nome })),
-  ...(process.env.GOAL_API_KEY ? [{ handle: "resultados", name: "Resultados em direto" }] : []),
+  ...[...RSS, ...TELEGRAM, ...BLUESKY].map((s) => ({ handle: s.id, name: s.nome, pais: s.pais })),
+  { handle: "resultados", name: "Resultados em direto" },
 ];
 
 store.load();
+const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
 const clients = new Set();
 const status = { x: "ligado", fila: 0, publicadas: 0, juntas: 0, ignoradas: 0, semTraducao: 0 };
 
@@ -39,6 +43,20 @@ function publish(item) {
   store.add({ also: [], ...item, postId: item.postId || item.id });
   status.publicadas++;
   broadcast("item", store.get(item.id));
+}
+
+// cria ou atualiza um cartão (usado pelos cartões de jogos em direto)
+function upsert(item) {
+  const cur = store.get(item.id);
+  if (!cur) return publish(item);
+  Object.assign(cur, item);
+  store.touch();
+  broadcast("update", cur);
+}
+function removeItem(id) {
+  if (!store.get(id)) return;
+  store.remove(id);
+  broadcast("remove", { id });
 }
 
 // Publicar primeiro, tratar depois: cada post aparece no site no segundo em que chega, com o texto original.
@@ -61,7 +79,7 @@ function refine(post, ai) {
   if (ai.bruto) status.semTraducao++;
   if (ai.igual_a && ai.igual_a !== it.id) {
     const merged = store.attach(ai.igual_a, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
-    if (merged) { status.juntas++; drop(); broadcast("update", merged); return; }
+    if (merged) { status.juntas++; drop(); broadcast("update", merged); stories.onTrending(merged); return; }
   }
   Object.assign(it, toItem(post, ai), { pending: false });
   store.touch();
@@ -75,7 +93,7 @@ function onPost(post) {
   if (seen.has(post.postId) || store.has(post.postId)) return;
   if (seen.size > 20000) seen.clear();
   seen.add(post.postId);
-  publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pending: true, ...toItem(post, fallback(post)) });
+  publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], pending: true, ...toItem(post, fallback(post)) });
   status.fila++;
   enrich(post).then((ai) => { status.fila--; refine(post, ai); });
 }
@@ -89,8 +107,8 @@ app.use((req, res, next) => {
 });
 app.get("/api/items", (req, res) => res.json(store.all(Number(req.query.limit) || 400)));
 app.get("/api/sources", (req, res) => res.json(SOURCES));
-app.get("/api/leagues", (req, res) => res.json(process.env.GOAL_API_KEY ? LIGAS.map((l) => ({ key: slug(l.nome), nome: l.nome })) : []));
-app.get("/api/config", (req, res) => res.json({ listaX: FONTES.listaX || "" }));
+app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira }))));
+app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
@@ -110,4 +128,7 @@ app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
 startRss(RSS, onPost, log);
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
-startResults(LIGAS, publish, log);
+// resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear
+const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log);
+const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
+stories.watch(espnLeagues);

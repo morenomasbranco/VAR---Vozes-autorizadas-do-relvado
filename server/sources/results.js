@@ -67,35 +67,42 @@ async function call(path) {
   return { body, quota };
 }
 
-// jogos de um dia (UTC), para saber a que horas há jogos das ligas escolhidas
-export async function fetchDay(date) {
+// lista paginada; se a API recusar os parâmetros de paginação, faz um só pedido sem eles (e lembra-se disso)
+let noPaging = false;
+async function list(path, maxPages) {
   const all = [];
   let quota = {};
-  for (let offset = 0, page = 0; page < 10; page++, offset += 200) {
-    const r = await call(`/fixtures/date/${date}?limit=200&offset=${offset}`);
+  const push = (body) => { const d = body.data; all.push(...(Array.isArray(d) ? d : d?.fixtures || d?.matches || [])); };
+  if (noPaging) {
+    const r = await call(path);
+    push(r.body);
+    return { raw: all, quota: r.quota };
+  }
+  for (let page = 0; page < maxPages; page++) {
+    let r;
+    try {
+      r = await call(`${path}?limit=100&offset=${page * 100}`);
+    } catch (e) {
+      if (e.status !== 400 || page > 0) throw e;
+      noPaging = true;
+      r = await call(path);
+      quota = r.quota;
+      push(r.body);
+      break;
+    }
     quota = r.quota;
-    const data = r.body.data;
-    all.push(...(Array.isArray(data) ? data : data?.fixtures || data?.matches || []));
+    push(r.body);
     if (!r.body.pagination?.hasMore) break;
   }
   return { raw: all, quota };
 }
 
-export async function fetchLive() {
-  const all = [];
-  let quota = {};
-  for (let offset = 0, page = 0; page < 3; page++, offset += 200) {
-    const r = await call(`/fixtures/live?limit=200&offset=${offset}`);
-    quota = r.quota;
-    const data = r.body.data;
-    all.push(...(Array.isArray(data) ? data : data?.fixtures || data?.matches || []));
-    if (!r.body.pagination?.hasMore) break;
-  }
-  return { raw: all, quota };
-}
+// jogos de um dia (UTC), para saber a que horas há jogos das ligas escolhidas
+export const fetchDay = (date) => list(`/fixtures/date/${date}`, 20);
+export const fetchLive = () => list("/fixtures/live", 5);
 
 export function startResults(leagues, publish, log) {
-  if (!process.env.GOAL_API_KEY) { log("[Resultados] sem GOAL_API_KEY no .env; resultados em direto desligados"); return; }
+  if (!process.env.GOAL_API_KEY) { log("[Resultados] sem GOAL_API_KEY; as ligas sem ESPN não têm resultados em direto"); return { add() {} }; }
   leagues = leagues.map((l) => ({ ...l, key: slug(l.nome) }));
   const state = new Map(); // estado de cada jogo acompanhado
   let quota = {};
@@ -123,7 +130,7 @@ export function startResults(leagues, publish, log) {
       final: [`Final: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==`, `Full time: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==`, big ? 5 : top ? 3 : 2],
       direto: [`Em direto: ${sc}`, `Live: ${sc}`, 1],
     }[kind];
-    const bullets = { pt: [lg.nome], en: [lg.nome] };
+    const bullets = { pt: [lg.nome], en: [lg.nome_en || lg.nome] };
     if (kind === "golo" && m.lastScorer) { bullets.pt.unshift(`Golo de ==${m.lastScorer}==${m.minute ? ` aos ${m.minute}` : ""}`); bullets.en.unshift(`Scored by ==${m.lastScorer}==${m.minute ? ` (${m.minute})` : ""}`); }
     else if (kind === "golo" && m.minute) { bullets.pt.unshift(`Aos ${m.minute}`); bullets.en.unshift(`On ${m.minute}`); }
     publish({
@@ -134,6 +141,7 @@ export function startResults(leagues, publish, log) {
       orig: "multi",
       cats: cats(m, lg),
       liga: lg.key,
+      pais: lg.bandeira,
       t: { pt: T[0], en: T[1] },
       b: bullets,
       imp: T[2],
@@ -244,6 +252,12 @@ export function startResults(leagues, publish, log) {
     await sleep(delay(live) * 1000);
     tick();
   };
-  log(`[Resultados] a acompanhar ${leagues.length} liga(s)`);
+  log(`[Resultados] GOAL API a acompanhar ${leagues.length} liga(s)`);
   tick();
+  return {
+    add(more) {
+      leagues.push(...more.map((l) => ({ ...l, key: slug(l.nome) })));
+      scheduleDay = ""; // volta a ler o calendário com as ligas novas
+    },
+  };
 }
