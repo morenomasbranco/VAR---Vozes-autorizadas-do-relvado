@@ -175,7 +175,7 @@ export function createStories({ broadcast, log }) {
     for (const [fav, und] of [[sides[0], sides[1]], [sides[1], sides[0]]]) {
       const rf = rank(fav.id), ru = rank(und.id);
       const favorito = isBig(fav.name) || (rf && rf <= 3);
-      if (!favorito || !rf || !ru || ru - rf < 8 || fav.goals > fav.opp) continue;
+      if (!favorito || !rf || !ru || ru - rf < 5 || fav.goals > fav.opp) continue;
       const perdeu = fav.goals < fav.opp;
       push({
         ...common,
@@ -211,7 +211,7 @@ export function createStories({ broadcast, log }) {
 
     // 3. golo decisivo nos últimos minutos
     const lastGoal = m.goals?.[m.goals.length - 1];
-    if (winner && margin === 1 && lastGoal && lastGoal.min >= 85 && lastGoal.home === (winner === sides[0])) push({
+    if (winner && margin === 1 && lastGoal && lastGoal.min >= 80 && lastGoal.home === (winner === sides[0])) push({
       ...common, id: `s:tardio:${m.id}`, tipo: "tardio",
       crit: ["emocao", ...noto(winner.name, winner.id), ...prox(winner.name)],
       t: { pt: `${winner.name} decide aos ${lastGoal.label} frente ao ${loser.name}`, en: `${winner.name} snatch it at ${lastGoal.label} against ${loser.name}` },
@@ -222,10 +222,10 @@ export function createStories({ broadcast, log }) {
     // 4. goleada (se um dos grandes a sofre, a pista fala dele e é negativa)
     const bigLoser = loser && isBig(loser.name) && !isBig(winner.name);
     const big = `${Math.max(m.hs, m.as)}–${Math.min(m.hs, m.as)}`;
-    if (winner && (margin >= 4 || m.hs + m.as >= 7)) push({
+    if (winner && (margin >= 3 || m.hs + m.as >= 6)) push({
       ...common, id: `s:goleada:${m.id}`, tipo: "goleada", tom: bigLoser ? "negativa" : "positiva",
       ...(bigLoser ? { t: { pt: `${loser.name} sofre goleada frente ao ${winner.name} (${big})`, en: `${loser.name} thrashed by ${winner.name} (${big})` } } : {}),
-      crit: ["magnitude", ...(margin >= 5 ? ["raridade"] : []), ...(isBig(loser.name) ? ["surpresa", "impacto"] : []), ...noto(winner.name, winner.id), ...noto(loser.name, loser.id), ...prox(winner.name), ...prox(loser.name)],
+      crit: ["magnitude", ...(margin >= 4 ? ["raridade"] : []), ...(isBig(loser.name) ? ["surpresa", "impacto"] : []), ...noto(winner.name, winner.id), ...noto(loser.name, loser.id), ...prox(winner.name), ...prox(loser.name)],
       ...(bigLoser ? {} : { t: { pt: `${winner.name} goleia o ${loser.name} (${big})`, en: `${winner.name} thrash ${loser.name} (${big})` } }),
       angulo: { pt: `Resultado invulgarmente largo. É o maior da época na competição? Há precedentes entre estas equipas?`, en: `An unusually wide margin. Is it the biggest of the season in this competition? Any precedent between these sides?` },
       dados: matchData,
@@ -249,31 +249,31 @@ export function createStories({ broadcast, log }) {
       const extra = [...noto(side.name, side.id), ...prox(side.name)];
       const forma = { pt: [`Últimos ${Math.min(r.length, 8)} jogos: ${r.slice(-8).join(" ")}`], en: [`Last ${Math.min(r.length, 8)}: ${r.slice(-8).map((x) => ({ V: "W", E: "D", D: "L" })[x]).join(" ")}`] };
       const verificarSerie = { pt: ["Recorde de vitórias seguidas do clube", "Declarações do treinador sobre o momento"], en: ["Club record for consecutive wins", "Manager's comments on the run"] };
-      if (wins >= 5) push({
-        ...base, id: `s:serie:${side.id}:${m.id}`, tipo: "serie", crit: ["continuidade", ...(wins >= 7 ? ["raridade"] : []), ...extra],
+      if (wins >= 3) push({
+        ...base, id: `s:serie:${side.id}:${m.id}`, tipo: "serie", crit: ["continuidade", ...(wins >= 5 ? ["raridade"] : []), ...extra],
         t: { pt: `${side.name} soma ${wins} vitórias seguidas`, en: `${side.name} make it ${wins} wins in a row` },
         angulo: { pt: "O que explica a série, até onde pode ir e se está perto de algum recorde do clube.", en: "What explains the run, how far it can go and whether a club record is in sight." },
         dados: forma, verificar: verificarSerie,
       });
-      else if (unbeaten >= 10) push({
+      else if (unbeaten >= 6) push({
         ...base, id: `s:invicto:${side.id}:${m.id}`, tipo: "serie", crit: ["continuidade", "raridade", ...extra],
         t: { pt: `${side.name} está há ${unbeaten} jogos sem perder`, en: `${side.name} unbeaten in ${unbeaten}` },
         angulo: { pt: "Série longa sem derrotas: solidez defensiva, rotação do plantel ou calendário favorável?", en: "A long unbeaten run: defensive solidity, squad rotation or a kind fixture list?" },
         dados: forma, verificar: verificarSerie,
       });
-      if (losses >= 3) push({
+      if (losses >= 2) push({
         ...base, id: `s:derrotas:${side.id}:${m.id}`, tipo: "derrotas", crit: ["continuidade", ...(isBig(side.name) || losses >= 5 ? ["impacto"] : []), ...(isBig(side.name) ? ["surpresa"] : []), ...extra],
         t: { pt: `${side.name} soma ${losses} derrotas seguidas`, en: `${side.name} have lost ${losses} in a row` },
         angulo: { pt: `Pressão sobre o treinador${winless > losses ? ` numa série de ${winless} jogos sem vencer` : ""}. O que mudou na equipa e que respostas dá a direção?`, en: `Pressure on the manager${winless > losses ? ` during a ${winless}-game winless run` : ""}. What has changed and how is the board responding?` },
         dados: forma, verificar: { pt: ["Posição do treinador e da direção", "Lesões e castigos no plantel", "Calendário dos próximos jogos"], en: ["Manager's and board's position", "Injuries and suspensions", "Upcoming fixtures"] },
       });
-      else if (winless >= 5) push({
+      else if (winless >= 4) push({
         ...base, id: `s:crise:${side.id}:${m.id}`, tipo: "crise", crit: ["continuidade", ...(isBig(side.name) ? ["impacto", "surpresa"] : []), ...extra],
         t: { pt: `${side.name} está há ${winless} jogos sem vencer`, en: `${side.name} without a win in ${winless}` },
         angulo: { pt: `Pressão sobre o treinador e sobre a posição na tabela${losses >= 3 ? `, com ${losses} derrotas seguidas` : ""}.`, en: `Pressure on the manager and on the league position${losses >= 3 ? `, with ${losses} straight defeats` : ""}.` },
         dados: forma, verificar: { pt: ["Posição do treinador e da direção", "Lesões e castigos no plantel"], en: ["Manager's and board's position", "Injuries and suspensions"] },
       });
-      if (prevWins >= 5) push({
+      if (prevWins >= 3) push({
         ...base, id: `s:fimserie:${side.id}:${m.id}`, tipo: "fimserie", crit: ["surpresa", "continuidade", ...extra],
         t: { pt: `Acabou a série de ${prevWins} vitórias do ${side.name}`, en: `${side.name}'s ${prevWins}-game winning run is over` },
         angulo: { pt: "A primeira escorregadela depois de uma boa fase: acidente ou sinal de quebra?", en: "The first slip after a strong run: a blip or a sign of decline?" },
@@ -342,28 +342,41 @@ export function createStories({ broadcast, log }) {
   }
 
   // no arranque, recupera as pistas dos jogos terminados nos últimos dias, para a secção não ficar vazia
+  const estado = { at: null, dias: 0, jogos: 0, pistas: 0, ligas: [] };
+
   async function backfill(leagues) {
     const days = Number(process.env.HISTORIAS_DIAS) || 7;
     const d = (n) => new Date(Date.now() - n * 86400e3).toISOString().slice(0, 10).replace(/-/g, "");
     let total = 0;
+    estado.dias = days;
+    estado.ligas = [];
     for (const lg of leagues.filter((l) => l.sport === "soccer")) {
+      const nota = { liga: lg.nome, jogos: 0, terminados: 0, tabela: false, erro: null };
+      estado.ligas.push(nota);
       try {
         await refreshTable(lg);
+        nota.tabela = !!table.get(lg.key);
         const body = await getJson(`${SITE}/${lg.espn}/scoreboard?dates=${d(days)}-${d(0)}`);
+        nota.jogos = (body.events || []).length;
         for (const ev of body.events || []) {
           const m = normalizeEvent(ev);
           if (m.state !== "post" || !m.completed || !m.home || !m.away) continue;
           if (lg.so && !lg.so.some((t) => norm(m.home) === norm(t) || norm(m.away) === norm(t))) continue;
+          nota.terminados++;
           await onFinal(lg, m, null, { backfill: true, ts: m.start || Date.now() });
           total++;
           await sleep(400);
         }
       } catch (e) {
+        nota.erro = e.message;
         log(`[Histórias] ${lg.nome}: ${e.message}`);
       }
     }
+    estado.at = Date.now();
+    estado.jogos = total;
+    estado.pistas = list.length;
     log(`[Histórias] ${total} jogo(s) dos últimos ${days} dias analisados; ${list.length} pista(s) disponíveis`);
   }
 
-  return { all: () => list, onFinal, onTrending, watch, backfill };
+  return { all: () => list, estado: () => estado, onFinal, onTrending, watch, backfill };
 }
