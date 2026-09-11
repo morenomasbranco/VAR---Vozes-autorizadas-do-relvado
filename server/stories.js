@@ -52,7 +52,7 @@ export async function fetchStandings(lg) {
     size = Math.max(size, entries.length);
     entries.forEach((e, i) => {
       const stat = (n) => e.stats?.find((s) => s.name === n || s.type === n)?.value;
-      byTeam.set(String(e.team?.id), { rank: Number(stat("rank")) || i + 1, points: stat("points"), name: e.team?.shortDisplayName || e.team?.displayName });
+      byTeam.set(String(e.team?.id), { rank: Number(stat("rank")) || i + 1, points: stat("points"), name: e.team?.shortDisplayName || e.team?.displayName, logo: e.team?.logos?.[0]?.href });
     });
   }
   const leader = [...byTeam.entries()].find(([, v]) => v.rank === 1)?.[0] || null;
@@ -72,6 +72,36 @@ export async function fetchForm(lg, teamId) {
     out.push({ id: String(ev.id), date: Date.parse(ev.date) || 0, r: me.winner ? "V" : op.winner ? "D" : "E" });
   }
   return out.sort((a, b) => a.date - b.date);
+}
+
+// estatísticas do jogo que entram na ficha, pela ordem em que aparecem
+const STATS = [
+  ["possessionPct", "Posse de bola (%)", "Possession (%)"],
+  ["totalShots", "Remates", "Shots"],
+  ["shotsOnTarget", "Remates à baliza", "Shots on target"],
+  ["wonCorners", "Cantos", "Corners"],
+  ["foulsCommitted", "Faltas", "Fouls"],
+  ["offsides", "Foras de jogo", "Offsides"],
+  ["yellowCards", "Amarelos", "Yellow cards"],
+  ["redCards", "Vermelhos", "Red cards"],
+  ["saves", "Defesas", "Saves"],
+];
+
+// ficha do jogo a partir do resumo da ESPN: estatísticas, golos e expulsões
+export async function fetchSummary(lg, m) {
+  const body = await getJson(`${SITE}/${lg.espn}/summary?event=${m.id}`);
+  const teams = body.boxscore?.teams || [];
+  const side = (id) => teams.find((t) => String(t.team?.id) === String(id));
+  const h = side(m.homeTeamId), a = side(m.awayTeamId);
+  const val = (t, name) => t?.statistics?.find((x) => x.name === name)?.displayValue;
+  const stats = h && a ? STATS.map(([id, pt, en]) => ({ id, pt, en, casa: val(h, id), fora: val(a, id) })).filter((x) => x.casa != null && x.fora != null) : [];
+  const ev = body.keyEvents || [];
+  const who = (k) => k.participants?.[0]?.athlete?.displayName || "";
+  const teamOf = (k) => (String(k.team?.id) === String(m.homeTeamId) ? m.home : String(k.team?.id) === String(m.awayTeamId) ? m.away : k.team?.displayName || "");
+  const goals = ev.filter((k) => (k.scoringPlay || /^goal/i.test(k.type?.text || "")) && !/disallow|anulad/i.test(k.type?.text || ""))
+    .map((k) => ({ min: k.clock?.displayValue || "", jogador: who(k), equipa: teamOf(k) }));
+  const reds = ev.filter((k) => /red card/i.test(k.type?.text || "")).map((k) => ({ min: k.clock?.displayValue || "", jogador: who(k), equipa: teamOf(k) }));
+  return { stats, goals, reds };
 }
 
 const trailing = (seq, test) => { let n = 0; for (let i = seq.length - 1; i >= 0 && test(seq[i]); i--) n++; return n; };
@@ -116,7 +146,23 @@ export function createStories({ broadcast, log }) {
     ];
     const sc = `${m.home} ${m.hs}–${m.as} ${m.away}`;
     const nomeEn = lg.nome_en || lg.nome;
-    const common = { liga: lg.key, ligaNome: lg.nome, pais: lg.bandeira, equipas: [m.home, m.away] };
+    // ficha do jogo que acompanha todas as pistas deste jogo
+    let sum = null;
+    try { sum = await fetchSummary(lg, m); } catch { /* sem resumo: a ficha fica só com os golos */ }
+    const posOf = (id, name) => {
+      const e = table.get(lg.key)?.byTeam.get(String(id));
+      return e ? { equipa: name, pos: e.rank, pts: e.points ?? null } : null;
+    };
+    const ficha = {
+      casa: m.home, fora: m.away, hs: m.hs, as: m.as,
+      golos: m.goals?.length ? m.goals.map((g) => ({ min: g.label, jogador: g.scorer, equipa: g.home ? m.home : m.away })) : sum?.goals || [],
+      vermelhos: sum?.reds || [],
+      stats: sum?.stats || [],
+      tabela: [posOf(m.homeTeamId, m.home), posOf(m.awayTeamId, m.away)].filter(Boolean),
+      tamanho: table.get(lg.key)?.size || null,
+    };
+    const crestOf = (name, logo) => ({ nome: name, papel: "envolvido", logo });
+    const common = { liga: lg.key, ligaNome: lg.nome, pais: lg.bandeira, equipas: [m.home, m.away], crests: [crestOf(m.home, m.homeLogo), crestOf(m.away, m.awayLogo)], ficha };
     const prox = (name) => (pt || isBig(name) ? ["proximidade"] : []);
     const noto = (name, id) => (isBig(name) || (lg.seccao === "big5" && rank(id) && rank(id) <= 3) ? ["notoriedade"] : []);
     const matchData = { pt: [`Resultado: ${sc} (${lg.nome})`], en: [`Result: ${sc} (${nomeEn})`] };
@@ -199,7 +245,7 @@ export function createStories({ broadcast, log }) {
       const winless = trailing(r, (x) => x !== "V");
       const losses = trailing(r, (x) => x === "D");
       const prevWins = res !== "V" ? trailing(r.slice(0, -1), (x) => x === "V") : 0;
-      const base = { ...common, equipas: [side.name] };
+      const base = { ...common, equipas: [side.name], crests: [crestOf(side.name, side === sides[0] ? m.homeLogo : m.awayLogo)] };
       const extra = [...noto(side.name, side.id), ...prox(side.name)];
       const forma = { pt: [`Últimos ${Math.min(r.length, 8)} jogos: ${r.slice(-8).join(" ")}`], en: [`Last ${Math.min(r.length, 8)}: ${r.slice(-8).map((x) => ({ V: "W", E: "D", D: "L" })[x]).join(" ")}`] };
       const verificarSerie = { pt: ["Recorde de vitórias seguidas do clube", "Declarações do treinador sobre o momento"], en: ["Club record for consecutive wins", "Manager's comments on the run"] };
@@ -251,7 +297,7 @@ export function createStories({ broadcast, log }) {
     if (now.leader && old.leader && now.leader !== old.leader) {
       const name = now.byTeam.get(now.leader)?.name;
       if (name) push({
-        ...common, id: `s:lider:${lg.key}:${m.id}`, tipo: "lider", equipas: [name], crit: ["impacto", ...(isBig(name) ? ["notoriedade"] : []), ...(pt || isBig(name) ? ["proximidade"] : [])],
+        ...common, id: `s:lider:${lg.key}:${m.id}`, tipo: "lider", equipas: [name], crests: [crestOf(name, now.byTeam.get(now.leader)?.logo)], crit: ["impacto", ...(isBig(name) ? ["notoriedade"] : []), ...(pt || isBig(name) ? ["proximidade"] : [])],
         t: { pt: `${name} é o novo líder da ${lg.nome}`, en: `${name} go top of the ${nomeEn}` },
         angulo: { pt: "Mudança na liderança: há quanto tempo não estava em primeiro e o que falta jogar entre os candidatos?", en: "A change at the top: how long since they led, and what's left between the contenders?" },
         dados: { pt: [`${name}: ${now.byTeam.get(now.leader)?.points ?? "?"} pontos`], en: [`${name}: ${now.byTeam.get(now.leader)?.points ?? "?"} points`] },
@@ -262,7 +308,7 @@ export function createStories({ broadcast, log }) {
     for (const side of sides) {
       const a = old.byTeam.get(String(side.id))?.rank, b = now.byTeam.get(String(side.id))?.rank;
       if (a && b && zone(now)(b) && !zone(old)(a)) push({
-        ...common, id: `s:descida:${side.id}:${m.id}`, tipo: "descida", equipas: [side.name], crit: ["impacto", "continuidade", ...prox(side.name)],
+        ...common, id: `s:descida:${side.id}:${m.id}`, tipo: "descida", equipas: [side.name], crests: [crestOf(side.name, side === sides[0] ? m.homeLogo : m.awayLogo)], crit: ["impacto", "continuidade", ...prox(side.name)],
         t: { pt: `${side.name} cai para a zona de descida`, en: `${side.name} drop into the relegation zone` },
         angulo: { pt: `Passou de ${pct(a)} para ${pct(b)}. O que falta jogar e quem são os adversários diretos?`, en: `Down from ${a} to ${b}. What's left, and who are the direct rivals?` },
         dados: { pt: [`Posição: ${pct(b)} de ${now.size}`], en: [`Position: ${b} of ${now.size}`] },
@@ -277,6 +323,7 @@ export function createStories({ broadcast, log }) {
     if (fontes < 3) return;
     const crit = ["continuidade", ...(item.imp >= 4 ? ["impacto"] : []), ...(item.cats?.some((c) => ["porto", "sporting", "benfica"].includes(c)) ? ["notoriedade", "proximidade"] : item.cats?.includes("portugueses") ? ["proximidade"] : [])];
     add({
+      crests: item.equipas || [],
       id: `s:tema:${item.id}`, tipo: "tema", equipas: [], liga: null, ligaNome: null, pais: item.paisTema || item.pais, crit,
       t: { pt: `Tema em destaque: ${item.t.pt.replace(/==/g, "")}`, en: `Big story: ${item.t.en.replace(/==/g, "")}` },
       angulo: { pt: `${fontes} fontes deram esta notícia. Há margem para um ângulo próprio: contexto, reações ou consequências.`, en: `${fontes} sources have this story. Room for an original angle: context, reactions or consequences.` },

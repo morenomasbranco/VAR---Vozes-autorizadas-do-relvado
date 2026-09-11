@@ -33,6 +33,8 @@ export function normalizeEvent(ev) {
     home: name(home),
     away: name(away),
     homeTeamId: home.team?.id,
+    homeLogo: home.team?.logo || home.team?.logos?.[0]?.href,
+    awayLogo: away.team?.logo || away.team?.logos?.[0]?.href,
     awayTeamId: away.team?.id,
     goals: goals.map((d) => {
       const label = d.clock?.displayValue || "";
@@ -65,7 +67,8 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
   };
   const minute = (m, lg) => (lg.sport === "soccer" ? (m.clock.match(/^\d+(\+\d+)?'/)?.[0] || null) : m.clock || null);
   const score = (m, lg, ft = false) => ({ comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: ft ? null : minute(m, lg), ft });
-  const base = (m, lg) => ({ src: "resultados", name: "Resultados em direto", orig: "multi", liga: lg.key, paisTema: lg.bandeira, cats: cats(m, lg) });
+  const base = (m, lg) => ({ src: "resultados", name: "Resultados em direto", orig: "multi", liga: lg.key, paisTema: lg.bandeira, cats: cats(m, lg),
+    equipas: [{ nome: m.home, papel: "envolvido", logo: m.homeLogo }, { nome: m.away, papel: "envolvido", logo: m.awayLogo }] });
   const sc = (m) => `${m.home} ${m.hs}–${m.as} ${m.away}`;
 
   // um cartão por jogo que se vai atualizando enquanto o jogo decorre

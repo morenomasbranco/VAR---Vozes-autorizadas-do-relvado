@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star } from "lucide-react";
+import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
 const SOURCES = []; // a lista de fontes vem do servidor (/api/sources)
@@ -10,10 +10,9 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 
 /* ───────── Secções ───────── */
 const CATS = [
-  { id: "destaque", pt: "Destaques", en: "Top stories" },
-  { id: "live", pt: "Live", en: "Live" },
+  { id: "destaque", pt: "Destaques", en: "Top stories", hl: "dest" },
+  { id: "live", pt: "Live", en: "Live", hl: "live" },
   { id: "resultados", pt: "Resultados", en: "Results" },
-  { id: "historias", pt: "Possíveis histórias", en: "Story leads" },
   { id: "favoritos", pt: "Favoritos", en: "Saved" },
   { id: "futebol", pt: "Futebol", en: "Football" },
   { id: "porto", pt: "Porto", en: "Porto", club: true },
@@ -26,11 +25,22 @@ const CATS = [
   { id: "estatisticas", pt: "Estatísticas", en: "Stats" },
   { id: "premios", pt: "Prémios", en: "Awards" },
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad" },
+  { id: "historias", pt: "Possíveis histórias", en: "Story leads", hl: "hist" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
-const inSection = (it, s) =>
-  s === "historias" || s === "favoritos" ? false : s === "live" ? true : s === "resultados" ? !!it.score : s === "destaque" ? (it.imp || 0) >= 3 : s === "futebol" ? !it.cats.includes("modalidades") : it.cats.includes(s);
+const BIG3 = ["porto", "sporting", "benfica"];
+// futebol nacional: notícias sobre Portugal (Gemini) ou, sem essa indicação, sobre os três grandes
+const isNational = (it) => !it.cats.includes("modalidades") && !it.cats.includes("portugueses") && (it.paisTema ? it.paisTema === "pt" : it.cats.some((c) => BIG3.includes(c)));
+const inSection = (it, s) => {
+  if (s === "historias" || s === "favoritos") return false;
+  if (s === "live") return true;
+  if (s === "resultados") return !!it.score;
+  if (it.src === "resultados") return false; // notícias dos resultados em direto só no Live e nos Resultados
+  if (s === "destaque") return (it.imp || 0) >= 3;
+  if (s === "futebol") return isNational(it);
+  return it.cats.includes(s);
+};
 
 /* ───────── Textos da interface ───────── */
 const UI = {
@@ -38,6 +48,8 @@ const UI = {
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco" },
+    eventsTitle: "Acontecimentos", noEvents: "Os golos, intervalos e finais dos jogos aparecem aqui assim que acontecem.",
+    goals: "Golos", reds: "Expulsões", matchStats: "Estatísticas do jogo", tableLbl: "Classificação", pts: "pts", ord: (n) => `${n}.º`,
     about: "Sobre", aboutTitle: (c) => `Notícia sobre: ${c}`, fromTitle: (c) => `Origem: ${c}`,
     pending: (n) => `Mostrar ${n} ${n === 1 ? "nova notícia" : "novas notícias"}`,
     empty: "Sem notícias nesta secção para as fontes ativas. Ativa mais fontes ou escolhe outra secção.",
@@ -63,6 +75,8 @@ const UI = {
     live: "Live", paused: "Paused", nSources: (n) => `${n} sources`, markRead: "Mark all as read",
     pause: "Pause", resume: "Resume", search: "Search news", copy: "Copy", copied: "Copied",
     share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish" },
+    eventsTitle: "Match events", noEvents: "Goals, half-times and full-times appear here as they happen.",
+    goals: "Goals", reds: "Red cards", matchStats: "Match stats", tableLbl: "Table", pts: "pts", ord: (n) => `#${n}`,
     about: "About", aboutTitle: (c) => `Story about: ${c}`, fromTitle: (c) => `Source: ${c}`,
     pending: (n) => `Show ${n} new ${n === 1 ? "story" : "stories"}`,
     empty: "No stories in this section from the active sources. Turn on more sources or pick another section.",
@@ -133,8 +147,51 @@ function Flag({ code, lang, title }) {
 const TIPO_TOM = { surpresa: "negativa", reviravolta: "positiva", tardio: "positiva", goleada: "positiva", serie: "positiva", crise: "negativa", derrotas: "negativa", fimserie: "negativa", primeira: "positiva", lider: "positiva", descida: "negativa" };
 const toneOf = (s) => s.tom || TIPO_TOM[s.tipo] || "neutra";
 
+// emblema de um clube ou seleção (a imagem vem da ESPN; se não carregar, fica o nome)
+function Crest({ e, theme, size = 22 }) {
+  const [bad, setBad] = useState(false);
+  const src = theme === "dark" && e.logoDark ? e.logoDark : e.logo;
+  if (!src || bad) return <span className="crest-txt">{e.nome}</span>;
+  return <img className="crest" src={src} alt={e.nome} title={e.nome} width={size} height={size} loading="lazy" onError={() => setBad(true)} />;
+}
+function Crests({ eq, theme, lang }) {
+  if (!eq?.length) return null;
+  const o = eq.find((e) => e.papel === "origem"), d = eq.find((e) => e.papel === "destino");
+  if (o || d) {
+    return (
+      <div className="crests transfer" title={`${o?.nome || "?"} → ${d?.nome || "?"}`}>
+        {o ? <Crest e={o} theme={theme} /> : <span className="crest-txt">?</span>}
+        <ArrowRight size={15} aria-label={lang === "en" ? "to" : "para"} />
+        {d ? <Crest e={d} theme={theme} /> : <span className="crest-txt">?</span>}
+      </div>
+    );
+  }
+  const withLogo = eq.filter((e) => e.logo).slice(0, 3); // fora das transferências, só os que têm emblema
+  if (!withLogo.length) return null;
+  return <div className="crests">{withLogo.map((e) => <Crest key={e.nome} e={e} theme={theme} />)}</div>;
+}
+
+// ficha do jogo: resultado, golos e marcadores, expulsões, estatísticas e classificação
+function Ficha({ f, lang, ui }) {
+  return (
+    <div className="ficha">
+      <div className="fres"><span>{f.casa}</span><b>{f.hs}–{f.as}</b><span>{f.fora}</span></div>
+      {f.golos?.length > 0 && <p><b>{ui.goals}:</b> {f.golos.map((g) => `${g.min} ${g.jogador || "?"} (${g.equipa})`).join(" · ")}</p>}
+      {f.vermelhos?.length > 0 && <p><b>{ui.reds}:</b> {f.vermelhos.map((g) => `${g.min} ${g.jogador || "?"} (${g.equipa})`).join(" · ")}</p>}
+      {f.stats?.length > 0 && (
+        <table className="fstats">
+          <caption>{ui.matchStats}</caption>
+          <thead><tr><th>{f.casa}</th><th /><th>{f.fora}</th></tr></thead>
+          <tbody>{f.stats.map((st) => <tr key={st.id}><td>{st.casa}</td><td>{lang === "en" ? st.en : st.pt}</td><td>{st.fora}</td></tr>)}</tbody>
+        </table>
+      )}
+      {f.tabela?.length > 0 && <p><b>{ui.tableLbl}:</b> {f.tabela.map((t) => `${t.equipa} ${ui.ord(t.pos)}${t.pts != null ? ` (${t.pts} ${ui.pts})` : ""}`).join(" · ")}</p>}
+    </div>
+  );
+}
+
 // possíveis histórias, da mais recente para a mais antiga, com filtros de nível e de tom
-function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais }) {
+function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais, theme }) {
   const [lvl, setLvl] = useState("todos");
   const [tone, setTone] = useState("todas");
   const list = stories
@@ -167,7 +224,9 @@ function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, league
                 {s.ligaNome && <span className="muted">{leagueName(s.liga) || s.ligaNome}</span>}
                 <span className="muted">{agoText(s.ts, now, ui)}</span>
               </div>
+              <Crests eq={s.crests} theme={theme} lang={lang} />
               <h3 className="title">{s.t[lang]}</h3>
+              {s.ficha && <Ficha f={s.ficha} lang={lang} ui={ui} />}
               <p className="angle"><b>{ui.angle}:</b> {s.angulo[lang]}</p>
               {s.dados?.[lang]?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {s.dados[lang].join(" · ")}</p>}
               {s.verificar?.[lang]?.length > 0 && (
@@ -195,10 +254,10 @@ function Rich({ text }) {
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap');
 .apito{--bg:#EEF2ED;--raise:#F8FAF7;--ink:#16221C;--muted:#58685F;--line:#C8D3CB;--accent:#E3AA12;--live:#CF3128;
-  --porto:#1D4E9E;--sporting:#0B7A47;--benfica:#C8102E;
+  --porto:#1D4E9E;--sporting:#0B7A47;--benfica:#C8102E;--hist:#6A41D8;
   font-family:Barlow,system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;font-size:16px;line-height:1.5}
 .apito[data-theme="dark"]{--bg:#0F1914;--raise:#16241D;--ink:#E4EDE7;--muted:#8E9F96;--line:#27382F;--accent:#F4C542;--live:#FF5B4D;
-  --porto:#83A9EE;--sporting:#4CC68D;--benfica:#FF6E7E}
+  --porto:#83A9EE;--sporting:#4CC68D;--benfica:#FF6E7E;--hist:#B29BFF}
 .apito *{box-sizing:border-box}
 .apito button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 .apito :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
@@ -221,21 +280,37 @@ const CSS = `
 .apito .seg button{padding:4px 11px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
 .apito .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .apito .icon-btn{width:34px;height:34px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:999px;background:var(--raise)}
-.apito .tabs{display:flex;flex-wrap:wrap;gap:0 2px;margin:0 -8px;padding:0 8px}
+.apito .tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:0 2px;margin:0 -8px;padding:0 8px 2px;overflow-x:auto;scrollbar-width:thin}
+.apito .tabs::-webkit-scrollbar{height:4px}
+.apito .tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
 @media(max-width:699px){
-  .apito .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-right:48px;
-    -webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
-  .apito .tabs::-webkit-scrollbar{height:4px}
-  .apito .tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .apito .tabs{padding-right:48px;-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
 }
-.apito .tab{white-space:nowrap;padding:9px clamp(6px,0.55vw,10px) 10px;font-size:clamp(13px,0.95vw,15px);font-weight:500;color:var(--muted);border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:6px}
+.apito .tab.hl{border-radius:8px 8px 0 0;font-weight:600}
+.apito .tab.hl-live{color:var(--live);--tabc:var(--live)}
+.apito .tab.hl-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--live);animation:apl 1.6s ease-out infinite}
+.apito .tab.hl-dest{color:var(--ink);--tabc:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.apito .tab.hl-hist{color:var(--hist);--tabc:var(--hist);background:color-mix(in srgb,var(--hist) 14%,transparent);margin-left:auto}
+.apito .tab.hl[aria-pressed="true"]{color:var(--tabc)}
+.apito .tab.hl-dest[aria-pressed="true"]{color:var(--ink)}
+.apito .tab{white-space:nowrap;padding:9px clamp(5px,0.45vw,8px) 10px;font-size:clamp(13px,0.92vw,15px);font-weight:500;color:var(--muted);border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:6px}
 .apito .tab:hover{color:var(--ink)}
 .apito .tab[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--tabc,var(--ink));font-weight:600}
 .apito .count{font-size:10px;font-weight:700;background:var(--accent);color:#1B1B1B;border-radius:999px;padding:0 5px;line-height:16px;min-width:16px;text-align:center}
 .apito .textbtn.off{opacity:.45;cursor:not-allowed}
 .apito .notice{font-size:13px;color:var(--muted);padding:14px 0 0}
 .apito .layout{display:grid;grid-template-columns:minmax(0,1fr);gap:40px;padding:10px 0 64px}
-@media(min-width:1000px){.apito .layout{grid-template-columns:minmax(0,1fr) 250px}}
+@media(min-width:1000px){.apito .layout{grid-template-columns:minmax(0,1fr) 250px} .apito .layout.res{grid-template-columns:minmax(0,1fr) 360px}}
+.apito .events .evlist{list-style:none;margin:10px 0 0;padding:0 4px 0 0;max-height:calc(100vh - 230px);overflow:auto}
+.apito .ev{border-left:3px solid var(--live);padding:6px 0 8px 10px;margin-bottom:8px;animation:evin .45s ease-out}
+.apito .evh{display:flex;align-items:center;gap:6px;font-size:12px}
+.apito .evt{margin-left:auto;font-variant-numeric:tabular-nums}
+.apito .evtitle{margin:2px 0 0;font-weight:600;font-size:15px;line-height:1.3}
+.apito .evb{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.apito .evempty{font-size:14px}
+.apito .mobevents{margin-top:24px}
+@media(min-width:1000px){.apito .mobevents{display:none}}
+@keyframes evin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .apito .feedhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
 .apito .feedhead h1{font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:600;font-size:26px;margin:0 auto 0 0;line-height:1.1}
 .apito .textbtn{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
@@ -301,8 +376,26 @@ const CSS = `
 @media(min-width:1000px){.apito .mobpanel{display:none}}
 .apito .flag{width:18px;height:13px;border-radius:2px;box-shadow:0 0 0 1px var(--line);vertical-align:-1px;flex:none}
 .apito .textbtn.on{color:var(--accent)}
+.apito .crests{display:flex;align-items:center;gap:8px;margin:2px 0 4px;color:var(--muted)}
+.apito .crest{object-fit:contain;flex:none;vertical-align:middle}
+.apito .crest-txt{font-size:12px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+.apito .match .team{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.apito .match .team.h{justify-content:flex-end}
+.apito .evcrests{display:inline-flex;gap:3px;margin-right:6px;vertical-align:-3px}
 .apito .about{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-right:2px}
-.apito .stories{max-width:760px}
+.apito .stories{max-width:820px}
+.apito .feedhead h1.hist{color:var(--hist)}
+.apito .stories .seg button[aria-pressed="true"]{background:var(--hist);color:#fff}
+.apito .story{background:color-mix(in srgb,var(--hist) 5%,var(--raise))}
+.apito .ficha{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:14px;background:var(--bg)}
+.apito .ficha p{margin:4px 0}
+.apito .fres{display:flex;align-items:center;justify-content:center;gap:12px;font-family:'Barlow Condensed',Barlow,sans-serif;font-size:20px;font-weight:600}
+.apito .fres b{font-size:24px;font-variant-numeric:tabular-nums}
+.apito .fstats{width:100%;border-collapse:collapse;margin:6px 0;font-variant-numeric:tabular-nums}
+.apito .fstats caption{text-align:left;font-weight:700;padding-bottom:2px}
+.apito .fstats th{font-size:12px;color:var(--muted);font-weight:600;padding:2px 4px}
+.apito .fstats td{padding:2px 4px;border-top:1px solid var(--line);text-align:center}
+.apito .fstats td:nth-child(2){color:var(--muted);font-size:13px}
 .apito .filters{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 0 16px}
 .apito .lvls{margin:0}
 .apito .tone{font-size:13px;font-weight:600}
@@ -556,6 +649,33 @@ export default function App() {
     } else copy(it);
   };
 
+  const resultsFeed = useMemo(() => items
+    .filter((it) => it.src === "resultados" && !it.id.endsWith(":live") && ligaOn(it) && matches(it))
+    .sort(byTime).slice(0, 80),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [items, ligasOn, query, lang]);
+  const leagueLabels = (it) => [leagueName(it.liga), it.score?.comp].filter(Boolean);
+  const eventsPanel = (
+    <div className="panel events">
+      <div className="panel-head"><h2>{ui.eventsTitle}</h2></div>
+      {resultsFeed.length === 0 ? <p className="muted evempty">{ui.noEvents}</p> : (
+        <ul className="evlist" aria-live="polite">
+          {resultsFeed.map((it) => (
+            <li key={it.id} className="ev">
+              <div className="evh">
+                <Flag code={topicOf(it)} lang={lang} />
+                <span className="muted">{leagueName(it.liga) || it.score?.comp}</span>
+                <span className="muted evt">{agoText(it.ts, now, ui)}</span>
+              </div>
+              <p className="evtitle">{it.equipas?.some((e) => e.logo) && <span className="evcrests">{it.equipas.map((e) => e.logo && <Crest key={e.nome} e={e} theme={theme} size={16} />)}</span>}<Rich text={it.t[lang]} /></p>
+              {it.b[lang].filter((b) => !leagueLabels(it).includes(b)).map((b, i) => <p key={i} className="evb"><Rich text={b} /></p>)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
   const sourcesPanel = (
     <div className="panel">
       <div className="panel-head">
@@ -623,7 +743,7 @@ export default function App() {
           </div>
           <nav className="tabs" aria-label={ui.sectionsLabel}>
             {CATS.map((c) => (
-              <button key={c.id} className="tab" aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
+              <button key={c.id} className={`tab ${c.hl ? `hl hl-${c.hl}` : ""}`} aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
                 style={c.club ? { "--tabc": `var(--${c.id})` } : undefined}>
                 {c[lang]}
                 {unreadBy[c.id] > 0 && <span className="count">{unreadBy[c.id]}</span>}
@@ -635,12 +755,12 @@ export default function App() {
 
       <div className="wrap">
         {conn === "offline" && <p className="notice">{ui.offlineNote}</p>}
-        <div className="layout">
+        <div className={`layout ${section === "resultados" ? "res" : ""}`}>
           <main>
             {showSources && <div className="mobpanel">{sourcesPanel}</div>}
 
             <div className="feedhead">
-              <h1>{CAT[section][lang]}</h1>
+              <h1 className={section === "historias" ? "hist" : ""}>{CAT[section][lang]}</h1>
               {section === "resultados" && leagues.length > 0 && (
                 <button className="textbtn" onClick={() => setShowLeagues((v) => !v)} aria-expanded={showLeagues}><ListFilter size={15} />{ui.pickLeagues}</button>
               )}
@@ -680,25 +800,28 @@ export default function App() {
             )}
 
             {section === "historias" ? (
-              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (
-              games.length === 0 ? <p className="empty">{ui.noResults}</p> : (
+              <>
+              {games.length === 0 ? <p className="empty">{ui.noResults}</p> : (
                 <ul className="board" aria-live="polite">
                   {games.map((it) => {
                     const sc = it.score, s = srcOf(it);
                     return (
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
                         <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
-                        <span className="team h">{sc.h}</span>
+                        <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
-                        <span className="team">{sc.a}</span>
+                        <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}{sc.a}</span>
                         <span className="st">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{sc.min || ui.live}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
                         <span className="upd">{ui.updated(agoText(it.upd || it.ts, now, ui), srcName(s))}</span>
                       </li>
                     );
                   })}
                 </ul>
-              )
+              )}
+              <div className="mobevents">{eventsPanel}</div>
+              </>
             ) : visible.length === 0 ? (
               <p className="empty">{section === "favoritos" ? ui.noFavs : items.length === 0 ? ui.waiting : ui.empty}</p>
             ) : (
@@ -732,13 +855,16 @@ export default function App() {
                           </span>
                         </div>
 
+                        {!it.score && <Crests eq={it.equipas} theme={theme} lang={lang} />}
                         <h3 className="title"><Rich text={it.t[lang]} /></h3>
 
                         {it.score && (
                           <div className="score">
+                            {it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}
                             <span>{it.score.h}</span>
                             <span className="n">{it.score.hs}–{it.score.as}</span>
                             <span>{it.score.a}</span>
+                            {it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}
                             {it.score.ft
                               ? <span className="m muted">{ui.ft}</span>
                               : <span className="m live">{it.score.min || ""}</span>}
@@ -779,7 +905,7 @@ export default function App() {
             )}
           </main>
 
-          <aside className="desk">{sourcesPanel}</aside>
+          <aside className="desk">{section === "resultados" ? eventsPanel : sourcesPanel}</aside>
         </div>
       </div>
     </div>

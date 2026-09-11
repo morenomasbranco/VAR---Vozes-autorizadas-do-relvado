@@ -29,6 +29,10 @@ const SCHEMA = {
       pontos_en: { type: "ARRAY", items: { type: "STRING" } },
       importancia: { type: "INTEGER" },
       pais_tema: { type: "STRING", nullable: true },
+      equipas: {
+        type: "ARRAY",
+        items: { type: "OBJECT", properties: { nome: { type: "STRING" }, papel: { type: "STRING", enum: ["origem", "destino", "envolvido"] } }, required: ["nome", "papel"] },
+      },
     },
     required: ["i", "relevante", "idioma", "seccoes", "titulo_pt", "titulo_en", "pontos_pt", "pontos_en", "importancia"],
   },
@@ -72,6 +76,11 @@ País a que a notícia se refere (pais_tema)
 - Inglaterra gb-eng, Escócia gb-sct, País de Gales gb-wls. Competições da UEFA: eu. Competições mundiais ou notícias sobre vários países: un.
 - Um português num clube estrangeiro conta como o país desse clube. Um jogo entre seleções conta como a seleção de que a notícia trata.
 - Se não for possível saber, null.
+
+Clubes e seleções (equipas)
+- Os clubes ou seleções de que a notícia trata, no máximo três, pelo nome internacional em inglês: Manchester United, Bayern Munich, Sporting CP, FC Porto, Benfica, Paris Saint-Germain, Portugal.
+- Numa transferência ou empréstimo, o clube de onde o jogador sai tem papel «origem» e o clube para onde vai tem papel «destino». Nos restantes casos, papel «envolvido».
+- Não incluas clubes mencionados só de passagem. Se a notícia não tratar de nenhum, lista vazia.
 
 Repetidos (igual_a)
 - Se o post relata o mesmo facto de uma notícia da lista recente (a mesma transferência, a mesma lesão), devolve o id dessa notícia.

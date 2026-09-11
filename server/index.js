@@ -10,6 +10,7 @@ import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
 import { startEspn } from "./sources/espn.js";
 import { createStories } from "./stories.js";
+import { createTeams } from "./teams.js";
 import { slug } from "./util.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
@@ -39,6 +40,8 @@ function broadcast(event, data) {
 const clamp = (n, a, b) => Math.min(b, Math.max(a, Math.round(Number(n) || a)));
 
 function publish(item) {
+  // resultados sem emblemas (GOAL API): procura-os pelo nome das equipas
+  if (item.score && !item.equipas?.some((e) => e.logo)) item.equipas = teams.resolve([{ nome: item.score.h }, { nome: item.score.a }]);
   if (store.get(item.id)) return;
   store.add({ also: [], ...item, postId: item.postId || item.id });
   status.publicadas++;
@@ -62,6 +65,10 @@ function removeItem(id) {
 // Publicar primeiro, tratar depois: cada post aparece no site no segundo em que chega, com o texto original.
 // Quando o Gemini responde (poucos segundos depois), o cartão é atualizado com título, secções e tradução;
 // se afinal não for notícia, ou já existir noutra fonte, o cartão sai e junta-se ao existente.
+const teams = createTeams({ log });
+// sem Gemini, os três grandes ainda recebem o emblema a partir das secções
+const BIG3_NAMES = { porto: "FC Porto", sporting: "Sporting CP", benfica: "Benfica" };
+const equipasOf = (ai) => teams.resolve(ai.equipas?.length ? ai.equipas : (ai.seccoes || []).filter((c) => BIG3_NAMES[c]).map((c) => ({ nome: BIG3_NAMES[c], papel: "envolvido" })));
 const toItem = (post, ai) => ({
   orig: ai.idioma,
   raw: !!ai.bruto,
@@ -70,6 +77,7 @@ const toItem = (post, ai) => ({
   b: { pt: ai.pontos_pt || [], en: ai.pontos_en || [] },
   imp: clamp(ai.importancia, 1, 5),
   paisTema: /^[a-z]{2}(-[a-z]{3})?$/.test(ai.pais_tema || "") ? ai.pais_tema : undefined,
+  equipas: equipasOf(ai),
 });
 
 function refine(post, ai) {
@@ -133,4 +141,5 @@ startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log);
 const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
 stories.watch(espnLeagues);
+teams.load(espnLeagues);
 setTimeout(() => stories.backfill(espnLeagues), 15000); // depois de as fontes arrancarem
