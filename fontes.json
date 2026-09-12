@@ -242,6 +242,51 @@
       "pais": "pt",
       "rapido": true,
       "google": "site:noticiasaominuto.com desporto"
+    },
+    {
+      "id": "futsal-pt",
+      "nome": "Futsal (Google News)",
+      "site": "https://news.google.com/",
+      "google": "futsal Portugal (Sporting OR Benfica OR Braga OR \"Liga Placard\" OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt"
+    },
+    {
+      "id": "hoquei-pt",
+      "nome": "Hóquei em patins (Google News)",
+      "site": "https://news.google.com/",
+      "google": "\"hóquei em patins\" (Porto OR Benfica OR Sporting OR Oliveirense OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt"
+    },
+    {
+      "id": "andebol-pt",
+      "nome": "Andebol (Google News)",
+      "site": "https://news.google.com/",
+      "google": "andebol Portugal (Sporting OR Benfica OR Porto OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt"
+    },
+    {
+      "id": "basquetebol-pt",
+      "nome": "Basquetebol (Google News)",
+      "site": "https://news.google.com/",
+      "google": "basquetebol Portugal (\"Liga Betclic\" OR Benfica OR Sporting OR Porto OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt"
+    },
+    {
+      "id": "voleibol-pt",
+      "nome": "Voleibol (Google News)",
+      "site": "https://news.google.com/",
+      "google": "voleibol Portugal (Benfica OR Sporting OR Fonte do Bastardo OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt"
     }
   ],
   "telegram": [

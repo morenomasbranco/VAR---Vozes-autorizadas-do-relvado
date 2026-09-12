@@ -82,8 +82,8 @@ export function startRss(sources, onPost, log) {
   async function run(s) {
     const alts = [s.feed, ...(s.feeds || [])].flat().filter(Boolean); // vários endereços possíveis
     let alt = 0;
-    let feed = alts[0] || null;
-    let google = false;
+    let google = !!s.soGoogle;
+    let feed = google ? googleNewsFeed(s) : alts[0] || null;
     let seen = new Set();
     let fails = 0;
     let wait = INTERVAL;

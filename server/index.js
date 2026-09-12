@@ -76,6 +76,16 @@ function secoes(post, ai) {
   const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
   if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
   if (cats.has("modalidades")) { cats.delete("big5"); cats.delete("perifericos"); }
+  // uma notícia não pode ser das cinco grandes ligas e dos campeonatos periféricos ao mesmo tempo:
+  // se nomear um escalão secundário ou uma liga de fora, é periférica; se nomear uma das cinco grandes
+  // ou um dos seus clubes, é big5
+  const SECUNDARIO = /\bchampionship\b|\bserie b\b|hypermotion|2\. bundesliga|\bligue ?2\b|liga saudita|saudi pro|brasileir[aã]o|\bmls\b|eredivisie|s[uü]per lig|ekstraklasa|liga mx/i;
+  // campeonatos periféricos são futebol de onze de fora das cinco grandes ligas e de fora de Portugal
+  const PORTUGAL = /liga portugal|primeira liga|liga 2\b|segunda liga|ta[cç]a de portugal|ta[cç]a da liga|liga 3\b|campeonato de portugal|liga betclic|liga bpi/i;
+  if (cats.has("perifericos") && (ai.pais_tema === "pt" || PORTUGAL.test(texto))) cats.delete("perifericos");
+  if (cats.has("big5") && cats.has("perifericos")) cats.delete(SECUNDARIO.test(texto) ? "big5" : "perifericos");
+  const BIG5 = RULES.find(([c]) => c === "big5")[1];
+  if (cats.has("perifericos") && BIG5.test(texto) && !SECUNDARIO.test(texto)) cats.delete("perifericos");
   // «Portugueses pelo mundo» é só para quem está fora de Portugal
   if (cats.has("portugueses") && (ai.pais_tema === "pt" || !ai.pais_tema)) cats.delete("portugueses");
   return [...cats];
@@ -107,6 +117,18 @@ function refine(post, ai) {
     const merged = store.attach(ai.igual_a, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
     if (merged) { status.juntas++; drop(); broadcast("update", merged); stories.onTrending(merged); return; }
   }
+  // segunda rede: o título traduzido pode revelar que é a mesma notícia de outra já publicada
+  const dup = store.findSimilar({ titulo: ai.titulo_pt, ts: it.ts, src: post.src, excluir: it.id });
+  if (dup && !dup.pending) {
+    const merged = store.attach(dup.id, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
+    if (merged) {
+      status.juntas++;
+      drop();
+      broadcast("update", merged);
+      stories.onTrending(merged);
+      return;
+    }
+  }
   Object.assign(it, toItem(post, ai), { pending: false });
   store.touch();
   broadcast("update", it);
@@ -120,6 +142,17 @@ function onPost(post) {
   if (seen.has(post.postId) || store.has(post.postId)) return;
   if (seen.size > 20000) seen.clear();
   seen.add(post.postId);
+  // a mesma notícia já publicada por outra fonte: junta-se em vez de aparecer de novo
+  const igual = store.findSimilar({ titulo: post.text.split("\n")[0], url: post.url, ts: post.ts, src: post.src });
+  if (igual) {
+    const merged = store.attach(igual.id, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
+    if (merged) {
+      status.juntas++;
+      broadcast("update", merged);
+      stories.onTrending(merged);
+      return;
+    }
+  }
   publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], tsAprox: post.tsAprox, pending: true, ...toItem(post, fallback(post)) });
   status.fila++;
   enrich(post).then((ai) => { status.fila--; refine(post, ai); });

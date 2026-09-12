@@ -872,8 +872,8 @@ export default function App() {
             {section === "modalidades" && modsPresent.length > 1 && (
               <div className="seg lvls mods" role="group" aria-label={ui.allSports}>
                 <button aria-pressed={modFilter === "todas"} onClick={() => setModFilter("todas")}>{ui.allSports}</button>
-                {modsPresent.map(([m, n]) => (
-                  <button key={m} aria-pressed={modFilter === m} onClick={() => setModFilter(m)}>{modName(m, lang) || m} <span className="muted">{n}</span></button>
+                {modsPresent.map(([m]) => (
+                  <button key={m} aria-pressed={modFilter === m} onClick={() => setModFilter(m)}>{modName(m, lang) || m}</button>
                 ))}
               </div>
             )}

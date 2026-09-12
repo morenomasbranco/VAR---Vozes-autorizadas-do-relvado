@@ -58,8 +58,8 @@ Pontos
 Secções (pode haver várias)
 - porto, sporting, benfica: quando o clube é assunto, incluindo as modalidades.
 - mercado: transferências, renovações, empréstimos, rescisões, saídas e entradas de treinadores.
-- big5: Premier League, LaLiga, Serie A, Bundesliga, Ligue 1 e os seus clubes.
-- perifericos: outros campeonatos estrangeiros (Turquia, Países Baixos, Arábia Saudita, MLS, Brasil, etc.).
+- big5: Premier League, LaLiga, Serie A, Bundesliga, Ligue 1 e os seus clubes (Real Madrid, Barcelona, Manchester United, Bayern, PSG…). Uma notícia de um destes clubes é big5, nunca perifericos.
+- perifericos: futebol de onze de campeonatos estrangeiros fora das cinco grandes ligas — Turquia, Países Baixos, Arábia Saudita, MLS, Brasil, Bélgica, Escócia, Grécia, Argentina, México, e também os segundos escalões estrangeiros (Championship, Serie B, Ligue 2, 2. Bundesliga, LaLiga Hypermotion). NUNCA para competições portuguesas (Liga Portugal, Liga 2, Taça de Portugal, Taça da Liga, Liga 3), que são futebol nacional, nem para outras modalidades. Usa-a só quando a notícia é sobre um desses campeonatos.
 - modalidades: tudo o que não seja futebol de onze (futsal, andebol, hóquei em patins, basquetebol, voleibol…).
 - estatisticas: posts centrados em números, rankings, xG ou notas.
 - premios: distinções, jogador do mês, Bola de Ouro, equipas do ano.
@@ -99,12 +99,12 @@ Não é notícia (relevante = false)
 // classificação de recurso, sem modelo
 // modalidade concreta de cada notícia que não é futebol de onze
 export const MODALIDADES = {
-  futsal: { pt: "Futsal", en: "Futsal", re: /futsal/i },
+  futsal: { pt: "Futsal", en: "Futsal", re: /futsal|liga placard|taça de portugal de futsal|uefa futsal/i },
   praia: { pt: "Futebol de praia", en: "Beach soccer", re: /futebol de praia|beach soccer/i },
-  andebol: { pt: "Andebol", en: "Handball", re: /andebol|handball|\behf\b/i },
-  basquetebol: { pt: "Basquetebol", en: "Basketball", re: /basquete|basketball|\bnba\b|\bwnba\b|euroleague|liga betclic|final four|\bacb\b/i },
-  voleibol: { pt: "Voleibol", en: "Volleyball", re: /voleibol|volleyball|v[oó]lei\b/i },
-  hoquei_patins: { pt: "Hóquei em patins", en: "Roller hockey", re: /h[oó]quei em patins|roller hockey|rink hockey/i },
+  andebol: { pt: "Andebol", en: "Handball", re: /andebol|handball|\behf\b|campeonato de andebol|liga de andebol/i },
+  basquetebol: { pt: "Basquetebol", en: "Basketball", re: /basquete|basketball|\bnba\b|\bwnba\b|euroleague|liga betclic|final four|\bacb\b|\bfiba\b|\beurobasket\b|proliga de basquete/i },
+  voleibol: { pt: "Voleibol", en: "Volleyball", re: /voleibol|volleyball|v[oó]lei\b|\bcev\b|liga de voleibol/i },
+  hoquei_patins: { pt: "Hóquei em patins", en: "Roller hockey", re: /h[oó]quei em patins|roller hockey|rink hockey|\bcerh\b|world skate|liga de h[oó]quei/i },
   hoquei_gelo: { pt: "Hóquei no gelo", en: "Ice hockey", re: /h[oó]quei no gelo|ice hockey|\bnhl\b/i },
   futebol_americano: { pt: "Futebol americano", en: "American football", re: /futebol americano|american football|\bnfl\b|quarterback|touchdown|college football|super bowl/i },
   tenis: { pt: "Ténis", en: "Tennis", re: /\bt[eé]nis\b|\btennis\b|\bus open\b|wimbledon|roland garros|\batp\b|\bwta\b/i },
@@ -130,7 +130,8 @@ export const RULES = [
   ["mercado", /here we go|transfer|contrat|renov|empr[eé]stimo|cl[aá]usula|assina|rescis|mercado|signs?\b|loan\b|fichaje/i],
   ["modalidades", /futsal|andebol|h[oó]quei|basquet|voleibol|handball|volleyball|basketball|nba\b|t[eé]nis|tennis|golfe|golf\b|ciclismo|cycling|atletismo|athletics|nata[cç][aã]o|r[aá]guebi|rugby|cricket|f[oó]rmula ?1|formula ?1|\bf1\b|motogp|nfl\b|padel|p[aá]del|corrida de cavalos|horse racing|us open|solheim|ryder cup|ehf|euroleague|liga betclic de basquetebol|final four|superta[cç]a de andebol/i],
   ["premios", /pr[eé]mio|bola de ouro|ballon d'or|jogador do m[eê]s|player of the month|melhor jogador|troféu|hall of fame/i],
-  ["big5", /premier league|laliga|la liga|serie a|bundesliga|ligue 1|championship/i],
+  ["big5", /premier league|laliga|la liga|serie a|bundesliga|ligue ?1|real madrid|barcelona|atl[eé]tico de madrid|man(chester)? (united|city)|liverpool|arsenal|chelsea|tottenham|juventus|\bmilan\b|inter(nazionale)?\b|n[aá]poles|napoli|bayern|dortmund|leverkusen|\bpsg\b|paris saint|marselha|marseille|monaco\b/i],
+  ["perifericos", /\bchampionship\b|eredivisie|s[uü]per lig|liga saudita|saudi pro|brasileir[aã]o|\bmls\b|ekstraklasa|jupiler|allsvenskan|eliteserien|liga mx|\bligue ?2\b|\bserie b\b|laliga hypermotion|2\. bundesliga|liga argentina|primera divisi[oó]n|liga profesional|scottish premiership|super lig grega|liga grega|liga belga|liga su[ií][cç]a|bundesliga austr[ií]aca|liga dinamarquesa|liga russa|liga ucraniana|j1 league|k league|liga chinesa/i],
   ["estatisticas", /estat[ií]stica|statistics|ranking|xg\b|m[eé]dia de idades|n[uú]meros e curiosidades/i],
 ];
 // palavras que marcam uma notícia como sendo de outra modalidade, e não de futebol de onze
