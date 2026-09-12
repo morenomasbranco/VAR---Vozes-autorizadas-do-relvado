@@ -718,16 +718,7 @@ export default function App() {
     if (!de.current || !para.current) return;
     if (para.current.scrollLeft !== de.current.scrollLeft) para.current.scrollLeft = de.current.scrollLeft;
   };
-  useEffect(() => {
-    const el = colsRef.current;
-    if (!el) return setColsW(0);
-    const medir = () => setColsW(el.scrollWidth);
-    medir();
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(medir) : null;
-    ro?.observe(el);
-    window.addEventListener("resize", medir);
-    return () => { ro?.disconnect(); window.removeEventListener("resize", medir); };
-  }, [section, lang, colunas]);
+  // a medição das colunas está mais abaixo, depois de «colunas» estar declarado
 
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
@@ -871,6 +862,18 @@ export default function App() {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, lang, sourceList, minuto]);
+
+  // barra de deslizar das colunas: medir a largura sempre que as colunas mudam
+  useEffect(() => {
+    const el = colsRef.current;
+    if (!el) return setColsW(0);
+    const medir = () => setColsW(el.scrollWidth);
+    medir();
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(medir) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", medir);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", medir); };
+  }, [section, lang, colunas]);
 
   const unreadBy = useMemo(() => {
     const out = {};
