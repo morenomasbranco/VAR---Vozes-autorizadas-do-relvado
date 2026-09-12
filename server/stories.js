@@ -317,17 +317,20 @@ export function createStories({ broadcast, log }) {
     }
   }
 
-  // chamado quando a mesma notícia já foi dada por três fontes diferentes
+  // chamado quando a mesma notícia chega por mais de uma fonte, ou quando é muito importante
   function onTrending(item) {
+    const nomes = [item.name, ...(item.also || []).map((a) => a.name)].filter(Boolean);
     const fontes = new Set([item.src, ...(item.also || []).map((a) => a.src)]).size;
-    if (fontes < 3) return;
-    const crit = ["continuidade", ...(item.imp >= 4 ? ["impacto"] : []), ...(item.cats?.some((c) => ["porto", "sporting", "benfica"].includes(c)) ? ["notoriedade", "proximidade"] : item.cats?.includes("portugueses") ? ["proximidade"] : [])];
+    if (fontes < 2 && (item.imp || 0) < 5) return;
+    const crit = [...(fontes > 1 ? ["continuidade"] : []), ...(item.imp >= 4 ? ["impacto"] : []), ...(item.imp >= 5 ? ["surpresa"] : []), ...(item.cats?.some((c) => ["porto", "sporting", "benfica"].includes(c)) ? ["notoriedade", "proximidade"] : item.cats?.includes("portugueses") ? ["proximidade"] : [])];
     add({
       crests: item.equipas || [],
       id: `s:tema:${item.id}`, tipo: "tema", equipas: [], liga: null, ligaNome: null, pais: item.paisTema || item.pais, crit,
       t: { pt: `Tema em destaque: ${item.t.pt.replace(/==/g, "")}`, en: `Big story: ${item.t.en.replace(/==/g, "")}` },
-      angulo: { pt: `${fontes} fontes deram esta notícia. Há margem para um ângulo próprio: contexto, reações ou consequências.`, en: `${fontes} sources have this story. Room for an original angle: context, reactions or consequences.` },
-      dados: { pt: [`Fontes: ${[item.name, ...(item.also || []).map((a) => a.name)].join(", ")}`], en: [`Sources: ${[item.name, ...(item.also || []).map((a) => a.name)].join(", ")}`] },
+      angulo: fontes > 1
+        ? { pt: `${fontes} fontes já deram esta notícia. Há margem para um ângulo próprio: contexto, reações ou consequências.`, en: `${fontes} sources already have this story. Room for an original angle: context, reactions or consequences.` }
+        : { pt: "Notícia de grande importância dada por uma só fonte. Vale confirmar e procurar um ângulo próprio.", en: "A major story from a single source. Worth confirming and finding an original angle." },
+      dados: { pt: [`Fontes: ${nomes.join(", ")}`], en: [`Sources: ${nomes.join(", ")}`] },
       verificar: { pt: ["Confirmação oficial do clube ou do jogador", "O que ainda não foi dito por nenhuma fonte"], en: ["Official confirmation from the club or player", "What no source has said yet"] },
       noticia: item.id,
     });

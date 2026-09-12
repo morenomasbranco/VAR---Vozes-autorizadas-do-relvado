@@ -14,7 +14,7 @@ const CATS = [
   { id: "live", pt: "Live", en: "Live", hl: "live" },
   { id: "resultados", pt: "Resultados", en: "Results" },
   { id: "favoritos", pt: "Favoritos", en: "Saved" },
-  { id: "futebol", pt: "Futebol", en: "Football" },
+  { id: "futebol", pt: "Nacional", en: "Portugal" },
   { id: "porto", pt: "Porto", en: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", club: true },
@@ -50,6 +50,7 @@ const UI = {
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco" },
     eventsTitle: "Acontecimentos", noEvents: "Os golos, intervalos e finais dos jogos aparecem aqui assim que acontecem.",
     goals: "Golos", reds: "Expulsões", matchStats: "Estatísticas do jogo", tableLbl: "Classificação", pts: "pts", ord: (n) => `${n}.º`,
+    allSports: "Todas as modalidades", sourcesLbl: "Fontes", confirmed: (n) => `Confirmada por ${n} fontes`,
     about: "Sobre", aboutTitle: (c) => `Notícia sobre: ${c}`, fromTitle: (c) => `Origem: ${c}`,
     pending: (n) => `Mostrar ${n} ${n === 1 ? "nova notícia" : "novas notícias"}`,
     empty: "Sem notícias nesta secção para as fontes ativas. Ativa mais fontes ou escolhe outra secção.",
@@ -77,6 +78,7 @@ const UI = {
     share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish" },
     eventsTitle: "Match events", noEvents: "Goals, half-times and full-times appear here as they happen.",
     goals: "Goals", reds: "Red cards", matchStats: "Match stats", tableLbl: "Table", pts: "pts", ord: (n) => `#${n}`,
+    allSports: "All sports", sourcesLbl: "Sources", confirmed: (n) => `Confirmed by ${n} sources`,
     about: "About", aboutTitle: (c) => `Story about: ${c}`, fromTitle: (c) => `Source: ${c}`,
     pending: (n) => `Show ${n} new ${n === 1 ? "story" : "stories"}`,
     empty: "No stories in this section from the active sources. Turn on more sources or pick another section.",
@@ -131,6 +133,18 @@ const COUNTRIES = {
   tr: ["Turquia", "Turkey"], sa: ["Arábia Saudita", "Saudi Arabia"], br: ["Brasil", "Brazil"], us: ["Estados Unidos", "United States"],
   eu: ["Europa", "Europe"], un: ["Internacional", "International"],
 };
+const MOD = {
+  futsal: ["Futsal", "Futsal"], praia: ["Futebol de praia", "Beach soccer"], andebol: ["Andebol", "Handball"],
+  basquetebol: ["Basquetebol", "Basketball"], voleibol: ["Voleibol", "Volleyball"],
+  hoquei_patins: ["Hóquei em patins", "Roller hockey"], hoquei_gelo: ["Hóquei no gelo", "Ice hockey"],
+  futebol_americano: ["Futebol americano", "American football"], tenis: ["Ténis", "Tennis"], padel: ["Padel", "Padel"],
+  ciclismo: ["Ciclismo", "Cycling"], atletismo: ["Atletismo", "Athletics"], natacao: ["Natação", "Swimming"],
+  automobilismo: ["Automobilismo", "Motorsport"], golfe: ["Golfe", "Golf"], ragby: ["Râguebi", "Rugby"],
+  criquete: ["Críquete", "Cricket"], beisebol: ["Beisebol", "Baseball"], combate: ["Desportos de combate", "Combat sports"],
+  equestre: ["Equestre", "Equestrian"], outra: ["Outra modalidade", "Other sport"],
+};
+const modName = (id, lang) => (MOD[id] ? MOD[id][lang === "en" ? 1 : 0] : null);
+
 const GB_PARTS = { "gb-sct": ["Escócia", "Scotland"], "gb-wls": ["País de Gales", "Wales"], "gb-nir": ["Irlanda do Norte", "Northern Ireland"] };
 function countryName(code, lang) {
   const own = COUNTRIES[code] || GB_PARTS[code];
@@ -376,6 +390,10 @@ const CSS = `
 @media(min-width:1000px){.apito .mobpanel{display:none}}
 .apito .flag{width:18px;height:13px;border-radius:2px;box-shadow:0 0 0 1px var(--line);vertical-align:-1px;flex:none}
 .apito .textbtn.on{color:var(--accent)}
+.apito .chip.mod{border-color:var(--accent);color:var(--ink)}
+.apito .mods{flex-wrap:wrap;margin:0 0 14px}
+.apito .modtag{margin-left:6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.apito .srcs{max-width:46ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apito .crests{display:flex;align-items:center;gap:10px;margin:4px 0 8px;color:var(--muted)}
 .apito .crests.transfer{gap:12px}
 .apito .crest{object-fit:contain;flex:none;vertical-align:middle}
@@ -451,6 +469,7 @@ export default function App() {
   });
   const [showLeagues, setShowLeagues] = useState(false);
   const [stories, setStories] = useState([]);
+  const [modFilter, setModFilter] = useState("todas");
   const [favs, setFavs] = useState(() => {
     try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
   });
@@ -579,7 +598,8 @@ export default function App() {
 
   const visible = useMemo(() => {
     if (section === "favoritos") return [...favs].filter(matches).sort(byTime);
-    const list = items.filter((it) => srcOn(it) && inSection(it, section) && matches(it));
+    const list = items.filter((it) => srcOn(it) && inSection(it, section) && matches(it)
+      && (section !== "modalidades" || modFilter === "todas" || it.mod === modFilter));
     if (section !== "destaque") return list.sort(byTime);
     // nos Destaques, cada jogo aparece uma só vez (o estado mais recente) e a ordem é por relevância
     const seen = new Set();
@@ -595,7 +615,7 @@ export default function App() {
       .slice(0, TOP_N)
       .sort(byTime);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, favs, enabled, ligasOn, section, query, lang, section === "destaque" ? now : 0]);
+  }, [items, favs, enabled, ligasOn, section, query, lang, modFilter, section === "destaque" ? now : 0]);
 
   const unreadBy = useMemo(() => {
     const out = {};
@@ -676,6 +696,12 @@ export default function App() {
       )}
     </div>
   );
+
+  const modsPresent = useMemo(() => {
+    const c = new Map();
+    for (const it of items) if (it.cats.includes("modalidades") && it.mod) c.set(it.mod, (c.get(it.mod) || 0) + 1);
+    return [...c.entries()].sort((a, b) => b[1] - a[1]);
+  }, [items]);
 
   const sourcesPanel = (
     <div className="panel">
@@ -800,6 +826,14 @@ export default function App() {
               <button className="pending" onClick={() => { setPaused(false); flush(); }}>{ui.pending(pending.length)}</button>
             )}
 
+            {section === "modalidades" && modsPresent.length > 1 && (
+              <div className="seg lvls mods" role="group" aria-label={ui.allSports}>
+                <button aria-pressed={modFilter === "todas"} onClick={() => setModFilter("todas")}>{ui.allSports}</button>
+                {modsPresent.map(([m, n]) => (
+                  <button key={m} aria-pressed={modFilter === m} onClick={() => setModFilter(m)}>{modName(m, lang) || m} <span className="muted">{n}</span></button>
+                ))}
+              </div>
+            )}
             {section === "historias" ? (
               <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (
@@ -810,7 +844,7 @@ export default function App() {
                     const sc = it.score, s = srcOf(it);
                     return (
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
-                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
+                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}{it.mod && <span className="modtag">{modName(it.mod, lang)}</span>}</span>
                         <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={30} />}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
                         <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={30} />}{sc.a}</span>
@@ -842,10 +876,13 @@ export default function App() {
                           <span className="src">{srcName(s)}</span>
                           {it.via && <span className="muted">{it.via}</span>}
                           {it.also?.length > 0 && (
-                            <span className="muted" title={it.also.map((a) => a.name || `@${a.src}`).join(", ")}>{ui.moreSources(it.also.length)}</span>
+                            <span className="muted srcs" title={ui.confirmed(it.also.length + 1)}>
+                              {ui.moreSources(it.also.length)}: {it.also.map((a) => a.name || a.src).join(", ")}
+                            </span>
                           )}
                           <span className="chips">
                             {topicOf(it) && <span className="about" title={ui.aboutTitle(countryName(topicOf(it), lang))}>{ui.about} <Flag code={topicOf(it)} lang={lang} title={ui.aboutTitle} /></span>}
+                            {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
                             {it.unread && <span className="chip new">{ui.fresh}</span>}
                             {it.hot && <span className="chip hot">{ui.hot}</span>}
                             {it.cats.filter((c) => CAT[c]).map((c) => (

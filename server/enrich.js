@@ -29,6 +29,7 @@ const SCHEMA = {
       pontos_en: { type: "ARRAY", items: { type: "STRING" } },
       importancia: { type: "INTEGER" },
       pais_tema: { type: "STRING", nullable: true },
+      modalidade: { type: "STRING", nullable: true },
       equipas: {
         type: "ARRAY",
         items: { type: "OBJECT", properties: { nome: { type: "STRING" }, papel: { type: "STRING", enum: ["origem", "destino", "envolvido"] } }, required: ["nome", "papel"] },
@@ -78,6 +79,10 @@ País a que a notícia se refere (pais_tema)
 - Um português num clube estrangeiro conta como o país desse clube. Um jogo entre seleções conta como a seleção de que a notícia trata.
 - Se não for possível saber, null.
 
+Modalidade (modalidade)
+- Se a notícia não for de futebol de onze, indica a modalidade, exatamente um destes valores: futsal, praia, andebol, basquetebol, voleibol, hoquei_patins, hoquei_gelo, futebol_americano, tenis, padel, ciclismo, atletismo, natacao, automobilismo, golfe, ragby, criquete, beisebol, combate, equestre, outra.
+- Se for futebol de onze, null.
+
 Clubes e seleções (equipas)
 - Os clubes ou seleções de que a notícia trata, no máximo três, pelo nome internacional em inglês: Manchester United, Bayern Munich, Sporting CP, FC Porto, Benfica, Paris Saint-Germain, Portugal.
 - Numa transferência ou empréstimo, o clube de onde o jogador sai tem papel «origem» e o clube para onde vai tem papel «destino». Nos restantes casos, papel «envolvido».
@@ -92,6 +97,32 @@ Não é notícia (relevante = false)
 - Publicidade, apostas, passatempos, pedidos para seguir ou ver um canal, grelha de programação sem notícia, posts só com link ou emojis e tudo o que não seja desporto.`;
 
 // classificação de recurso, sem modelo
+// modalidade concreta de cada notícia que não é futebol de onze
+export const MODALIDADES = {
+  futsal: { pt: "Futsal", en: "Futsal", re: /futsal/i },
+  praia: { pt: "Futebol de praia", en: "Beach soccer", re: /futebol de praia|beach soccer/i },
+  andebol: { pt: "Andebol", en: "Handball", re: /andebol|handball|\behf\b/i },
+  basquetebol: { pt: "Basquetebol", en: "Basketball", re: /basquete|basketball|\bnba\b|\bwnba\b|euroleague|liga betclic|final four|\bacb\b/i },
+  voleibol: { pt: "Voleibol", en: "Volleyball", re: /voleibol|volleyball|v[oó]lei\b/i },
+  hoquei_patins: { pt: "Hóquei em patins", en: "Roller hockey", re: /h[oó]quei em patins|roller hockey|rink hockey/i },
+  hoquei_gelo: { pt: "Hóquei no gelo", en: "Ice hockey", re: /h[oó]quei no gelo|ice hockey|\bnhl\b/i },
+  futebol_americano: { pt: "Futebol americano", en: "American football", re: /futebol americano|american football|\bnfl\b|quarterback|touchdown|college football|super bowl/i },
+  tenis: { pt: "Ténis", en: "Tennis", re: /t[eé]nis|tennis|us open|wimbledon|roland garros|atp\b|wta\b/i },
+  padel: { pt: "Padel", en: "Padel", re: /p[aá]del|padel/i },
+  ciclismo: { pt: "Ciclismo", en: "Cycling", re: /ciclismo|cycling|volta a|tour de france|giro|vuelta/i },
+  atletismo: { pt: "Atletismo", en: "Athletics", re: /atletismo|athletics|maratona|marathon|salto com vara|pole vault/i },
+  natacao: { pt: "Natação", en: "Swimming", re: /nata[cç][aã]o|swimming/i },
+  automobilismo: { pt: "Automobilismo", en: "Motorsport", re: /f[oó]rmula ?1|formula ?1|\bf1\b|grande pr[eé]mio|grand prix|motogp|nascar|rali|rally/i },
+  golfe: { pt: "Golfe", en: "Golf", re: /golfe|\bgolf\b|ryder cup|solheim|irish open/i },
+  ragby: { pt: "Râguebi", en: "Rugby", re: /r[aá]guebi|rugby/i },
+  criquete: { pt: "Críquete", en: "Cricket", re: /cr[ií]quete|cricket|\btest match\b/i },
+  beisebol: { pt: "Beisebol", en: "Baseball", re: /beisebol|baseball|\bmlb\b/i },
+  combate: { pt: "Desportos de combate", en: "Combat sports", en_: 1, re: /boxe|boxing|\bufc\b|\bmma\b|judo|karate/i },
+  equestre: { pt: "Equestre", en: "Equestrian", re: /hip[ií]smo|horse racing|\bracing\b|doncaster|st leger|equestre/i },
+  outra: { pt: "Outra modalidade", en: "Other sport", re: /dardos|darts|snooker|xadrez|chess|esports|surf/i },
+};
+export const modalidadeDe = (texto) => Object.entries(MODALIDADES).find(([, m]) => m.re.test(texto))?.[0] || null;
+
 export const RULES = [
   ["porto", /\b(fc )?porto\b|drag[aã]o|drag[oõ]es|azuis e brancos/i],
   ["sporting", /\bsporting\b(?! (de |clube de )?braga)|le[oõ]es|alvalade|sporting cp/i],

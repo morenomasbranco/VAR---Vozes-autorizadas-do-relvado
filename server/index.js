@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import * as store from "./store.js";
-import { createEnricher, fallback, RULES, NAO_FUTEBOL } from "./enrich.js";
+import { createEnricher, fallback, RULES, NAO_FUTEBOL, MODALIDADES, modalidadeDe } from "./enrich.js";
 import { startRss } from "./sources/rss.js";
 import { startTelegram } from "./sources/telegram.js";
 import { startBluesky } from "./sources/bluesky.js";
@@ -76,12 +76,20 @@ function secoes(post, ai) {
   const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
   if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
   if (cats.has("modalidades")) { cats.delete("big5"); cats.delete("perifericos"); }
+  // «Portugueses pelo mundo» é só para quem está fora de Portugal
+  if (cats.has("portugueses") && (ai.pais_tema === "pt" || !ai.pais_tema)) cats.delete("portugueses");
   return [...cats];
+}
+// modalidade concreta: a que o Gemini indicou, ou a que as palavras do texto revelam
+function modalidade(post, ai) {
+  const dada = MODALIDADES[ai.modalidade] ? ai.modalidade : null;
+  return dada || modalidadeDe(`${post.text} ${ai.titulo_pt || ""}`) || null;
 }
 const toItem = (post, ai) => ({
   orig: ai.idioma,
   raw: !!ai.bruto,
   cats: secoes(post, ai),
+  mod: modalidade(post, ai) || undefined,
   t: { pt: ai.titulo_pt, en: ai.titulo_en },
   b: { pt: ai.pontos_pt || [], en: ai.pontos_en || [] },
   imp: clamp(ai.importancia, 1, 5),
@@ -102,6 +110,7 @@ function refine(post, ai) {
   Object.assign(it, toItem(post, ai), { pending: false });
   store.touch();
   broadcast("update", it);
+  stories.onTrending(it); // notícias de grande importância também dão pistas
 }
 
 // só as notícias já tratadas servem de referência para detetar repetidos
@@ -125,7 +134,7 @@ app.use((req, res, next) => {
 });
 app.get("/api/items", (req, res) => res.json(store.all(Number(req.query.limit) || 400)));
 app.get("/api/sources", (req, res) => res.json(SOURCES));
-app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira }))));
+app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira, mod: l.mod }))));
 app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/stories/estado", (req, res) => res.json(stories.estado())); // diagnóstico da recuperação de pistas
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
