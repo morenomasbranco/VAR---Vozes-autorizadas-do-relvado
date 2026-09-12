@@ -14,13 +14,10 @@ const CATS = [
   { id: "live", pt: "Live", en: "Live", hl: "live" },
   { id: "resultados", pt: "Resultados", en: "Results" },
   { id: "favoritos", pt: "Favoritos", en: "Saved" },
-  { id: "futebol", pt: "Nacional", en: "Portugal" },
   { id: "porto", pt: "Porto", en: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", club: true },
   { id: "mercado", pt: "Mercado", en: "Transfers" },
-  { id: "big5", pt: "Big 5", en: "Big 5" },
-  { id: "perifericos", pt: "Campeonatos periféricos", en: "Other leagues" },
   { id: "modalidades", pt: "Modalidades", en: "Other sports" },
   { id: "estatisticas", pt: "Estatísticas", en: "Stats" },
   { id: "premios", pt: "Prémios", en: "Awards" },
@@ -29,17 +26,29 @@ const CATS = [
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
-const BIG3 = ["porto", "sporting", "benfica"];
-// futebol nacional: notícias sobre Portugal (Gemini) ou, sem essa indicação, sobre os três grandes
-const isNational = (it) => !it.cats.includes("modalidades") && !it.cats.includes("portugueses") && (it.paisTema ? it.paisTema === "pt" : it.cats.some((c) => BIG3.includes(c)));
+/* ───────── Colunas dos Destaques (proveniência da notícia) ───────── */
+const COLS = [
+  { id: "pt", pt: "Portugal", en: "Portugal", pais: "pt" },
+  { id: "en", pt: "Inglaterra", en: "England", pais: "gb-eng" },
+  { id: "es", pt: "Espanha", en: "Spain", pais: "es" },
+  { id: "it", pt: "Itália", en: "Italy", pais: "it" },
+  { id: "de", pt: "Alemanha", en: "Germany", pais: "de" },
+  { id: "fr", pt: "França", en: "France", pais: "fr" },
+  { id: "mundo", pt: "Resto do Mundo", en: "Rest of the world", pais: "un" },
+  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", pais: "pt" },
+];
+// país de que a notícia trata → coluna; os países que não estão aqui caem no Resto do Mundo
+const PAIS_COL = { pt: "pt", gb: "en", "gb-eng": "en", es: "es", it: "it", de: "de", fr: "fr" };
+const COL_N = 14; // notícias por coluna
+const MIN_IMP_COL = 2; // importância mínima para entrar nos Destaques
+
 const inSection = (it, s) => {
   if (s === "historias" || s === "favoritos") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
   if (it.src === "resultados") return false; // notícias dos resultados em direto só no Live e nos Resultados
-  if (s === "destaque") return (it.imp || 0) >= 3;
-  if (s === "futebol") return isNational(it);
+  if (s === "destaque") return (it.imp || 0) >= MIN_IMP_COL;
   return it.cats.includes(s);
 };
 
@@ -62,8 +71,8 @@ const UI = {
     trOther: "Traduzido", moreSources: (n) => `+${n} ${n === 1 ? "fonte" : "fontes"}`,
     all: "Todas", none: "Nenhuma", sources: "Fontes", hot: "Destaque", fresh: "Novo", ft: "Final",
     toLight: "Mudar para modo claro", toDark: "Mudar para modo escuro", locale: "pt-PT",
-    tagline: "Vozes Autorizadas do Relvado",
-    docTitle: "VAR — Vozes Autorizadas do Relvado", langLabel: "Idioma", sectionsLabel: "Secções", resultsSource: "Resultados em direto",
+    tagline: "Verified Action Reports",
+    docTitle: "VAR — Verified Action Reports", langLabel: "Idioma", sectionsLabel: "Secções", resultsSource: "Resultados em direto",
     save: "Guardar", saved: "Guardado", noFavs: "Ainda não guardaste notícias. Carrega em «Guardar» numa notícia para a encontrares aqui.",
     now: "agora", noResults: "Ainda não há resultados das fontes ativas.",
     noPost: "Esta notícia não tem link para a fonte.", viewSrc: "Ver na fonte",
@@ -72,8 +81,20 @@ const UI = {
     tones: { positiva: "Positiva", negativa: "Negativa", neutra: "Neutra" }, allTones: "Todas", toneLabel: "Tom", levelLabel: "Nível",
     angle: "Ângulo", data: "Dados", check: "A verificar", seeNews: "Ver a notícia",
     noStories: "Ainda não há pistas. Aparecem quando os resultados, as classificações ou as notícias mostram algo fora do normal.",
-    storiesNote: "Pistas para notícias encontradas nos dados. O nível de interesse vem dos critérios de noticiabilidade que cada pista cumpre.",
+    storiesNote: "Pistas para notícias, encontradas nos resultados e nas notícias que vão entrando. O nível de interesse vem dos critérios de noticiabilidade que cada pista cumpre. As possibilidades são hipóteses escritas a partir do que as fontes disseram — nunca factos novos.",
     updated: (t, src) => `Atualizado ${t} por ${src}`, agoWord: (t) => `há ${t}`,
+    colsNote: "As notícias mais relevantes de cada origem, em tempo real. A coluna vem do país de que a notícia trata; quando não é possível saber, vem da proveniência da fonte.",
+    colEmpty: "Sem notícias nesta coluna para já.", colAll: "Ver tudo desta origem",
+    liveNow: "Jogos a decorrer", allResults: "Ver todos os resultados", onTv: "Transmissão", nextTv: "A seguir na televisão",
+    noLive: "Não há jogos a decorrer nas ligas escolhidas.", countryLabel: "País da fonte",
+    srcState: (d, g, e) => `${d} com feed próprio · ${g} pelo Google News${e ? ` · ${e} sem responder` : ""}`,
+    onlyProblems: "Só as que têm problemas", lastNews: "última notícia", noNews: "ainda não trouxe notícias", srcFail: "não responde",
+    gaveFirst: "Deu primeiro", onlyHere: "Só nesta fonte", confirms: "Confirmações",
+    justConfirmed: "acabou de confirmar", confirmedAt: (t) => `confirmou ${t}`, nConfirms: (n) => `${n} ${n === 1 ? "confirmação" : "confirmações"}`,
+    thread: "O fio da história", whatNext: "O que pode acontecer", consequences: "Consequências", ifWord: "se",
+    possNote: "Hipóteses, não factos: cada uma diz de que depende.",
+    origins: { todas: "Todas", noticia: "Das notícias", dados: "Dos jogos" }, originLabel: "Origem",
+    consTypes: { desportiva: "Desportiva", contratual: "Contratual", financeira: "Financeira", competitiva: "Competitiva", institucional: "Institucional", disciplinar: "Disciplinar" },
   },
   en: {
     live: "Live", paused: "Paused", nSources: (n) => `${n} sources`, markRead: "Mark all as read",
@@ -92,8 +113,8 @@ const UI = {
     trOther: "Translated", moreSources: (n) => `+${n} ${n === 1 ? "source" : "sources"}`,
     all: "All", none: "None", sources: "Sources", hot: "Top story", fresh: "New", ft: "FT",
     toLight: "Switch to light mode", toDark: "Switch to dark mode", locale: "en-GB",
-    tagline: "Voices, Action & Reports",
-    docTitle: "VAR — Voices, Action & Reports", langLabel: "Language", sectionsLabel: "Sections", resultsSource: "Live results",
+    tagline: "Verified Action Reports",
+    docTitle: "VAR — Verified Action Reports", langLabel: "Language", sectionsLabel: "Sections", resultsSource: "Live results",
     save: "Save", saved: "Saved", noFavs: "No saved stories yet. Tap «Save» on a story to find it here.",
     now: "now", noResults: "No results from the active sources yet.",
     noPost: "This story has no link to its source.", viewSrc: "View source",
@@ -102,15 +123,26 @@ const UI = {
     tones: { positiva: "Positive", negativa: "Negative", neutra: "Neutral" }, allTones: "All", toneLabel: "Tone", levelLabel: "Level",
     angle: "Angle", data: "Data", check: "To check", seeNews: "See the story",
     noStories: "No leads yet. They appear when results, tables or news show something out of the ordinary.",
-    storiesNote: "Story leads found in the data. The interest level comes from the news values each lead meets.",
+    storiesNote: "Story leads found in the results and in the news as it comes in. The interest level comes from the news values each lead meets. The possibilities are hypotheses built from what the sources said — never new facts.",
     updated: (t, src) => `Updated ${t} by ${src}`, agoWord: (t) => `${t} ago`,
+    colsNote: "The most relevant stories from each origin, in real time. The column follows the country the story is about; when that is unknown, it follows the source's own country.",
+    colEmpty: "No stories in this column yet.", colAll: "See everything from this origin",
+    liveNow: "Live matches", allResults: "See all results", onTv: "On TV", nextTv: "Next on TV",
+    noLive: "No matches in progress in the chosen leagues.", countryLabel: "Source country",
+    srcState: (d, g, e) => `${d} with their own feed · ${g} via Google News${e ? ` · ${e} not responding` : ""}`,
+    onlyProblems: "Only the ones with problems", lastNews: "last story", noNews: "no stories yet", srcFail: "not responding",
+    gaveFirst: "Broke it", onlyHere: "Single source", confirms: "Confirmations",
+    justConfirmed: "just confirmed", confirmedAt: (t) => `confirmed ${t}`, nConfirms: (n) => `${n} ${n === 1 ? "confirmation" : "confirmations"}`,
+    thread: "The story so far", whatNext: "What could happen next", consequences: "Consequences", ifWord: "if",
+    possNote: "Hypotheses, not facts: each one states what it depends on.",
+    origins: { todas: "All", noticia: "From the news", dados: "From matches" }, originLabel: "Origin",
+    consTypes: { desportiva: "Sporting", contratual: "Contractual", financeira: "Financial", competitiva: "Competitive", institucional: "Institutional", disciplinar: "Disciplinary" },
   },
 };
 
 const isHot = (it) => (it.imp || 0) >= 4;
 // relevância = importância a perder peso com o tempo (metade ao fim de 3 horas)
 const relevance = (it, now) => (it.imp || 1) / (1 + (now - it.ts) / 3600000 / 3);
-const TOP_N = 8;
 const byTime = (a, b) => b.ts - a.ts; // mais recente primeiro
 const MAX_ITEMS = 4000; // arquivo que o site mantém aberto
 
@@ -160,6 +192,20 @@ function Flag({ code, lang, title }) {
   if (!code) return null;
   const name = countryName(code, lang);
   return <img className="flag" src={`https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`} alt={name} title={title ? title(name) : name} width="18" height="13" loading="lazy" />;
+}
+
+// canal português que transmite o jogo (Zapping do zerozero); sem logótipo, fica o nome com a cor do canal
+function Tv({ tv, size = 20 }) {
+  const [bad, setBad] = useState(false);
+  if (!tv) return null;
+  return (
+    <span className="tv" title={`${tv.nome}${tv.canal !== tv.nome ? ` — ${tv.canal}` : ""}`} style={tv.cor ? { "--tvc": tv.cor } : undefined}>
+      {tv.logo && !bad
+        ? <img className="tvlogo" src={tv.logo} alt={tv.nome} width={size} height={size} loading="lazy" onError={() => setBad(true)} />
+        : <i className="tvdot" aria-hidden="true" />}
+      <span className="tvname">{tv.canal}</span>
+    </span>
+  );
 }
 
 // pistas antigas, guardadas antes de existir o tom, recebem-no pelo tipo
@@ -213,9 +259,12 @@ function Ficha({ f, lang, ui }) {
 function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais, theme }) {
   const [lvl, setLvl] = useState("todos");
   const [tone, setTone] = useState("todas");
+  const [orig, setOrig] = useState("todas");
+  const origemDe = (s) => s.origem || (s.noticia ? "noticia" : "dados");
   const list = stories
     .filter((s) => lvl === "todos" || s.nivel === lvl)
     .filter((s) => tone === "todas" || toneOf(s) === tone)
+    .filter((s) => orig === "todas" || origemDe(s) === orig)
     .sort((a, b) => b.ts - a.ts);
   return (
     <div className="stories">
@@ -229,6 +278,11 @@ function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, league
         <div className="seg lvls" role="group" aria-label={ui.toneLabel}>
           {["todas", "positiva", "negativa", "neutra"].map((k) => (
             <button key={k} aria-pressed={tone === k} onClick={() => setTone(k)}>{k === "todas" ? ui.allTones : ui.tones[k]}</button>
+          ))}
+        </div>
+        <div className="seg lvls" role="group" aria-label={ui.originLabel}>
+          {["todas", "noticia", "dados"].map((k) => (
+            <button key={k} aria-pressed={orig === k} onClick={() => setOrig(k)}>{ui.origins[k] || ui.origins.todas}</button>
           ))}
         </div>
       </div>
@@ -246,6 +300,27 @@ function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, league
               <Crests eq={s.crests} theme={theme} lang={lang} />
               <h3 className="title">{s.t[lang]}</h3>
               {s.ficha && <Ficha f={s.ficha} lang={lang} ui={ui} />}
+              {s.narrativa?.[lang] && <p className="narr"><b>{ui.thread}:</b> {s.narrativa[lang]}</p>}
+              {s.possibilidades?.length > 0 && (
+                <div className="block poss">
+                  <b>{ui.whatNext}</b> <span className="muted small">{ui.possNote}</span>
+                  <ul className="bul">
+                    {s.possibilidades.map((p, i) => (
+                      <li key={i}>{p[lang]}{p.se?.[lang] && <span className="muted"> — {ui.ifWord} {p.se[lang].replace(/^(se|if)\s+/i, "")}</span>}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {s.consequencias?.length > 0 && (
+                <div className="block cons">
+                  <b>{ui.consequences}</b>
+                  <ul className="bul">
+                    {s.consequencias.map((c, i) => (
+                      <li key={i}>{c.tipo && <span className="chip tipo">{ui.consTypes[c.tipo] || c.tipo}</span>} {c[lang]}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p className="angle"><b>{ui.angle}:</b> {s.angulo[lang]}</p>
               {s.dados?.[lang]?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {s.dados[lang].join(" · ")}</p>}
               {s.verificar?.[lang]?.length > 0 && (
@@ -265,16 +340,39 @@ function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, league
   );
 }
 
+// quem confirmou a notícia depois da fonte que a deu primeiro: um quadradinho por órgão,
+// com «acabou de confirmar» nos primeiros minutos e a hora a partir daí
+function Confirms({ it, lang, ui, now, srcPais }) {
+  if (!it.also?.length) return null;
+  return (
+    <div className="confs">
+      <span className="conflbl">{ui.confirms}</span>
+      {it.also.map((a) => {
+        const quando = a.at || a.ts;
+        const recente = now - quando < 10 * 60000;
+        return (
+          <span key={a.postId || a.src} className={`conf ${recente ? "now" : ""}`}>
+            <Flag code={a.pais || srcPais[a.src]} lang={lang} />
+            <b>{a.name || a.src}</b>
+            <span className="muted">{recente ? ui.justConfirmed : ui.confirmedAt(agoText(quando, now, ui))}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function Rich({ text }) {
   return text.split(/==(.+?)==/g).map((p, i) => (i % 2 ? <mark key={i} className="hl">{p}</mark> : <span key={i}>{p}</span>));
 }
 
 /* ───────── Estilos ───────── */
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap');
-.apito{--bg:#EEF2ED;--raise:#F8FAF7;--ink:#16221C;--muted:#58685F;--line:#C8D3CB;--accent:#E3AA12;--live:#CF3128;
+.apito{--ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --display:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --bg:#EEF2ED;--raise:#F8FAF7;--ink:#16221C;--muted:#58685F;--line:#C8D3CB;--accent:#E3AA12;--live:#CF3128;
   --porto:#1D4E9E;--sporting:#0B7A47;--benfica:#C8102E;--hist:#6A41D8;
-  font-family:Barlow,system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;font-size:16px;line-height:1.5}
+  font-family:var(--ui);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:"case" 1;background:var(--bg);color:var(--ink);min-height:100vh;font-size:16px;line-height:1.5}
 .apito[data-theme="dark"]{--bg:#0F1914;--raise:#16241D;--ink:#E4EDE7;--muted:#8E9F96;--line:#27382F;--accent:#F4C542;--live:#FF5B4D;
   --porto:#83A9EE;--sporting:#4CC68D;--benfica:#FF6E7E;--hist:#B29BFF}
 .apito *{box-sizing:border-box}
@@ -284,7 +382,7 @@ const CSS = `
 .apito .hdr{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line)}
 .apito .bar{display:flex;align-items:center;gap:12px 16px;padding:14px 0 8px;flex-wrap:wrap}
 .apito .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
-.apito .brand b{font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:700;font-size:30px;line-height:1}
+.apito .brand b{font-family:var(--display);font-weight:700;font-size:27px;line-height:1;letter-spacing:-.02em}
 .apito .tagline{font-size:13px;color:var(--muted);margin-right:6px}
 .apito .status{display:flex;align-items:center;gap:10px;font-size:14px}
 .apito .pulse{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--live)}
@@ -340,23 +438,23 @@ const CSS = `
 @media(min-width:1000px){.apito .mobevents{display:none}}
 @keyframes evin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .apito .feedhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
-.apito .feedhead h1{font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:600;font-size:26px;margin:0 auto 0 0;line-height:1.1}
+.apito .feedhead h1{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0 auto 0 0;line-height:1.1}
 .apito .textbtn{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
 .apito .textbtn:hover{color:var(--ink)}
 .apito .pending{display:block;width:100%;margin:0 0 12px;padding:9px;border:1px dashed var(--accent);border-radius:8px;font-weight:600;font-size:14px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .apito .feed{list-style:none;margin:0;padding:0}
 .apito .item{display:grid;grid-template-columns:50px 24px minmax(0,1fr)}
-.apito .gut{text-align:right;padding-top:13px;font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:600;font-size:21px;line-height:1;font-variant-numeric:tabular-nums;color:var(--muted)}
+.apito .gut{text-align:right;padding-top:13px;font-family:var(--display);font-weight:600;font-size:21px;line-height:1;font-variant-numeric:tabular-nums;color:var(--muted)}
 .apito .item.unread .gut{color:var(--ink)}
 .apito .gut .n{display:block}
-.apito .gut .u{display:block;font-family:Barlow,system-ui,sans-serif;font-size:12px;font-weight:500;margin-top:3px;color:var(--muted)}
+.apito .gut .u{display:block;font-family:var(--ui);font-size:12px;font-weight:500;margin-top:3px;color:var(--muted)}
 .apito .score .m.live{color:var(--live)}
 .apito .board{list-style:none;margin:0;padding:0;border-top:1px solid var(--line);max-width:720px}
 .apito .match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) 76px;align-items:center;gap:4px 14px;padding:12px 4px;border-bottom:1px solid var(--line)}
 .apito .match .comp{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--muted)}
-.apito .match .team{font-family:'Barlow Condensed',Barlow,sans-serif;font-size:22px;font-weight:600;line-height:1.1}
+.apito .match .team{font-family:var(--display);font-size:19px;letter-spacing:-.015em;font-weight:600;line-height:1.1}
 .apito .match .team.h{text-align:right}
-.apito .match .res{font-family:'Barlow Condensed',Barlow,sans-serif;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;min-width:70px;text-align:center;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--raise)}
+.apito .match .res{font-family:var(--display);font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;min-width:70px;text-align:center;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--raise)}
 .apito .match.on .res{border-color:var(--live)}
 .apito .match .st{font-size:14px;font-weight:700;text-align:right}
 .apito .match .upd{grid-column:1/-1;font-size:12px;color:var(--muted)}
@@ -375,13 +473,13 @@ const CSS = `
 .apito .chip.club{border-color:var(--c);color:var(--c)}
 .apito .chip.hot{background:var(--accent);border-color:var(--accent);color:#1B1B1B}
 .apito .chip.new{border-color:var(--accent);color:var(--ink)}
-.apito .title{font-family:'Barlow Condensed',Barlow,sans-serif;font-weight:600;font-size:24px;line-height:1.15;margin:6px 0 2px;max-width:44ch}
-.apito .item.hot .title{font-size:29px}
+.apito .title{font-family:var(--display);font-weight:600;font-size:21px;line-height:1.2;letter-spacing:-.021em;margin:6px 0 2px;max-width:46ch}
+.apito .item.hot .title{font-size:25px}
 .apito .bul{margin:6px 0 0;padding:0;list-style:none;max-width:68ch}
 .apito .bul li{position:relative;padding-left:16px;margin:3px 0}
 .apito .bul li::before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:1px;background:var(--muted)}
 .apito mark.hl{background:color-mix(in srgb,var(--accent) 30%,transparent);color:inherit;padding:0 2px;border-radius:2px}
-.apito .score{display:inline-flex;align-items:center;gap:12px;margin:8px 0 2px;padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:var(--raise);font-family:'Barlow Condensed',Barlow,sans-serif;font-size:21px;font-weight:600}
+.apito .score{display:inline-flex;align-items:center;gap:12px;margin:8px 0 2px;padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:var(--raise);font-family:var(--display);font-size:21px;font-weight:600}
 .apito .score .n{font-variant-numeric:tabular-nums;font-size:27px;font-weight:700}
 .apito .score .m{font-size:14px;font-weight:700}
 .apito .acts{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;margin-top:10px}
@@ -389,7 +487,7 @@ const CSS = `
 .apito .tr{font-size:13px;color:var(--muted);font-style:italic;margin-left:auto}
 .apito .panel{position:sticky;top:200px}
 .apito .panel-head{display:flex;align-items:baseline;justify-content:space-between}
-.apito .panel h2{font-family:'Barlow Condensed',Barlow,sans-serif;font-size:22px;font-weight:600;margin:0}
+.apito .panel h2{font-family:var(--display);font-size:19px;letter-spacing:-.015em;font-weight:600;margin:0}
 .apito .srclist{list-style:none;margin:8px 0 0;padding:0;max-height:62vh;overflow:auto}
 .apito .srcrow{display:flex;align-items:center;gap:10px;width:100%;padding:5px 6px;border-radius:6px;font-size:14px;text-align:left}
 .apito .srcrow:hover{background:var(--raise)}
@@ -422,7 +520,7 @@ const CSS = `
 .apito .story{background:color-mix(in srgb,var(--hist) 5%,var(--raise))}
 .apito .ficha{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:14px;background:var(--bg)}
 .apito .ficha p{margin:4px 0}
-.apito .fres{display:flex;align-items:center;justify-content:center;gap:12px;font-family:'Barlow Condensed',Barlow,sans-serif;font-size:20px;font-weight:600}
+.apito .fres{display:flex;align-items:center;justify-content:center;gap:12px;font-family:var(--display);font-size:20px;font-weight:600}
 .apito .fres b{font-size:24px;font-variant-numeric:tabular-nums}
 .apito .fstats{width:100%;border-collapse:collapse;margin:6px 0;font-variant-numeric:tabular-nums}
 .apito .fstats caption{text-align:left;font-weight:700;padding-bottom:2px}
@@ -448,14 +546,94 @@ const CSS = `
 .apito .xnote{font-size:14px;color:var(--muted);margin:0 0 12px;max-width:60ch}
 .apito .leagues .srclist.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));max-height:none}
 @media(min-width:1000px){.apito .mobpanel.leagues{display:block}}
+.apito .tv{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:1px 7px 1px 4px;border:1px solid var(--line);
+  border-left:3px solid var(--tvc,var(--accent));border-radius:4px;background:var(--raise);white-space:nowrap}
+.apito .tvlogo{border-radius:3px;object-fit:contain;flex:none;background:#fff}
+.apito .tvdot{width:8px;height:8px;border-radius:2px;background:var(--tvc,var(--accent));flex:none}
+.apito .comptv{margin-left:6px}
+.apito .livebar{margin:0 0 18px}
+.apito .livehead{display:flex;align-items:center;gap:12px;margin:0 0 8px}
+.apito .livehead .pulse{font-size:14px}
+.apito .livelist{list-style:none;margin:0;padding:0 0 8px;display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin}
+.apito .livelist::-webkit-scrollbar{height:6px}
+.apito .livelist::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .lcard{flex:0 0 auto;width:214px;border:1px solid var(--line);border-top:3px solid var(--live);border-radius:8px;padding:8px 10px 9px;background:var(--raise)}
+.apito .lcard.next{border-top-color:var(--accent)}
+.apito .lcomp{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apito .lrow{display:flex;align-items:center;gap:8px;margin-top:4px;font-family:var(--display);font-size:15px;letter-spacing:-.01em;font-weight:600;line-height:1.1}
+.apito .lrow b{margin-left:auto;font-size:20px;font-variant-numeric:tabular-nums}
+.apito .lteam{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apito .lfoot{display:flex;align-items:center;gap:8px;margin-top:8px}
+.apito .lmin{font-size:13px;font-weight:700;color:var(--live)}
+.apito .lfoot .tv{margin-left:auto}
+.apito .narr{margin:8px 0;max-width:68ch}
+.apito .block{margin:8px 0;max-width:68ch}
+.apito .block .bul{margin-top:3px}
+.apito .block.poss{border-left:3px solid var(--accent);padding-left:10px}
+.apito .block.cons{border-left:3px solid var(--hist);padding-left:10px}
+.apito .small{font-size:12px}
+.apito .chip.tipo{margin-right:5px;font-size:10px;text-transform:uppercase;letter-spacing:.03em;border-color:var(--hist);color:var(--hist)}
+.apito .confs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 0}
+.apito .conflbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.apito .conf{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 8px;border:1px solid var(--line);border-radius:4px;background:var(--raise)}
+.apito .conf b{font-weight:600}
+.apito .conf.now{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--raise));animation:cfin .6s ease-out}
+.apito .conf.now .muted{color:var(--ink);font-weight:600}
+@keyframes cfin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.apito .chip.first{border-color:var(--accent);color:var(--ink);font-weight:700}
+.apito .chip.only{border-style:dashed}
+.apito .chip.conf.mini{display:inline-flex;align-items:center;gap:4px;padding:0 6px}
+.apito .chip.conf.mini .flag{width:14px;height:10px}
+.apito .chip.conf.mini.now{border-color:var(--accent);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.apito .conf.now{animation:none}}
+.apito .srcstate{font-size:12px;color:var(--muted);margin:6px 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.apito .srcstate .textbtn{font-size:12px;padding:1px 5px;border:1px solid var(--line);border-radius:999px}
+.apito .fst{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:0 5px;line-height:16px;border-radius:3px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.apito .fst.ok{border-color:color-mix(in srgb,var(--sporting) 60%,transparent);color:var(--sporting)}
+.apito .fst.slow{border-color:color-mix(in srgb,var(--accent) 70%,transparent);color:var(--accent)}
+.apito .fst.bad{border-color:var(--live);color:var(--live)}
+.apito .srcgroup{margin-bottom:4px}
+.apito .srcgroup summary{display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:6px;cursor:pointer;font-size:14px;list-style:none}
+.apito .srcgroup summary::-webkit-details-marker{display:none}
+.apito .srcgroup summary::after{content:"+";margin-left:auto;color:var(--muted);font-weight:700}
+.apito .srcgroup details[open] summary::after{content:"–"}
+.apito .srcgroup summary:hover{background:var(--raise)}
+.apito .srcgroup summary .ct{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+.apito .srcgroup summary::after{margin-left:8px}
+.apito .grpacts{display:flex;gap:6px;padding:0 4px 2px 26px}
+.apito .srclist.plain{max-height:none;overflow:visible;margin:0 0 6px;padding-left:18px}
+.apito .cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(248px,1fr);gap:0;overflow-x:auto;padding:0 0 14px;scrollbar-width:thin}
+.apito .cols::-webkit-scrollbar{height:6px}
+.apito .cols::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .col{min-width:0;padding:0 12px;border-left:1px solid var(--line)}
+.apito .col:first-child{padding-left:0;border-left:0}
+.apito .colh{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:7px;margin:0 0 8px;padding:6px 0 8px;background:var(--bg);
+  font-family:var(--display);font-size:17px;letter-spacing:-.015em;font-weight:600;line-height:1.1;border-bottom:2px solid var(--accent)}
+.apito .clist{list-style:none;margin:0;padding:0}
+.apito .citem{padding:9px 0 11px;border-bottom:1px solid var(--line)}
+.apito .citem.fresh{animation:afr 3s ease-out}
+.apito .citem.hot{border-left:3px solid var(--accent);padding-left:8px}
+.apito .cmeta{display:flex;align-items:center;gap:6px;font-size:12px;min-width:0}
+.apito .cmeta .src{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apito .cmeta .ctime{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.apito .ctitle{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.25;letter-spacing:-.015em;margin:4px 0 0}
+.apito .citem.unread .ctitle{color:var(--ink)}
+.apito .citem:not(.unread) .ctitle{color:color-mix(in srgb,var(--ink) 86%,var(--bg))}
+.apito .cbul{margin:4px 0 0;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.apito .cacts{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
+.apito .cacts .textbtn{padding:2px 3px}
+.apito .cacts .textbtn:last-child,.apito .cacts a.textbtn{margin-left:auto}
+.apito .cempty{font-size:13px;color:var(--muted);padding:6px 0}
+@media(max-width:640px){.apito .cols{grid-auto-columns:minmax(84vw,1fr);scroll-snap-type:x mandatory}.apito .col{scroll-snap-align:start}}
 .apito .empty{padding:40px 0 40px 74px;color:var(--muted);max-width:60ch}
 @media(max-width:640px){
   .apito .search{width:100%;order:5}
   .apito .item{grid-template-columns:40px 20px minmax(0,1fr)}
   .apito .gut{font-size:18px}
   .apito .match{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) 56px;gap:4px 8px}
-  .apito .match .team{font-size:18px} .apito .match .res{font-size:23px;min-width:56px}
-  .apito .title{font-size:21px} .apito .item.hot .title{font-size:24px}
+  .apito .match .team{font-size:16px} .apito .match .res{font-size:21px;min-width:56px}
+  .apito .title{font-size:19px} .apito .item.hot .title{font-size:22px}
   .apito .chips{margin-left:0;width:100%}
   .apito .empty{padding-left:0}
 }
@@ -467,7 +645,7 @@ export default function App() {
     typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   );
   const [lang, setLang] = useState("pt");
-  const [section, setSection] = useState("live");
+  const [section, setSection] = useState("destaque");
   const [items, setItems] = useState([]);
   const [conn, setConn] = useState("a ligar"); // ligação do browser ao servidor
   const [xStatus, setXStatus] = useState("a ligar"); // ligação do servidor ao X
@@ -483,11 +661,30 @@ export default function App() {
   });
   const [showLeagues, setShowLeagues] = useState(false);
   const [stories, setStories] = useState([]);
+  const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
+  const [diag, setDiag] = useState({}); // estado de cada fonte: por onde é lida, se responde, última notícia
+  const [soProblemas, setSoProblemas] = useState(false);
   const [modFilter, setModFilter] = useState("todas");
   const [favs, setFavs] = useState(() => {
     try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   useEffect(() => { try { localStorage.setItem("var-favoritos", JSON.stringify(favs)); } catch { /* sem armazenamento */ } }, [favs]);
+  // estado das fontes: lido no arranque e refrescado de minuto a minuto
+  useEffect(() => {
+    const load = () => fetch(`${API}/api/fontes`).then((r) => r.json())
+      .then((l) => Array.isArray(l) && setDiag(Object.fromEntries(l.map((d) => [d.handle, d]))))
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, []);
+  // grelha de transmissões: lida no arranque e refrescada de minuto a minuto
+  useEffect(() => {
+    const load = () => fetch(`${API}/api/zapping`).then((r) => r.json()).then((l) => Array.isArray(l) && setZapping(l)).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, []);
   // ao voltar ao separador, busca o que entrou enquanto o site esteve em segundo plano
   useEffect(() => {
     const onBack = () => {
@@ -536,7 +733,7 @@ export default function App() {
       .then((r) => r.json())
       .then((list) => {
         if (stop || !list.length) return;
-        setSourceList(list.map((x) => [x.handle, x.name, x.pais]));
+        setSourceList(list.map((x) => [x.handle, x.name, x.pais, x.col]));
       })
       .catch(() => {});
     fetch(`${API}/api/leagues`).then((r) => r.json()).then((l) => !stop && setLeagues(l)).catch(() => {});
@@ -606,6 +803,13 @@ export default function App() {
   const leagueByKey = useMemo(() => Object.fromEntries(leagues.map((l) => [l.key, l])), [leagues]);
   const leagueName = (k) => { const l = leagueByKey[k]; return l ? (lang === "en" ? l.nome_en || l.nome : l.nome) : null; };
   const srcPais = useMemo(() => Object.fromEntries(sourceList.map(([h, , p]) => [h, p])), [sourceList]);
+  const srcCol = useMemo(() => Object.fromEntries(sourceList.map(([h, , , c]) => [h, c])), [sourceList]);
+  // coluna dos Destaques: o país de que a notícia trata manda; sem essa indicação, vale a proveniência da fonte
+  const colOf = (it) => {
+    if (it.cats?.includes("portugueses")) return "portugueses";
+    if (it.paisTema) return PAIS_COL[it.paisTema] || "mundo";
+    return srcCol[it.src] || PAIS_COL[srcPais[it.src]] || "mundo";
+  };
   const flagOf = (it) => (it.src === "resultados" ? null : it.pais || srcPais[it.src]); // país da fonte
   const topicOf = (it) => it.paisTema || (it.src === "resultados" ? leagueByKey[it.liga]?.pais || it.pais : null); // país de que a notícia trata
   // resultados em direto: só as ligas escolhidas (a escolha fica guardada neste browser)
@@ -627,24 +831,29 @@ export default function App() {
 
   const visible = useMemo(() => {
     if (section === "favoritos") return [...favs].filter(matches).sort(byTime);
-    const list = items.filter((it) => srcOn(it) && inSection(it, section) && matches(it)
-      && (section !== "modalidades" || modFilter === "todas" || it.mod === modFilter));
-    if (section !== "destaque") return list.sort(byTime);
-    // nos Destaques, cada jogo aparece uma só vez (o estado mais recente) e a ordem é por relevância
-    const seen = new Set();
-    return list
-      .filter((it) => {
-        if (!it.score) return true;
-        const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      })
-      .sort((a, b) => relevance(b, now) - relevance(a, now))
-      .slice(0, TOP_N)
-      .sort(byTime);
+    return items.filter((it) => srcOn(it) && inSection(it, section) && matches(it)
+      && (section !== "modalidades" || modFilter === "todas" || it.mod === modFilter)).sort(byTime);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, favs, enabled, ligasOn, section, query, lang, modFilter, section === "destaque" ? now : 0]);
+  }, [items, favs, enabled, ligasOn, section, query, lang, modFilter]);
+
+  // Destaques: as notícias mais relevantes de cada origem, uma coluna por proveniência.
+  // A ordem dentro de cada coluna é por relevância (importância a perder peso com o tempo),
+  // recalculada de minuto a minuto para não mexer no ecrã a cada segundo.
+  const minuto = Math.floor(now / 60000);
+  const colunas = useMemo(() => {
+    const out = Object.fromEntries(COLS.map((c) => [c.id, []]));
+    for (const it of items) {
+      if (it.board || it.score || it.src === "resultados") continue; // resultados têm secção própria
+      if ((it.imp || 0) < MIN_IMP_COL) continue;
+      if (!srcOn(it) || !matches(it)) continue;
+      (out[colOf(it)] || out.mundo).push(it);
+    }
+    for (const k of Object.keys(out)) {
+      out[k] = out[k].sort((a, b) => relevance(b, minuto * 60000) - relevance(a, minuto * 60000)).slice(0, COL_N);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, enabled, ligasOn, query, lang, sourceList, minuto]);
 
   const unreadBy = useMemo(() => {
     const out = {};
@@ -665,6 +874,11 @@ export default function App() {
     return [...map.values()].sort((a, b) => (isLive(b.score, b.upd || b.ts, now) - isLive(a.score, a.upd || a.ts, now)) || (b.upd || b.ts) - (a.upd || a.ts));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
+
+  // jogos a decorrer, para a página inicial (o quadro completo continua na secção Resultados)
+  const aoVivo = useMemo(() => games.filter((it) => isLive(it.score, it.upd || it.ts, now)), [games, now]);
+  // próximas transmissões na televisão portuguesa, quando não há jogos a decorrer
+  const proximasTv = useMemo(() => zapping.filter((z) => z.inicio > now - 15 * 60000).slice(0, 10), [zapping, now]);
 
   const srcCounts = useMemo(() => {
     const out = {};
@@ -757,6 +971,46 @@ export default function App() {
     </div>
   );
 
+  // fontes agrupadas pelo país de origem, Portugal e as cinco grandes primeiro
+  const ORDEM_PAIS = ["pt", "gb", "gb-eng", "es", "it", "de", "fr"];
+  const sourceGroups = useMemo(() => {
+    const g = new Map();
+    for (const s of sourceList) {
+      const pais = s[2] || "un";
+      if (!g.has(pais)) g.set(pais, []);
+      g.get(pais).push(s);
+    }
+    return [...g.entries()]
+      .map(([pais, list]) => [pais, [...list].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "pt"))])
+      .sort((a, b) => {
+        const ia = ORDEM_PAIS.indexOf(a[0]), ib = ORDEM_PAIS.indexOf(b[0]);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || b[1].length - a[1].length;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceList]);
+  const toggleGroup = (list, on) => setEnabled((cur) => {
+    const n = new Set(cur ?? sourceList.map((x) => x[0]));
+    for (const [h] of list) on ? n.add(h) : n.delete(h);
+    return n;
+  });
+
+  const resumoFontes = useMemo(() => {
+    const v = Object.values(diag);
+    return {
+      google: v.filter((d) => d.via === "Google News" && d.ok !== false).length,
+      direto: v.filter((d) => d.ok !== false && d.via && d.via !== "Google News").length,
+      erro: v.filter((d) => d.ok === false).length,
+    };
+  }, [diag]);
+  const temProblema = (h) => diag[h] && (diag[h].ok === false || diag[h].via === "Google News");
+  const estadoFonte = (h) => {
+    const d = diag[h];
+    if (!d) return null;
+    const quando = d.ultima ? `${ui.lastNews} ${agoText(d.ultima, now, ui)}` : ui.noNews;
+    if (d.ok === false) return { cls: "bad", label: "✗", tip: `${ui.srcFail}: ${d.erro || ""} · ${quando}` };
+    return { cls: d.via === "Google News" ? "slow" : "ok", label: d.via || "—", tip: `${d.feed || d.via || ""} · ${quando}` };
+  };
+
   const sourcesPanel = (
     <div className="panel">
       <div className="panel-head">
@@ -766,16 +1020,48 @@ export default function App() {
           <button className="textbtn" onClick={() => setEnabled(new Set())}>{ui.none}</button>
         </div>
       </div>
-      <ul className="srclist">
-        {sourceList.map(([h, n]) => {
-          const on = isOn(h);
+      {Object.keys(diag).length > 0 && (
+        <p className="srcstate">
+          {ui.srcState(resumoFontes.direto, resumoFontes.google, resumoFontes.erro)}
+          <button className={`textbtn ${soProblemas ? "on" : ""}`} aria-pressed={soProblemas} onClick={() => setSoProblemas((v) => !v)}>{ui.onlyProblems}</button>
+        </p>
+      )}
+      <ul className="srclist" aria-label={ui.countryLabel}>
+        {sourceGroups.map(([pais, todas], i) => {
+          const list = soProblemas ? todas.filter(([h]) => temProblema(h)) : todas;
+          if (!list.length) return null;
+          const ligadas = list.filter(([h]) => isOn(h)).length;
           return (
-            <li key={h}>
-              <button className="srcrow" aria-pressed={on} onClick={() => toggleSource(h)}>
-                <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
-                <span className="nm">{h === "resultados" ? ui.resultsSource : n}</span>
-                <span className="ct">{srcCounts[h] || 0}</span>
-              </button>
+            <li key={pais} className="srcgroup">
+              <details open={i === 0}>
+                <summary>
+                  <Flag code={pais} lang={lang} />
+                  <b>{countryName(pais, lang)}</b>
+                  <span className="ct">{ligadas}/{list.length}</span>
+                </summary>
+                <div className="grpacts">
+                  <button className="textbtn" onClick={() => toggleGroup(list, true)}>{ui.all}</button>
+                  <button className="textbtn" onClick={() => toggleGroup(list, false)}>{ui.none}</button>
+                </div>
+                <ul className="srclist plain">
+                  {list.map(([h, n]) => {
+                    const on = isOn(h);
+                    return (
+                      <li key={h}>
+                        <button className="srcrow" aria-pressed={on} onClick={() => toggleSource(h)}>
+                          <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
+                          <span className="nm">{h === "resultados" ? ui.resultsSource : n}</span>
+                          {(() => {
+                            const st = estadoFonte(h);
+                            return st ? <span className={`fst ${st.cls}`} title={st.tip}>{st.label}</span> : null;
+                          })()}
+                          <span className="ct">{srcCounts[h] || 0}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
             </li>
           );
         })}
@@ -877,7 +1163,97 @@ export default function App() {
                 ))}
               </div>
             )}
-            {section === "historias" ? (
+            {section === "destaque" ? (
+              <>
+                <section className="livebar">
+                  <div className="livehead">
+                    <span className={`pulse ${aoVivo.length ? "" : "off"}`}><i />{aoVivo.length ? ui.liveNow : ui.nextTv}</span>
+                    <button className="textbtn" onClick={() => setSection("resultados")}>{ui.allResults}</button>
+                  </div>
+                  {aoVivo.length > 0 ? (
+                    <ul className="livelist">
+                      {aoVivo.map((it) => {
+                        const sc = it.score;
+                        return (
+                          <li key={it.id} className="lcard">
+                            <span className="lcomp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
+                            <div className="lrow">
+                              <span className="lteam">{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}{sc.h}</span>
+                              <b>{sc.hs}</b>
+                            </div>
+                            <div className="lrow">
+                              <span className="lteam">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}{sc.a}</span>
+                              <b>{sc.as}</b>
+                            </div>
+                            <div className="lfoot">
+                              <span className="lmin">{sc.ft ? ui.ft : sc.min || ui.live}</span>
+                              <Tv tv={it.tv} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : proximasTv.length > 0 ? (
+                    <ul className="livelist tvlist">
+                      {proximasTv.map((z) => (
+                        <li key={`${z.casa}|${z.fora}|${z.inicio}`} className="lcard next">
+                          <span className="lcomp">{new Date(z.inicio).toLocaleString(ui.locale, { weekday: "short", hour: "2-digit", minute: "2-digit" })}{z.qualificador ? ` · ${z.qualificador}` : ""}</span>
+                          <div className="lrow"><span className="lteam">{z.casa}</span></div>
+                          <div className="lrow"><span className="lteam">{z.fora}</span></div>
+                          <div className="lfoot"><Tv tv={z} /></div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="cempty">{ui.noLive}</p>}
+                </section>
+                <p className="xnote">{ui.colsNote}</p>
+                <div className="cols">
+                  {COLS.map((c) => (
+                    <section key={c.id} className="col">
+                      <h2 className="colh"><Flag code={c.pais} lang={lang} /> {c[lang]}</h2>
+                      {colunas[c.id].length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
+                        <ul className="clist" aria-live="polite">
+                          {colunas[c.id].map((it) => {
+                            const s = srcOf(it);
+                            return (
+                              <li key={it.id} id={`c-${it.id}`} className={`citem ${it.hot ? "hot" : ""} ${it.unread ? "unread" : ""} ${it.fresh ? "fresh" : ""}`} onClick={() => markRead(it.id)}>
+                                <div className="cmeta">
+                                  <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
+                                  <span className="src">{srcName(s)}</span>
+                                  <span className="muted ctime">{agoText(it.ts, now, ui)}</span>
+                                </div>
+                                <h3 className="ctitle"><Rich text={it.t[lang]} /></h3>
+                                {it.b[lang][0] && <p className="cbul"><Rich text={it.b[lang][0]} /></p>}
+                                <div className="cacts">
+                                  {it.hot && <span className="chip hot">{ui.hot}</span>}
+                                  {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
+                                  {it.also?.length > 0 && (
+                                    <span className={`chip conf mini ${now - (it.upd || 0) < 10 * 60000 ? "now" : ""}`} title={`${ui.confirms}: ${it.also.map((a) => a.name || a.src).join(", ")}`}>
+                                      {it.also.slice(0, 3).map((a) => <Flag key={a.postId || a.src} code={a.pais || srcPais[a.src]} lang={lang} />)}
+                                      {ui.nConfirms(it.also.length)}
+                                    </span>
+                                  )}
+                                  <button className={`textbtn ${isFav(it.id) ? "on" : ""}`} aria-pressed={isFav(it.id)} title={isFav(it.id) ? ui.saved : ui.save}
+                                    onClick={(e) => { e.stopPropagation(); toggleFav(it); }}>
+                                    <Star size={13} fill={isFav(it.id) ? "currentColor" : "none"} />
+                                  </button>
+                                  {postUrl(it) && (
+                                    <a className="textbtn" href={postUrl(it)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                                      title={isXUrl(postUrl(it)) ? ui.viewX : ui.viewSrc} style={{ textDecoration: "none" }}>
+                                      <ExternalLink size={13} />
+                                    </a>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </section>
+                  ))}
+                </div>
+              </>
+            ) : section === "historias" ? (
               <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (
               <>
@@ -887,7 +1263,7 @@ export default function App() {
                     const sc = it.score, s = srcOf(it);
                     return (
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
-                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}{it.mod && <span className="modtag">{modName(it.mod, lang)}</span>}</span>
+                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}{it.mod && <span className="modtag">{modName(it.mod, lang)}</span>}{it.tv && <span className="comptv"><Tv tv={it.tv} size={18} /></span>}</span>
                         <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={30} />}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
                         <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={30} />}{sc.a}</span>
@@ -924,11 +1300,9 @@ export default function App() {
                           <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
                           <span className="src">{srcName(s)}</span>
                           {it.via && <span className="muted">{it.via}</span>}
-                          {it.also?.length > 0 && (
-                            <span className="muted srcs" title={ui.confirmed(it.also.length + 1)}>
-                              {ui.moreSources(it.also.length)}: {it.also.map((a) => a.name || a.src).join(", ")}
-                            </span>
-                          )}
+                          {it.also?.length > 0
+                            ? <span className="chip first" title={ui.confirmed(it.also.length + 1)}>{ui.gaveFirst}</span>
+                            : (it.imp || 0) >= 4 && !it.pending && <span className="chip only">{ui.onlyHere}</span>}
                           <span className="chips">
                             {topicOf(it) && <span className="about" title={ui.aboutTitle(countryName(topicOf(it), lang))}>{ui.about} <Flag code={topicOf(it)} lang={lang} title={ui.aboutTitle} /></span>}
                             {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
@@ -955,6 +1329,7 @@ export default function App() {
                             {it.score.ft
                               ? <span className="m muted">{ui.ft}</span>
                               : <span className="m live">{it.score.min || ""}</span>}
+                            <Tv tv={it.tv} size={18} />
                           </div>
                         )}
 
@@ -963,6 +1338,8 @@ export default function App() {
                             {it.b[lang].map((b, i) => <li key={i}><Rich text={b} /></li>)}
                           </ul>
                         )}
+
+                        <Confirms it={it} lang={lang} ui={ui} now={now} srcPais={srcPais} />
 
                         <div className="acts">
                           <button className="textbtn" onClick={() => copy(it)}>

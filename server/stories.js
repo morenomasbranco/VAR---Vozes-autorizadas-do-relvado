@@ -28,7 +28,7 @@ export const nivel = (crit) => {
 // positiva ou negativa para o protagonista da pista (a equipa ou pessoa de quem o título fala)
 export const TOM = {
   surpresa: "negativa", expulsao: "negativa", reviravolta: "positiva", tardio: "positiva", goleada: "positiva", serie: "positiva",
-  crise: "negativa", derrotas: "negativa", fimserie: "negativa", primeira: "positiva", lider: "positiva", descida: "negativa", tema: "neutra",
+  crise: "negativa", derrotas: "negativa", fimserie: "negativa", primeira: "positiva", lider: "positiva", descida: "negativa", tema: "neutra", desdobramento: "neutra",
 };
 
 const BIG = [/\bbenfica\b/, /\bporto\b/, /^sporting( cp| lisbon| clube de portugal)?$/, /^portugal$/];
@@ -162,7 +162,7 @@ export function createStories({ broadcast, log }) {
       tamanho: table.get(lg.key)?.size || null,
     };
     const crestOf = (name, logo) => ({ nome: name, papel: "envolvido", logo });
-    const common = { liga: lg.key, ligaNome: lg.nome, pais: lg.bandeira, equipas: [m.home, m.away], crests: [crestOf(m.home, m.homeLogo), crestOf(m.away, m.awayLogo)], ficha };
+    const common = { origem: "dados", liga: lg.key, ligaNome: lg.nome, pais: lg.bandeira, equipas: [m.home, m.away], crests: [crestOf(m.home, m.homeLogo), crestOf(m.away, m.awayLogo)], ficha };
     const prox = (name) => (pt || isBig(name) ? ["proximidade"] : []);
     const noto = (name, id) => (isBig(name) || (lg.seccao === "big5" && rank(id) && rank(id) <= 3) ? ["notoriedade"] : []);
     const matchData = { pt: [`Resultado: ${sc} (${lg.nome})`], en: [`Result: ${sc} (${nomeEn})`] };
@@ -341,6 +341,34 @@ export function createStories({ broadcast, log }) {
     }
   }
 
+  // pista completa a partir de uma notícia: fio da história, possibilidades e consequências,
+  // escritas a partir do que o site tem (ver server/desdobra.js)
+  function onNoticia(item, out) {
+    const nomes = [item.name, ...(item.also || []).map((a) => a.name)].filter(Boolean);
+    const crit = (out.criterios || []).filter((c) => CRITERIOS[c]);
+    const par = (a, b) => ({ pt: a || b || "", en: b || a || "" });
+    add({
+      id: `s:desdobra:${item.id}`,
+      tipo: "desdobramento",
+      origem: "noticia",
+      tom: out.tom || "neutra",
+      equipas: [],
+      crests: item.equipas || [],
+      liga: null,
+      ligaNome: null,
+      pais: item.paisTema || item.pais,
+      crit: crit.length ? crit : ["continuidade"],
+      t: { pt: item.t.pt.replace(/==/g, ""), en: item.t.en.replace(/==/g, "") },
+      narrativa: par(out.narrativa_pt, out.narrativa_en),
+      angulo: par(out.angulo_pt || out.narrativa_pt, out.angulo_en || out.narrativa_en),
+      possibilidades: (out.possibilidades || []).map((p) => ({ pt: p.pt, en: p.en, se: { pt: p.se_pt, en: p.se_en } })),
+      consequencias: (out.consequencias || []).map((c) => ({ pt: c.pt, en: c.en, tipo: c.tipo })),
+      dados: { pt: [`Fontes: ${nomes.join(", ")}`], en: [`Sources: ${nomes.join(", ")}`] },
+      verificar: { pt: out.verificar_pt || [], en: out.verificar_en || [] },
+      noticia: item.id,
+    });
+  }
+
   // chamado quando a mesma notícia chega por mais de uma fonte, ou quando é muito importante
   function onTrending(item) {
     const nomes = [item.name, ...(item.also || []).map((a) => a.name)].filter(Boolean);
@@ -349,7 +377,7 @@ export function createStories({ broadcast, log }) {
     const crit = [...(fontes > 1 ? ["continuidade"] : []), ...(item.imp >= 4 ? ["impacto"] : []), ...(item.imp >= 5 ? ["surpresa"] : []), ...(item.cats?.some((c) => ["porto", "sporting", "benfica"].includes(c)) ? ["notoriedade", "proximidade"] : item.cats?.includes("portugueses") ? ["proximidade"] : [])];
     add({
       crests: item.equipas || [],
-      id: `s:tema:${item.id}`, tipo: "tema", equipas: [], liga: null, ligaNome: null, pais: item.paisTema || item.pais, crit,
+      id: `s:tema:${item.id}`, tipo: "tema", origem: "noticia", equipas: [], liga: null, ligaNome: null, pais: item.paisTema || item.pais, crit,
       t: { pt: `Tema em destaque: ${item.t.pt.replace(/==/g, "")}`, en: `Big story: ${item.t.en.replace(/==/g, "")}` },
       angulo: fontes > 1
         ? { pt: `${fontes} fontes já deram esta notícia. Há margem para um ângulo próprio: contexto, reações ou consequências.`, en: `${fontes} sources already have this story. Room for an original angle: context, reactions or consequences.` }
@@ -405,5 +433,5 @@ export function createStories({ broadcast, log }) {
     log(`[Histórias] ${total} jogo(s) dos últimos ${days} dias analisados; ${list.length} pista(s) disponíveis`);
   }
 
-  return { all: () => list, estado: () => estado, onFinal, onTrending, watch, backfill };
+  return { all: () => list, estado: () => estado, onFinal, onTrending, onNoticia, watch, backfill };
 }

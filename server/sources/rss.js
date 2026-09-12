@@ -11,12 +11,24 @@ const parser = new Parser({
 // alguns feeds (Sky Sports em vídeos, por exemplo) não datam os itens
 const dataDe = (it) => Date.parse(it.isoDate || it.pubDate || it.dcDate || it.dctCreated || it.published || it.updated || it.a10Updated || "") || null;
 const UA = "Mozilla/5.0 (compatible; VAR-feed/1.0; agregador de notícias de desporto)";
+// alguns sites (A Bola, Observador, Canal 11, AP…) recusam pedidos de programas e respondem 403 ao
+// agregador. Nesses casos vale a pena repetir o pedido do feed como um browser normal; põe
+// RSS_UA_ALTERNATIVO=0 no .env para não o fazer.
+const UA_BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+const TENTAR_BROWSER = process.env.RSS_UA_ALTERNATIVO !== "0";
+const origem = (u) => { try { return new URL(u).origin; } catch { return undefined; } };
+// pedido ao site: se responder 403 ou 401, repete uma vez como browser
+async function pedir(url, headers) {
+  const res = await fetch(url, { headers: { ...headers, "User-Agent": UA }, redirect: "follow" });
+  if (![401, 403].includes(res.status) || !TENTAR_BROWSER) return res;
+  return fetch(url, { headers: { ...headers, "User-Agent": UA_BROWSER, Referer: origem(url), "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8" }, redirect: "follow" });
+}
 const INTERVAL = Math.max(1, Number(process.env.RSS_SEGUNDOS) || 15) * 1000;
 // fontes marcadas como "rapido": leitura ao segundo enquanto o feed dá sinal de vida, abrandando quando
 // fica parado. Os pedidos são condicionais (ETag), por isso um feed sem novidades responde só "304".
 const FAST = Math.max(1, Number(process.env.RSS_RAPIDO_SEGUNDOS) || 1) * 1000;
 const FAST_STEPS = [[10 * 60e3, FAST], [60 * 60e3, 5000], [Infinity, 15000]]; // parado há X → ler a cada Y
-const GOOGLE_INTERVAL = 60000; // o Google News só muda de minuto a minuto; mais do que isto seria desperdício
+const GOOGLE_INTERVAL = Math.max(10, Number(process.env.GOOGLE_NEWS_SEGUNDOS) || 30) * 1000; // o Google News indexa com alguns minutos de atraso; ler mais vezes encurta só a última espera
 const GOOGLE_BASE = process.env.GOOGLE_NEWS_BASE || "https://news.google.com/rss/search";
 const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it", de: "hl=de&gl=DE&ceid=DE:de" };
 const STALE_MS = 7 * 86400e3;
@@ -44,7 +56,7 @@ export function googleNewsFeed(s) {
 // procura o feed na página indicada: primeiro nas marcas <link rel="alternate">,
 // depois nas ligações da própria página (páginas de RSS como a do zerozero listam-nas assim)
 export async function discover(site) {
-  const res = await fetch(site, { headers: { "User-Agent": UA }, redirect: "follow" });
+  const res = await pedir(site, {});
   if (!res.ok) throw fail(`o site respondeu ${res.status}`, { status: res.status });
   const html = await res.text();
   const abs = (h) => new URL(h.replace(/&amp;/g, "&"), res.url).href;
@@ -61,10 +73,10 @@ export async function discover(site) {
 }
 
 export async function readFeed(url, cache = {}) {
-  const headers = { "User-Agent": UA, Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8" };
+  const headers = { Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8" };
   if (cache.etag) headers["If-None-Match"] = cache.etag;
   if (cache.lastModified) headers["If-Modified-Since"] = cache.lastModified;
-  const res = await fetch(url, { headers, redirect: "follow" });
+  const res = await pedir(url, headers);
   if (res.status === 304) return null;
   if (!res.ok) throw fail(`o feed respondeu ${res.status}`, { status: res.status });
   cache.etag = res.headers.get("etag");
@@ -76,8 +88,12 @@ export async function readFeed(url, cache = {}) {
   }
 }
 
-export function startRss(sources, onPost, log) {
-  for (const s of sources) run(s);
+// estado de cada fonte, para o /api/fontes e para o painel de definições do site
+export function startRss(sources, onPost, log, estado = new Map()) {
+  for (const s of sources) {
+    estado.set(s.id, { via: null, feed: null, ok: null, itens: 0, erro: null, at: null, ms: null });
+    run(s);
+  }
 
   async function run(s) {
     const alts = [s.feed, ...(s.feeds || [])].flat().filter(Boolean); // vários endereços possíveis
@@ -85,6 +101,7 @@ export function startRss(sources, onPost, log) {
     let google = !!s.soGoogle;
     let feed = google ? googleNewsFeed(s) : alts[0] || null;
     let seen = new Set();
+    let procurado = false; // já se procurou o feed no site
     let fails = 0;
     let wait = INTERVAL;
     let cache = {};
@@ -108,12 +125,16 @@ export function startRss(sources, onPost, log) {
     for (;;) {
       try {
         if (!feed) {
-          feed = alts[++alt] || await discover(s.site);
-          if (alts[alt]) log(`[RSS] ${s.nome}: a experimentar ${feed}`);
+          const proximo = alts[++alt];
+          if (proximo) { feed = proximo; log(`[RSS] ${s.nome}: a experimentar ${feed}`); }
+          else { procurado = true; feed = await discover(s.site); } // último recurso antes do Google News
           if (!feed) throw fail(`não encontrei o feed em ${s.site}`, { notFound: true });
           log(`[RSS] ${s.nome}: feed ${feed}`);
         }
+        const t0 = Date.now();
         const parsed = await readFeed(feed, cache);
+        const nota = estado.get(s.id);
+        if (nota) Object.assign(nota, { via: google ? "Google News" : "RSS", feed, ok: true, erro: null, at: Date.now(), ms: Date.now() - t0, ...(parsed ? { itens: (parsed.items || []).length } : {}) });
         if (parsed) {
           const items = (parsed.items || []).slice(0, 40);
           const dated = items.map(dataDe).filter(Boolean);
@@ -127,7 +148,9 @@ export function startRss(sources, onPost, log) {
             // depois disso, a hora em que apareceu no feed é a melhor aproximação que existe
             if (!dt && first) continue;
             lastNew = Date.now();
-            const ts = dt || Date.now();
+            // alguns feeds datam as notícias no futuro; nesse caso vale a hora em que chegaram
+            const futuro = dt && dt - Date.now() > 2 * 60000;
+            const ts = futuro || !dt ? Date.now() : dt;
             if (Date.now() - ts > BACKFILL_MS) continue;
             // no Google News o título vem com « - Nome do jornal» no fim e a descrição repete o título
             const title = google ? clean(it.title).replace(/\s+-\s+[^-]+$/, "") : clean(it.title);
@@ -151,7 +174,7 @@ export function startRss(sources, onPost, log) {
               text: `${title}\n${body}`.trim().slice(0, 1500),
               lang: s.lang,
               ts,
-              tsAprox: !dt || undefined, // hora aproximada: o feed não datou o item
+              tsAprox: !dt || futuro || undefined, // hora aproximada: o feed não datou o item, ou datou-o no futuro
             });
           }
           seen = new Set(items.map((it) => {
@@ -164,6 +187,8 @@ export function startRss(sources, onPost, log) {
         slow = Math.max(0, slow / 2 - 500); // correu bem: levantar o travão aos poucos
         wait = every();
       } catch (e) {
+        const nota = estado.get(s.id);
+        if (nota) Object.assign(nota, { ok: false, erro: e.message, at: Date.now(), feed, via: google ? "Google News" : nota.via });
         if (e.status === 429 || e.status === 503) {
           // o site pede calma: abrandar até 60 s em vez de desistir do feed
           slow = Math.min(60000, Math.max(5000, slow * 2));
@@ -172,7 +197,8 @@ export function startRss(sources, onPost, log) {
           continue;
         }
         const blocked = [401, 403, 404, 410, 451].includes(e.status) || e.notFound || e.parse || e.stale;
-        if (!google && blocked && alt < alts.length - 1) {
+        const maisPorTentar = alt < alts.length - 1 || !procurado; // outro endereço indicado, ou a procura no site
+        if (!google && blocked && maisPorTentar) {
           // ainda há outro endereço de feed para experimentar antes de passar ao Google News
           log(`[RSS] ${s.nome}: ${e.message}`);
           feed = null;

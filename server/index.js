@@ -9,7 +9,9 @@ import { startTelegram } from "./sources/telegram.js";
 import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
 import { startEspn } from "./sources/espn.js";
+import { createZapping } from "./sources/zapping.js";
 import { createStories } from "./stories.js";
+import { createDesdobrar, ativo as desdobraAtivo } from "./desdobra.js";
 import { createTeams } from "./teams.js";
 import { slug } from "./util.js";
 
@@ -23,10 +25,14 @@ const RSS = FONTES.rss || [];
 const TELEGRAM = FONTES.telegram || [];
 const BLUESKY = FONTES.bluesky || [];
 const PAIS = Object.fromEntries([...RSS, ...TELEGRAM, ...BLUESKY].map((s) => [s.id, s.pais])); // país de cada fonte, para a bandeira
+// coluna dos Destaques a que a fonte pertence (proveniência): pt, en, es, it, de, fr, mundo, portugueses
+const COL = Object.fromEntries([...RSS, ...TELEGRAM, ...BLUESKY].map((s) => [s.id, s.col]));
 const SOURCES = [
-  ...[...RSS, ...TELEGRAM, ...BLUESKY].map((s) => ({ handle: s.id, name: s.nome, pais: s.pais })),
-  { handle: "resultados", name: "Resultados em direto" },
+  ...[...RSS, ...TELEGRAM, ...BLUESKY].map((s) => ({ handle: s.id, name: s.nome, pais: s.pais, col: s.col })),
+  { handle: "resultados", name: "Resultados em direto", col: "mundo" },
 ];
+
+const ESTADO_RSS = new Map(); // estado de cada feed: qual está em uso, se responde e há quanto tempo trouxe algo
 
 store.load();
 const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
@@ -39,9 +45,18 @@ function broadcast(event, data) {
 }
 const clamp = (n, a, b) => Math.min(b, Math.max(a, Math.round(Number(n) || a)));
 
+// canal português que transmite o jogo, vindo do Zapping do zerozero
+function comTv(item) {
+  if (!item.score) return item;
+  const tv = zapping.find(item.score.h, item.score.a, item.ts || Date.now(), item.mod);
+  if (tv) item.tv = tv;
+  return item;
+}
+
 function publish(item) {
   // resultados sem emblemas (GOAL API): procura-os pelo nome das equipas
   if (item.score && !item.equipas?.some((e) => e.logo)) item.equipas = teams.resolve([{ nome: item.score.h }, { nome: item.score.a }]);
+  comTv(item);
   if (store.get(item.id)) return;
   store.add({ also: [], ...item, postId: item.postId || item.id });
   status.publicadas++;
@@ -50,6 +65,7 @@ function publish(item) {
 
 // cria ou atualiza um cartão (usado pelos cartões de jogos em direto)
 function upsert(item) {
+  comTv(item);
   const cur = store.get(item.id);
   if (!cur) return publish(item);
   Object.assign(cur, item, { ts: cur.ts, upd: Date.now() });
@@ -66,6 +82,7 @@ function removeItem(id) {
 // Quando o Gemini responde (poucos segundos depois), o cartão é atualizado com título, secções e tradução;
 // se afinal não for notícia, ou já existir noutra fonte, o cartão sai e junta-se ao existente.
 const teams = createTeams({ log });
+const zapping = createZapping({ log });
 // sem Gemini, os três grandes ainda recebem o emblema a partir das secções
 const BIG3_NAMES = { porto: "FC Porto", sporting: "Sporting CP", benfica: "Benfica" };
 const equipasOf = (ai) => teams.resolve(ai.equipas?.length ? ai.equipas : (ai.seccoes || []).filter((c) => BIG3_NAMES[c]).map((c) => ({ nome: BIG3_NAMES[c], papel: "envolvido" })));
@@ -75,17 +92,6 @@ function secoes(post, ai) {
   const texto = `${post.text} ${ai.titulo_pt || ""} ${(ai.pontos_pt || []).join(" ")}`;
   const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
   if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
-  if (cats.has("modalidades")) { cats.delete("big5"); cats.delete("perifericos"); }
-  // uma notícia não pode ser das cinco grandes ligas e dos campeonatos periféricos ao mesmo tempo:
-  // se nomear um escalão secundário ou uma liga de fora, é periférica; se nomear uma das cinco grandes
-  // ou um dos seus clubes, é big5
-  const SECUNDARIO = /\bchampionship\b|\bserie b\b|hypermotion|2\. bundesliga|\bligue ?2\b|liga saudita|saudi pro|brasileir[aã]o|\bmls\b|eredivisie|s[uü]per lig|ekstraklasa|liga mx/i;
-  // campeonatos periféricos são futebol de onze de fora das cinco grandes ligas e de fora de Portugal
-  const PORTUGAL = /liga portugal|primeira liga|liga 2\b|segunda liga|ta[cç]a de portugal|ta[cç]a da liga|liga 3\b|campeonato de portugal|liga betclic|liga bpi/i;
-  if (cats.has("perifericos") && (ai.pais_tema === "pt" || PORTUGAL.test(texto))) cats.delete("perifericos");
-  if (cats.has("big5") && cats.has("perifericos")) cats.delete(SECUNDARIO.test(texto) ? "big5" : "perifericos");
-  const BIG5 = RULES.find(([c]) => c === "big5")[1];
-  if (cats.has("perifericos") && BIG5.test(texto) && !SECUNDARIO.test(texto)) cats.delete("perifericos");
   // «Portugueses pelo mundo» é só para quem está fora de Portugal
   if (cats.has("portugueses") && (ai.pais_tema === "pt" || !ai.pais_tema)) cats.delete("portugueses");
   return [...cats];
@@ -115,7 +121,7 @@ function refine(post, ai) {
   if (ai.bruto) status.semTraducao++;
   if (ai.igual_a && ai.igual_a !== it.id) {
     const merged = store.attach(ai.igual_a, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
-    if (merged) { status.juntas++; drop(); broadcast("update", merged); stories.onTrending(merged); return; }
+    if (merged) { status.juntas++; drop(); broadcast("update", merged); pista(merged); return; }
   }
   // segunda rede: o título traduzido pode revelar que é a mesma notícia de outra já publicada
   const dup = store.findSimilar({ titulo: ai.titulo_pt, ts: it.ts, src: post.src, excluir: it.id });
@@ -125,14 +131,32 @@ function refine(post, ai) {
       status.juntas++;
       drop();
       broadcast("update", merged);
-      stories.onTrending(merged);
+      pista(merged);
       return;
     }
   }
   Object.assign(it, toItem(post, ai), { pending: false });
   store.touch();
   broadcast("update", it);
-  stories.onTrending(it); // notícias de grande importância também dão pistas
+  pista(it); // notícias de grande importância também dão pistas
+}
+
+// Desdobramento: as notícias mais fortes viram pista de trabalho — o fio da história, o que pode
+// acontecer a seguir e as consequências, tudo a partir do que o site já tem. Quando não há chave do
+// Gemini, matéria suficiente ou orçamento de pedidos, fica a pista simples de tema em destaque.
+const desdobrar = createDesdobrar({ log });
+const nomesDe = (it) => [...new Set([
+  ...(it.equipas || []).map((e) => e.nome),
+  ...[...String(it.t?.pt || "").matchAll(/==(.+?)==/g)].map((m) => m[1]),
+])].filter(Boolean);
+
+function pista(item) {
+  if (!item || item.score || item.pending) return;
+  const fontes = 1 + (item.also?.length || 0);
+  if (fontes < 2 && (item.imp || 0) < 4) return;
+  if (!desdobraAtivo) return stories.onTrending(item);
+  desdobrar(item, store.related({ id: item.id, nomes: nomesDe(item) }))
+    .then((out) => (out ? stories.onNoticia(item, out) : stories.onTrending(item)));
 }
 
 // só as notícias já tratadas servem de referência para detetar repetidos
@@ -149,7 +173,7 @@ function onPost(post) {
     if (merged) {
       status.juntas++;
       broadcast("update", merged);
-      stories.onTrending(merged);
+      pista(merged);
       return;
     }
   }
@@ -167,8 +191,33 @@ app.use((req, res, next) => {
 });
 app.get("/api/items", (req, res) => res.json(store.all(Math.min(Number(req.query.limit) || 1000, 5000))));
 app.get("/api/sources", (req, res) => res.json(SOURCES));
+// estado de cada fonte: por onde está a ser lida, se está a responder e a hora da última notícia que trouxe
+app.get("/api/fontes", (req, res) => {
+  const ultima = new Map();
+  for (const it of store.all(4000)) {
+    for (const src of [it.src, ...(it.also || []).map((a) => a.src)]) {
+      if (!ultima.has(src) || ultima.get(src) < it.ts) ultima.set(src, it.ts);
+    }
+  }
+  const via = { ...Object.fromEntries(TELEGRAM.map((s) => [s.id, "Telegram"])), ...Object.fromEntries(BLUESKY.map((s) => [s.id, "Bluesky"])), resultados: "ESPN" };
+  res.json(SOURCES.map((s) => {
+    const e = ESTADO_RSS.get(s.handle);
+    return {
+      handle: s.handle, nome: s.name, pais: s.pais, col: s.col,
+      via: e?.via || via[s.handle] || null,
+      feed: e?.feed || null,
+      ok: e ? e.ok : null,
+      erro: e?.erro || null,
+      itens: e?.itens ?? null,
+      ms: e?.ms ?? null,
+      ultima: ultima.get(s.handle) || null,
+    };
+  }));
+});
 app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira, mod: l.mod }))));
 app.get("/api/stories", (req, res) => res.json(stories.all()));
+app.get("/api/zapping", (req, res) => res.json(zapping.all())); // grelha de transmissões (canal de cada jogo)
+app.get("/api/zapping/estado", (req, res) => res.json(zapping.estado()));
 app.get("/api/stories/estado", (req, res) => res.json(stories.estado())); // diagnóstico da recuperação de pistas
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
@@ -186,7 +235,8 @@ if (fs.existsSync(dist)) app.use(express.static(dist));
 
 app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
 
-startRss(RSS, onPost, log);
+startRss(RSS, onPost, log, ESTADO_RSS);
+zapping.start();
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear

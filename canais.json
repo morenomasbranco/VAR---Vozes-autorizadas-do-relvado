@@ -1,0 +1,21 @@
+{
+  "_nota": "Canais de televisão portugueses que transmitem os jogos, como aparecem no Zapping do zerozero. \"re\" é a expressão que reconhece o nome no feed; \"dominio\" serve para ir buscar o logótipo; \"cor\" é a cor de recurso quando o logótipo não carrega. Para usar um logótipo próprio, junta \"logo\": \"https://…\".",
+  "canais": [
+    { "id": "sporttv", "nome": "Sport TV", "re": "^sport ?tv", "dominio": "sporttv.pt", "cor": "#00A551" },
+    { "id": "dazn", "nome": "DAZN", "re": "^(dazn|eleven)", "dominio": "dazn.com", "cor": "#111111" },
+    { "id": "canal11", "nome": "Canal 11", "re": "^(canal ?11|c11)", "dominio": "canal11.pt", "cor": "#E30613" },
+    { "id": "btv", "nome": "BTV", "re": "^(btv|benfica ?tv)", "dominio": "slbenfica.pt", "cor": "#C8102E" },
+    { "id": "portocanal", "nome": "Porto Canal", "re": "^porto ?canal", "dominio": "portocanal.pt", "cor": "#1D4E9E" },
+    { "id": "sportingtv", "nome": "Sporting TV", "re": "^sporting ?tv", "dominio": "sporting.pt", "cor": "#0B7A47" },
+    { "id": "abolatv", "nome": "A Bola TV", "re": "^a ?bola", "dominio": "abola.pt", "cor": "#D8232A" },
+    { "id": "andeboltv", "nome": "Andebol TV", "re": "^andebol", "dominio": "fpa.pt", "cor": "#F6A21E" },
+    { "id": "rtp", "nome": "RTP", "re": "^rtp", "dominio": "rtp.pt", "cor": "#0B5FA5" },
+    { "id": "sic", "nome": "SIC", "re": "^sic", "dominio": "sic.pt", "cor": "#E4002B" },
+    { "id": "tvi", "nome": "TVI", "re": "^tvi", "dominio": "tvi.iol.pt", "cor": "#E2001A" },
+    { "id": "cmtv", "nome": "CMTV", "re": "^cm ?tv", "dominio": "cmjornal.pt", "cor": "#B3121B" },
+    { "id": "fpftv", "nome": "FPF TV", "re": "^fpf", "dominio": "fpf.pt", "cor": "#006233" },
+    { "id": "fptv", "nome": "Futebol Play", "re": "^(futebol ?play|fplay)", "dominio": "ligaportugal.pt", "cor": "#12284C" },
+    { "id": "youtube", "nome": "YouTube", "re": "^(youtube|yt)", "dominio": "youtube.com", "cor": "#FF0000" },
+    { "id": "twitch", "nome": "Twitch", "re": "^twitch", "dominio": "twitch.tv", "cor": "#9146FF" }
+  ]
+}

@@ -8,7 +8,8 @@
     "start": "node server/index.js",
     "telegram-login": "node scripts/telegram-login.js",
     "verificar-fontes": "node scripts/verificar-fontes.js",
-    "ligas": "node scripts/ligas.js"
+    "ligas": "node scripts/ligas.js",
+    "arrumar-fontes": "node scripts/verificar-fontes.js --corrigir"
   },
   "engines": {
     "node": ">=20"

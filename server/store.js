@@ -19,7 +19,7 @@ export const get = (id) => items.find((i) => i.id === id);
 export const has = (postId) => items.some((i) => i.postId === postId || i.also?.some((a) => a.postId === postId));
 
 // notícias das últimas horas, para o modelo detetar repetidos
-export function recent(hours = 3, n = 40) {
+export function recent(hours = 3, n = Number(process.env.REPETIDOS_JANELA) || 80) {
   const cutoff = Date.now() - hours * 3600e3;
   return items.filter((i) => i.ts >= cutoff).slice(0, n);
 }
@@ -70,10 +70,29 @@ export function findSimilar({ titulo, url, ts, src, excluir, horas = 18 }) {
   return null;
 }
 
+// notícias já publicadas que falam das mesmas equipas ou das mesmas pessoas, para dar
+// contexto ao desdobramento (o fio da história). Só títulos já tratados, nunca resultados.
+export function related({ id, nomes = [], dias = 14, n = 5 }) {
+  const chaves = nomes.map((x) => chaveTitulo(x)).filter((x) => x.length > 2);
+  if (!chaves.length) return [];
+  const limite = Date.now() - dias * 86400e3;
+  const out = [];
+  for (const it of items) {
+    if (it.id === id || it.score || it.pending || it.ts < limite) continue;
+    const alvo = chaveTitulo([it.t?.pt, it.t?.en, ...(it.equipas || []).map((e) => e.nome)].filter(Boolean).join(" "));
+    if (chaves.some((c) => alvo.includes(c))) out.push(it);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
 export function attach(id, source) {
   const it = get(id);
   if (!it || it.postId === source.postId || it.also.some((a) => a.postId === source.postId)) return null;
-  it.also.push(source);
+  // «at» é o momento em que a confirmação entrou no VAR, que é o que interessa mostrar
+  // («acabou de confirmar»); «ts» é a hora a que a outra fonte publicou
+  it.also.push({ ...source, at: Date.now() });
+  it.upd = Date.now();
   const distinct = new Set([it.src, ...it.also.map((a) => a.src)]).size;
   if (distinct >= 3 && !it.boosted) { it.imp = Math.min(5, it.imp + 1); it.boosted = true; }
   dirty = true;

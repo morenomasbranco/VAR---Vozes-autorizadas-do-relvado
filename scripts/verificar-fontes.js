@@ -8,21 +8,73 @@ import { scoreboardUrl, normalizeEvent } from "../server/sources/espn.js";
 
 const fontes = JSON.parse(fs.readFileSync(new URL("../fontes.json", import.meta.url), "utf8"));
 const ligas = JSON.parse(fs.readFileSync(new URL("../ligas.json", import.meta.url), "utf8"));
-const age = (ts) => { const m = Math.round((Date.now() - ts) / 60000); return m < 60 ? `há ${m} min` : `há ${Math.round(m / 60)} h`; };
+const age = (ts) => {
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < -2) return `datada no futuro (${Math.abs(m)} min à frente; o feed tem o fuso mal configurado)`;
+  return m < 60 ? `há ${Math.max(0, m)} min` : `há ${Math.round(m / 60)} h`;
+};
 const row = (ok, nome, detalhe) => console.log(`${ok ? "✓" : "✗"} ${nome.padEnd(22)} ${detalhe}`);
 
-console.log("\nRSS");
-for (const s of fontes.rss || []) {
-  try {
-    const feed = s.feed || (await discover(s.site));
-    if (!feed) { row(false, s.nome, `sem feed encontrado em ${s.site}; procura-o no site e põe-no em "feed"`); continue; }
-    const t0 = Date.now();
-    const parsed = await readFeed(feed);
-    const items = parsed?.items || [];
-    const newest = Math.max(...items.map((i) => Date.parse(i.isoDate || i.pubDate) || 0));
-    row(items.length > 0, s.nome, `${items.length} notícias, a mais recente ${newest ? age(newest) : "sem data"} (${Date.now() - t0} ms) — ${feed}`);
-  } catch (e) { row(false, s.nome, e.message); }
+const corrigir = process.argv.includes("--corrigir");
+const semFeed = [];
+const parados = [];
+let arrumado = false;
+
+// testa um endereço: tem de ser um feed válido, com itens, e atualizado na última semana
+async function testar(url) {
+  const t0 = Date.now();
+  const parsed = await readFeed(url);
+  const items = parsed?.items || [];
+  if (!items.length) throw new Error("o feed não tem itens");
+  const datas = items.map((i) => Date.parse(i.isoDate || i.pubDate || i.published || i.updated || "") || 0).filter(Boolean);
+  const recente = datas.length ? Math.max(...datas) : 0;
+  if (recente && Date.now() - recente > 7 * 86400e3) throw new Error(`parado desde ${age(recente)}`);
+  return { url, n: items.length, recente, ms: Date.now() - t0, semData: !datas.length };
 }
+
+console.log("\nRSS (cada fonte é testada em todos os endereços indicados, depois no próprio site)");
+for (const s of fontes.rss || []) {
+  if (s.soGoogle) { semFeed.push(s.nome); row(true, s.nome, "só Google News (sem feed próprio) — atraso de alguns minutos"); continue; }
+  const cands = [s.feed, ...(s.feeds || [])].flat().filter(Boolean);
+  const falhas = [];
+  let bom = null;
+  for (const url of cands) {
+    try { bom = await testar(url); break; } catch (e) { falhas.push(`${url} → ${e.message}`); }
+  }
+  if (!bom) {
+    try {
+      const achado = await discover(s.site);
+      if (achado) bom = await testar(achado);
+      else falhas.push(`${s.site} → sem feed na página`);
+    } catch (e) { falhas.push(`${s.site} → ${e.message}`); }
+  }
+  if (bom) {
+    const idade = bom.recente ? age(bom.recente) : "sem data nos itens";
+    row(true, s.nome, `${bom.n} notícias, a mais recente ${idade} (${bom.ms} ms) — ${bom.url}`);
+    if (bom.recente && Date.now() - bom.recente > 12 * 3600e3) parados.push(`${s.nome} (${idade})`);
+    if (corrigir && bom.url !== s.feed) {
+      s.feed = bom.url;
+      const resto = cands.filter((u) => u !== bom.url);
+      if (resto.length) s.feeds = resto; else delete s.feeds;
+      arrumado = true;
+    }
+  } else {
+    semFeed.push(s.nome);
+    row(false, s.nome, `sem feed próprio; vai pelo Google News. ${falhas.join(" | ")}`);
+    if (corrigir) { delete s.feed; delete s.feeds; arrumado = true; }
+  }
+  for (const f of bom ? falhas : []) console.log(`   · endereço descartado: ${f}`);
+}
+
+if (arrumado) {
+  fs.writeFileSync(new URL("../fontes.json", import.meta.url), `${JSON.stringify(fontes, null, 2)}\n`);
+  console.log("\n→ fontes.json arrumado: o endereço que funciona passou a ser o principal e os que falharam foram retirados.");
+} else if (!corrigir) {
+  console.log("\n→ corre com --corrigir para gravar no fontes.json o endereço que funciona de cada fonte.");
+}
+console.log(`\nResumo: ${(fontes.rss || []).length - semFeed.length} fonte(s) com feed próprio (segundos de atraso), ${semFeed.length} pelo Google News (minutos).`);
+if (semFeed.length) console.log(`  Pelo Google News: ${semFeed.join(", ")}`);
+if (parados.length) console.log(`  Com feed lento ou pouco movimento (nada nas últimas 12 h): ${parados.join(", ")}`);
 
 console.log("\nBluesky");
 for (const s of fontes.bluesky || []) {
@@ -50,6 +102,17 @@ else {
     } catch (e) { row(false, s.nome, e.message); }
   }
   await client.disconnect();
+}
+
+console.log("\nZapping (canal de cada jogo)");
+{
+  const { createZapping } = await import("../server/sources/zapping.js");
+  const z = createZapping({ log: () => {} });
+  z.start();
+  await new Promise((r) => setTimeout(r, 3000));
+  const lista = z.all();
+  const e = z.estado();
+  row(lista.length > 0, "zerozero Zapping", e.erro || `${lista.length} transmissões — a próxima: ${lista[0] ? `${lista[0].casa} x ${lista[0].fora} (${lista[0].canal})` : "—"}`);
 }
 
 console.log("\nResultados em direto (ESPN)");
