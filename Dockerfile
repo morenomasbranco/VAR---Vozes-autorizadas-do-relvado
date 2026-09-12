@@ -8,7 +8,7 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine
 WORKDIR /app
-ENV NODE_ENV=production PORT=3001
+ENV NODE_ENV=production PORT=3001 NODE_OPTIONS=--max-old-space-size=384
 COPY --from=build /app /app
 EXPOSE 3001
 CMD ["node", "server/index.js"]

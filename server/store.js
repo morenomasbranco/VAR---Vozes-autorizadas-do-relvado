@@ -3,7 +3,8 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const FILE = fileURLToPath(new URL("../data/items.json", import.meta.url));
-const MAX = Number(process.env.ARQUIVO_MAX) || 30000; // notícias guardadas em data/items.json
+const MAX = Number(process.env.ARQUIVO_MAX) || 4000; // notícias guardadas em data/items.json
+const TEXTO_MAX = Number(process.env.TEXTO_MAX) || 1500; // caracteres guardados do texto original de cada post
 let items = []; // mais recentes primeiro
 let dirty = false;
 
@@ -32,6 +33,8 @@ export function remove(id) {
 export const touch = () => { dirty = true; };
 
 export function add(item) {
+  // o texto original só serve para mostrar o post e comparar títulos; guardá-lo inteiro era o que enchia a memória
+  if (typeof item.text === "string" && item.text.length > TEXTO_MAX) item = { ...item, text: item.text.slice(0, TEXTO_MAX) };
   items.unshift(item);
   if (items.length > MAX) items.length = MAX;
   dirty = true;
@@ -99,9 +102,15 @@ export function attach(id, source) {
   return it;
 }
 
+// gravar de 30 em 30 s: cada gravação cria uma cópia de tudo em texto, e a cada 5 s isso era o bastante
+// para o recolector de lixo não acompanhar e o processo esgotar o heap
 setInterval(() => {
   if (!dirty) return;
-  fs.mkdirSync(new URL("../data", import.meta.url), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(items));
-  dirty = false;
-}, 5000).unref();
+  try {
+    fs.mkdirSync(new URL("../data", import.meta.url), { recursive: true });
+    fs.writeFileSync(FILE, JSON.stringify(items));
+    dirty = false;
+  } catch (e) {
+    console.log("[Arquivo] não consegui gravar:", e.message);
+  }
+}, Number(process.env.ARQUIVO_INTERVALO) || 30000).unref();

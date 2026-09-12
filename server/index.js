@@ -231,7 +231,14 @@ setInterval(() => { for (const res of clients) res.write(": ping\n\n"); }, 25000
 
 // em produção (npm run build), o próprio servidor entrega o site
 const dist = fileURLToPath(new URL("../web/dist", import.meta.url));
-if (fs.existsSync(dist)) app.use(express.static(dist));
+if (fs.existsSync(dist)) {
+  app.use(express.static(dist));
+  // qualquer endereço que não seja da API devolve a app (abrir /mercado diretamente dava 404)
+  app.use((req, res, next) => {
+    if (req.method !== "GET" || req.path.startsWith("/api/")) return next();
+    res.sendFile(`${dist}/index.html`);
+  });
+}
 
 app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
 
