@@ -14,6 +14,7 @@ const JANELA = 5 * 3600e3; // diferença máxima entre a hora do jogo e a hora d
 const UA = "Mozilla/5.0 (compatible; VAR-feed/1.0; agregador de notícias de desporto)";
 const parser = new Parser({ timeout: 10000 });
 
+const FICHEIRO = new URL("../../data/zapping.json", import.meta.url);
 const readJson = (url, alt) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return alt; } };
 const CANAIS = (readJson(new URL("../../canais.json", import.meta.url), {}).canais || [])
   .map((c) => ({ ...c, rx: new RegExp(c.re, "i") }));
@@ -28,16 +29,23 @@ export function canalDe(texto) {
 }
 
 // nomes de equipa comparáveis: sem acentos, sem siglas de clube e sem palavras de ligação
-const RUIDO = /\b(fc|sc|cf|ac|sl|cd|ad|ca|rc|afc|sad|ud|cs|gd|ss|us|ssc|vfl|vfb|bsc|tsg|fsv|nk|fk|sk|if|bk|cp|aa|gc|se|ec|de|da|do|of|the|and|le|la|el)\b/g;
+const RUIDO = /\b(fc|sc|cf|ac|sl|cd|ad|ca|rc|afc|sad|ud|cs|gd|ss|us|ssc|vfl|vfb|bsc|tsg|fsv|nk|fk|sk|if|bk|cp|aa|gc|se|ec|club|clube|de|da|do|of|the|and|le|la|el)\b/g;
 // abreviaturas que o zerozero e a ESPN escrevem de maneiras diferentes
 const NOMES = {
-  "vitoria": "vitoria guimaraes", "vitoria guimaraes": "vitoria guimaraes", "sporting braga": "braga",
-  "inter": "inter milan", "atleti": "atletico madrid", "atletico": "atletico madrid", "psg": "paris saint germain",
-  "gladbach": "borussia monchengladbach", "m gladbach": "borussia monchengladbach", "betis": "real betis",
-  "spurs": "tottenham", "wolves": "wolverhampton", "nott m forest": "nottingham forest", "nottm forest": "nottingham forest",
+  "vitoria": "vitoria guimaraes", "guimaraes": "vitoria guimaraes", "vitoria guimaraes": "vitoria guimaraes",
+  "sporting braga": "braga", "inter": "inter milan", "internazionale": "inter milan",
+  "atleti": "atletico madrid", "atletico": "atletico madrid", "psg": "paris saint germain",
+  "betis": "real betis", "spurs": "tottenham", "wolves": "wolverhampton",
   "leipzig": "rb leipzig", "brighton": "brighton hove albion", "leverkusen": "bayer leverkusen", "dortmund": "borussia dortmund",
+  "athletic": "athletic bilbao", "olympique marseille": "marseille", "olympique lyonnais": "lyon", "olympique lyon": "lyon",
+  "saint etienne": "saint etienne", "estoril": "estoril praia", "estoril praia": "estoril praia",
 };
-const PALAVRAS = { munique: "munich", munchen: "munich", muenchen: "munich", koln: "cologne", colonia: "cologne", monaco: "monaco" };
+// palavras que os dois sites escrevem de forma diferente
+const PALAVRAS = {
+  munique: "munich", munchen: "munich", muenchen: "munich", koln: "cologne", colonia: "cologne",
+  utd: "united", gladbach: "monchengladbach", mgladbach: "monchengladbach", nottm: "nottingham", afs: "avs",
+  wanderers: "wanderers", hotspur: "tottenham", albion: "albion",
+};
 export const chave = (n) => {
   const base = norm(n).replace(/[.'’`-]/g, " ").replace(RUIDO, " ").replace(/\s+/g, " ").trim();
   return (NOMES[base] || base).split(" ").map((w) => PALAVRAS[w] || w).join(" ");
@@ -94,7 +102,19 @@ const modCompativel = (qualificador, mod) => {
 
 export function createZapping({ log = () => {} } = {}) {
   const jogos = new Map(); // casa|fora|hora → transmissão
-  const estado = { at: null, jogos: 0, erro: null };
+  const estado = { at: null, jogos: 0, erro: null, semCanal: [] }; // semCanal: jogos que não casaram com nenhuma transmissão
+
+  // a grelha fica guardada em disco: um reinício a meio da tarde não perde as transmissões
+  // dos jogos que começaram de manhã e que já saíram do feed
+  for (const t of readJson(FICHEIRO, [])) {
+    if (t?.casa && t?.inicio && Date.now() - t.inicio < VALIDADE) jogos.set(`${chave(t.casa)}|${chave(t.fora)}|${t.inicio}`, t);
+  }
+  const gravar = () => {
+    try {
+      fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true });
+      fs.writeFileSync(FICHEIRO, JSON.stringify([...jogos.values()]));
+    } catch { /* sem disco de escrita: a grelha vive só em memória */ }
+  };
 
   const guardar = (t) => {
     if (!t) return;
@@ -113,6 +133,7 @@ export function createZapping({ log = () => {} } = {}) {
     estado.at = Date.now();
     estado.jogos = jogos.size;
     estado.erro = null;
+    gravar();
   }
 
   async function start() {
@@ -135,12 +156,22 @@ export function createZapping({ log = () => {} } = {}) {
       if (!modCompativel(t.qualificador, mod || null)) continue; // andebol, futsal, femininos e escalões só entram no cartão da mesma modalidade
       const dif = Math.abs(t.inicio - ts);
       if (dif > JANELA) continue;
-      const nota = simil(t.casa, casa) + simil(t.fora, fora);
-      if (simil(t.casa, casa) < 0.6 || simil(t.fora, fora) < 0.6) continue;
+      const nc = simil(t.casa, casa);
+      const nf = simil(t.fora, fora);
+      // cada equipa tem de se parecer, e o par no conjunto tem de ser convincente: como se exigem
+      // as duas, um limiar mais baixo não engana (o Sporting e o Sp. Braga têm adversários diferentes)
+      if (nc < 0.5 || nf < 0.5 || nc + nf < 1.3) continue;
+      const nota = nc + nf;
       const total = nota - dif / JANELA / 10; // entre dois jogos iguais, o mais próximo na hora
       if (total > melhorNota) { melhorNota = total; melhor = t; }
     }
-    return melhor ? { canal: melhor.canal, nome: melhor.nome, logo: melhor.logo, cor: melhor.cor, inicio: melhor.inicio } : null;
+    if (!melhor) {
+      // fica registado para se poder ver no /api/zapping/estado quais é que estão a falhar
+      const chaveJogo = `${casa} x ${fora}${mod ? ` (${mod})` : ""}`;
+      if (!estado.semCanal.includes(chaveJogo)) estado.semCanal = [chaveJogo, ...estado.semCanal].slice(0, 30);
+      return null;
+    }
+    return { canal: melhor.canal, nome: melhor.nome, logo: melhor.logo, cor: melhor.cor, inicio: melhor.inicio };
   }
 
   // toda a grelha, da mais próxima para a mais distante (usada em /api/zapping)

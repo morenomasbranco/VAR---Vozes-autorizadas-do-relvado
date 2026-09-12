@@ -13,7 +13,6 @@ const CATS = [
   { id: "destaque", pt: "Destaques", en: "Top stories", hl: "dest" },
   { id: "live", pt: "Live", en: "Live", hl: "live" },
   { id: "resultados", pt: "Resultados", en: "Results" },
-  { id: "favoritos", pt: "Favoritos", en: "Saved" },
   { id: "porto", pt: "Porto", en: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", club: true },
@@ -23,6 +22,7 @@ const CATS = [
   { id: "premios", pt: "Prémios", en: "Awards" },
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad" },
   { id: "historias", pt: "Possíveis histórias", en: "Story leads", hl: "hist" },
+  { id: "favoritos", pt: "Favoritos", en: "Saved", hl: "fav" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
@@ -256,7 +256,60 @@ function Ficha({ f, lang, ui }) {
 }
 
 // possíveis histórias, da mais recente para a mais antiga, com filtros de nível e de tom
-function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais, theme }) {
+// cartão de uma pista, usado nas Possíveis histórias e nos Favoritos
+function StoryCard({ s, items, lang, ui, now, onOpen, leagueName, leaguePais, theme, isFav, onFav }) {
+  return (
+    <li className={`story lv-${s.nivel}`}>
+      <div className="mrow">
+        <span className="lvl">{ui.levels[s.nivel]}</span>
+        <span className={`tone t-${toneOf(s)}`}>{toneOf(s) === "positiva" ? "▲" : toneOf(s) === "negativa" ? "▼" : "●"} {ui.tones[toneOf(s)]}</span>
+        <Flag code={s.pais || leaguePais(s.liga)} lang={lang} />
+        {s.ligaNome && <span className="muted">{leagueName(s.liga) || s.ligaNome}</span>}
+        <span className="muted">{agoText(s.ts, now, ui)}</span>
+        <button className={`textbtn savest ${isFav ? "on" : ""}`} aria-pressed={isFav} onClick={() => onFav(s)}>
+          <Star size={14} fill={isFav ? "currentColor" : "none"} />{isFav ? ui.saved : ui.save}
+        </button>
+      </div>
+      <Crests eq={s.crests} theme={theme} lang={lang} />
+      <h3 className="title">{s.t[lang]}</h3>
+      {s.ficha && <Ficha f={s.ficha} lang={lang} ui={ui} />}
+      {s.narrativa?.[lang] && <p className="narr"><b>{ui.thread}:</b> {s.narrativa[lang]}</p>}
+      {s.possibilidades?.length > 0 && (
+        <div className="block poss">
+          <b>{ui.whatNext}</b> <span className="muted small">{ui.possNote}</span>
+          <ul className="bul">
+            {s.possibilidades.map((p, i) => (
+              <li key={i}>{p[lang]}{p.se?.[lang] && <span className="muted"> — {ui.ifWord} {p.se[lang].replace(/^(se|if)\s+/i, "")}</span>}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {s.consequencias?.length > 0 && (
+        <div className="block cons">
+          <b>{ui.consequences}</b>
+          <ul className="bul">
+            {s.consequencias.map((c, i) => (
+              <li key={i}>{c.tipo && <span className="chip tipo">{ui.consTypes[c.tipo] || c.tipo}</span>} {c[lang]}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="angle"><b>{ui.angle}:</b> {s.angulo[lang]}</p>
+      {s.dados?.[lang]?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {s.dados[lang].join(" · ")}</p>}
+      {s.verificar?.[lang]?.length > 0 && (
+        <div className="check"><b>{ui.check}:</b><ul className="bul">{s.verificar[lang].map((v, i) => <li key={i}>{v}</li>)}</ul></div>
+      )}
+      <div className="chips crit">
+        {s.crit.map((c) => <span key={c.id} className="chip">{c[lang]}</span>)}
+        {s.noticia && items.some((x) => x.id === s.noticia) && (
+          <button className="textbtn" onClick={() => onOpen(s.noticia)}><ExternalLink size={14} />{ui.seeNews}</button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais, theme, isFavStory, onFavStory }) {
   const [lvl, setLvl] = useState("todos");
   const [tone, setTone] = useState("todas");
   const [orig, setOrig] = useState("todas");
@@ -289,75 +342,12 @@ function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, league
       {list.length === 0 ? <p className="empty">{ui.noStories}</p> : (
         <ul className="storylist">
           {list.map((s) => (
-            <li key={s.id} className={`story lv-${s.nivel}`}>
-              <div className="mrow">
-                <span className="lvl">{ui.levels[s.nivel]}</span>
-                <span className={`tone t-${toneOf(s)}`}>{toneOf(s) === "positiva" ? "▲" : toneOf(s) === "negativa" ? "▼" : "●"} {ui.tones[toneOf(s)]}</span>
-                <Flag code={s.pais || leaguePais(s.liga)} lang={lang} />
-                {s.ligaNome && <span className="muted">{leagueName(s.liga) || s.ligaNome}</span>}
-                <span className="muted">{agoText(s.ts, now, ui)}</span>
-              </div>
-              <Crests eq={s.crests} theme={theme} lang={lang} />
-              <h3 className="title">{s.t[lang]}</h3>
-              {s.ficha && <Ficha f={s.ficha} lang={lang} ui={ui} />}
-              {s.narrativa?.[lang] && <p className="narr"><b>{ui.thread}:</b> {s.narrativa[lang]}</p>}
-              {s.possibilidades?.length > 0 && (
-                <div className="block poss">
-                  <b>{ui.whatNext}</b> <span className="muted small">{ui.possNote}</span>
-                  <ul className="bul">
-                    {s.possibilidades.map((p, i) => (
-                      <li key={i}>{p[lang]}{p.se?.[lang] && <span className="muted"> — {ui.ifWord} {p.se[lang].replace(/^(se|if)\s+/i, "")}</span>}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {s.consequencias?.length > 0 && (
-                <div className="block cons">
-                  <b>{ui.consequences}</b>
-                  <ul className="bul">
-                    {s.consequencias.map((c, i) => (
-                      <li key={i}>{c.tipo && <span className="chip tipo">{ui.consTypes[c.tipo] || c.tipo}</span>} {c[lang]}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p className="angle"><b>{ui.angle}:</b> {s.angulo[lang]}</p>
-              {s.dados?.[lang]?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {s.dados[lang].join(" · ")}</p>}
-              {s.verificar?.[lang]?.length > 0 && (
-                <div className="check"><b>{ui.check}:</b><ul className="bul">{s.verificar[lang].map((v, i) => <li key={i}>{v}</li>)}</ul></div>
-              )}
-              <div className="chips crit">
-                {s.crit.map((c) => <span key={c.id} className="chip">{c[lang]}</span>)}
-                {s.noticia && items.some((x) => x.id === s.noticia) && (
-                  <button className="textbtn" onClick={() => onOpen(s.noticia)}><ExternalLink size={14} />{ui.seeNews}</button>
-                )}
-              </div>
-            </li>
+            <StoryCard key={s.id} s={s} items={items} lang={lang} ui={ui} now={now} onOpen={onOpen}
+              leagueName={leagueName} leaguePais={leaguePais} theme={theme}
+              isFav={isFavStory(s.id)} onFav={onFavStory} />
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-// quem confirmou a notícia depois da fonte que a deu primeiro: um quadradinho por órgão,
-// com «acabou de confirmar» nos primeiros minutos e a hora a partir daí
-function Confirms({ it, lang, ui, now, srcPais }) {
-  if (!it.also?.length) return null;
-  return (
-    <div className="confs">
-      <span className="conflbl">{ui.confirms}</span>
-      {it.also.map((a) => {
-        const quando = a.at || a.ts;
-        const recente = now - quando < 10 * 60000;
-        return (
-          <span key={a.postId || a.src} className={`conf ${recente ? "now" : ""}`}>
-            <Flag code={a.pais || srcPais[a.src]} lang={lang} />
-            <b>{a.name || a.src}</b>
-            <span className="muted">{recente ? ui.justConfirmed : ui.confirmedAt(agoText(quando, now, ui))}</span>
-          </span>
-        );
-      })}
     </div>
   );
 }
@@ -603,9 +593,13 @@ const CSS = `
 .apito .srcgroup summary::after{margin-left:8px}
 .apito .grpacts{display:flex;gap:6px;padding:0 4px 2px 26px}
 .apito .srclist.plain{max-height:none;overflow:visible;margin:0 0 6px;padding-left:18px}
-.apito .cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(248px,1fr);gap:0;overflow-x:auto;padding:0 0 14px;scrollbar-width:thin}
-.apito .cols::-webkit-scrollbar{height:6px}
-.apito .cols::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .colsbar{overflow-x:auto;overflow-y:hidden;height:10px;margin:0 0 4px;scrollbar-width:thin}
+.apito .colsbar>div{height:1px}
+.apito .colsbar::-webkit-scrollbar{height:7px}
+.apito .colsbar::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .colsbar::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.apito .cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(248px,1fr);gap:0;overflow-x:auto;padding:0;scrollbar-width:none}
+.apito .cols::-webkit-scrollbar{display:none}
 .apito .col{min-width:0;padding:0 12px;border-left:1px solid var(--line)}
 .apito .col:first-child{padding-left:0;border-left:0}
 .apito .colh{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:7px;margin:0 0 8px;padding:6px 0 8px;background:var(--bg);
@@ -701,6 +695,10 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onBack);
   }, []);
   const isFav = (id) => favs.some((f) => f.id === id);
+  const favStories = useMemo(() => favs.filter((f) => f.kind === "story").sort((a, b) => b.favAt - a.favAt), [favs]);
+  const toggleFavStory = (st) => setFavs((f) => (f.some((x) => x.id === st.id)
+    ? f.filter((x) => x.id !== st.id)
+    : [{ ...st, kind: "story", favAt: Date.now() }, ...f]));
   const toggleFav = (it) => setFavs((f) => (f.some((x) => x.id === it.id)
     ? f.filter((x) => x.id !== it.id)
     : [{ ...it, unread: false, fresh: false, favAt: Date.now() }, ...f]));
@@ -711,6 +709,25 @@ export default function App() {
   }, [lang]);
   const [showSources, setShowSources] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+
+  // barra de deslizar das colunas, colocada acima dos cabeçalhos dos países
+  const colsRef = useRef(null);
+  const barraRef = useRef(null);
+  const [colsW, setColsW] = useState(0);
+  const sincroniza = (de, para) => {
+    if (!de.current || !para.current) return;
+    if (para.current.scrollLeft !== de.current.scrollLeft) para.current.scrollLeft = de.current.scrollLeft;
+  };
+  useEffect(() => {
+    const el = colsRef.current;
+    if (!el) return setColsW(0);
+    const medir = () => setColsW(el.scrollWidth);
+    medir();
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(medir) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", medir);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", medir); };
+  }, [section, lang, colunas]);
 
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
@@ -830,7 +847,7 @@ export default function App() {
   };
 
   const visible = useMemo(() => {
-    if (section === "favoritos") return [...favs].filter(matches).sort(byTime);
+    if (section === "favoritos") return favs.filter((f) => f.kind !== "story").filter(matches).sort(byTime);
     return items.filter((it) => srcOn(it) && inSection(it, section) && matches(it)
       && (section !== "modalidades" || modFilter === "todas" || it.mod === modFilter)).sort(byTime);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1163,12 +1180,24 @@ export default function App() {
                 ))}
               </div>
             )}
+            {section === "favoritos" && favStories.length > 0 && (
+              <div className="stories favstories">
+                <ul className="storylist">
+                  {favStories.map((st) => (
+                    <StoryCard key={st.id} s={st} items={items} lang={lang} ui={ui} now={now} theme={theme}
+                      leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais}
+                      isFav onFav={toggleFavStory}
+                      onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {section === "destaque" ? (
               <>
                 <section className="livebar">
                   <div className="livehead">
                     <span className={`pulse ${aoVivo.length ? "" : "off"}`}><i />{aoVivo.length ? ui.liveNow : ui.nextTv}</span>
-                    <button className="textbtn" onClick={() => setSection("resultados")}>{ui.allResults}</button>
                   </div>
                   {aoVivo.length > 0 ? (
                     <ul className="livelist">
@@ -1206,8 +1235,10 @@ export default function App() {
                     </ul>
                   ) : <p className="cempty">{ui.noLive}</p>}
                 </section>
-                <p className="xnote">{ui.colsNote}</p>
-                <div className="cols">
+                <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
+                  <div style={{ width: colsW || 1 }} />
+                </div>
+                <div className="cols" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
                   {COLS.map((c) => (
                     <section key={c.id} className="col">
                       <h2 className="colh"><Flag code={c.pais} lang={lang} /> {c[lang]}</h2>
@@ -1254,7 +1285,7 @@ export default function App() {
                 </div>
               </>
             ) : section === "historias" ? (
-              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (
               <>
               {games.length === 0 ? <p className="empty">{ui.noResults}</p> : (
@@ -1276,7 +1307,7 @@ export default function App() {
               )}
               <div className="mobevents">{eventsPanel}</div>
               </>
-            ) : visible.length === 0 ? (
+            ) : visible.length === 0 && !(section === "favoritos" && favStories.length > 0) ? (
               <p className="empty">{section === "favoritos" ? ui.noFavs : items.length === 0 ? ui.waiting : ui.empty}</p>
             ) : (
               <ol className="feed" aria-live="polite">
