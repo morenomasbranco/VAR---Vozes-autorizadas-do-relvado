@@ -4,7 +4,12 @@
 import Parser from "rss-parser";
 import { sleep, hash, BACKFILL_MS } from "../util.js";
 
-const parser = new Parser({ timeout: 10000 });
+const parser = new Parser({
+  timeout: 10000,
+  customFields: { item: [["dc:date", "dcDate"], ["dcterms:created", "dctCreated"], ["published", "published"], ["updated", "updated"], ["a10:updated", "a10Updated"]] },
+});
+// alguns feeds (Sky Sports em vídeos, por exemplo) não datam os itens
+const dataDe = (it) => Date.parse(it.isoDate || it.pubDate || it.dcDate || it.dctCreated || it.published || it.updated || it.a10Updated || "") || null;
 const UA = "Mozilla/5.0 (compatible; VAR-feed/1.0; agregador de notícias de desporto)";
 const INTERVAL = Math.max(1, Number(process.env.RSS_SEGUNDOS) || 15) * 1000;
 // fontes marcadas como "rapido": leitura ao segundo enquanto o feed dá sinal de vida, abrandando quando
@@ -83,6 +88,7 @@ export function startRss(sources, onPost, log) {
     let fails = 0;
     let wait = INTERVAL;
     let cache = {};
+    let first = true; // primeira leitura deste feed
     let lastNew = Date.now(); // última vez que o feed trouxe algo
     let slow = 0; // travão temporário quando o site pede calma (429) ou falha
     const every = () => {
@@ -110,14 +116,18 @@ export function startRss(sources, onPost, log) {
         const parsed = await readFeed(feed, cache);
         if (parsed) {
           const items = (parsed.items || []).slice(0, 40);
-          const dated = items.map((it) => Date.parse(it.isoDate || it.pubDate)).filter(Boolean);
+          const dated = items.map(dataDe).filter(Boolean);
           if (!google && dated.length && Date.now() - Math.max(...dated) > STALE_MS) throw fail("o feed não é atualizado há mais de uma semana", { stale: true });
           for (const it of [...items].reverse()) {
             const uniq = items.filter((x) => (x.guid || x.link) === (it.guid || it.link)).length === 1;
-            const key = (uniq && (it.guid || it.link)) || `${it.title}|${it.isoDate || it.pubDate || ""}`;
+            const key = (uniq && (it.guid || it.link)) || `${it.title}|${dataDe(it) || ""}`;
             if (!key || seen.has(key)) continue;
+            const dt = dataDe(it);
+            // item sem data: na primeira leitura não se publica (não se sabe se é de hoje ou do mês passado);
+            // depois disso, a hora em que apareceu no feed é a melhor aproximação que existe
+            if (!dt && first) continue;
             lastNew = Date.now();
-            const ts = Date.parse(it.isoDate || it.pubDate) || Date.now();
+            const ts = dt || Date.now();
             if (Date.now() - ts > BACKFILL_MS) continue;
             // no Google News o título vem com « - Nome do jornal» no fim e a descrição repete o título
             const title = google ? clean(it.title).replace(/\s+-\s+[^-]+$/, "") : clean(it.title);
@@ -141,12 +151,14 @@ export function startRss(sources, onPost, log) {
               text: `${title}\n${body}`.trim().slice(0, 1500),
               lang: s.lang,
               ts,
+              tsAprox: !dt || undefined, // hora aproximada: o feed não datou o item
             });
           }
           seen = new Set(items.map((it) => {
             const uniq = items.filter((x) => (x.guid || x.link) === (it.guid || it.link)).length === 1;
-            return (uniq && (it.guid || it.link)) || `${it.title}|${it.isoDate || it.pubDate || ""}`;
+            return (uniq && (it.guid || it.link)) || `${it.title}|${dataDe(it) || ""}`;
           }));
+          first = false;
         }
         fails = 0;
         slow = Math.max(0, slow / 2 - 500); // correu bem: levantar o travão aos poucos

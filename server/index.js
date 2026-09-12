@@ -120,7 +120,7 @@ function onPost(post) {
   if (seen.has(post.postId) || store.has(post.postId)) return;
   if (seen.size > 20000) seen.clear();
   seen.add(post.postId);
-  publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], pending: true, ...toItem(post, fallback(post)) });
+  publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], tsAprox: post.tsAprox, pending: true, ...toItem(post, fallback(post)) });
   status.fila++;
   enrich(post).then((ai) => { status.fila--; refine(post, ai); });
 }

@@ -51,6 +51,7 @@ const UI = {
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco" },
     eventsTitle: "Acontecimentos", noEvents: "Os golos, intervalos e finais dos jogos aparecem aqui assim que acontecem.",
     goals: "Golos", reds: "Expulsões", matchStats: "Estatísticas do jogo", tableLbl: "Classificação", pts: "pts", ord: (n) => `${n}.º`,
+    approx: "Hora aproximada: a fonte não datou a notícia",
     settings: "Definições", settingsHint: "Escolhe as fontes e as ligas que queres ver.",
     allSports: "Todas as modalidades", sourcesLbl: "Fontes", confirmed: (n) => `Confirmada por ${n} fontes`,
     about: "Sobre", aboutTitle: (c) => `Notícia sobre: ${c}`, fromTitle: (c) => `Origem: ${c}`,
@@ -80,6 +81,7 @@ const UI = {
     share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish" },
     eventsTitle: "Match events", noEvents: "Goals, half-times and full-times appear here as they happen.",
     goals: "Goals", reds: "Red cards", matchStats: "Match stats", tableLbl: "Table", pts: "pts", ord: (n) => `#${n}`,
+    approx: "Approximate time: the source did not date this story",
     settings: "Settings", settingsHint: "Choose the sources and leagues you want to see.",
     allSports: "All sports", sourcesLbl: "Sources", confirmed: (n) => `Confirmed by ${n} sources`,
     about: "About", aboutTitle: (c) => `Story about: ${c}`, fromTitle: (c) => `Source: ${c}`,
@@ -908,7 +910,13 @@ export default function App() {
                   return (
                     <li key={it.id} id={`n-${it.id}`} className={cls}>
                       <div className="gut" title={new Date(it.ts).toLocaleTimeString(ui.locale)}>
-                        {(() => { const a = ago(it.ts, now); return a ? <><span className="n">{a[0]}</span><span className="u">{a[1]}</span></> : <span className="u">{ui.now}</span>; })()}
+                        {(() => {
+                          const a = ago(it.ts, now);
+                          const tip = it.tsAprox ? ui.approx : undefined;
+                          return a
+                            ? <><span className="n" title={tip}>{it.tsAprox ? "~" : ""}{a[0]}</span><span className="u">{a[1]}</span></>
+                            : <span className="u" title={tip}>{ui.now}</span>;
+                        })()}
                       </div>
                       <div className="rail"><span className="dot" /></div>
                       <article className="body" onClick={() => markRead(it.id)}>
