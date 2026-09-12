@@ -27,7 +27,7 @@ export const nivel = (crit) => {
 
 // positiva ou negativa para o protagonista da pista (a equipa ou pessoa de quem o título fala)
 export const TOM = {
-  surpresa: "negativa", reviravolta: "positiva", tardio: "positiva", goleada: "positiva", serie: "positiva",
+  surpresa: "negativa", expulsao: "negativa", reviravolta: "positiva", tardio: "positiva", goleada: "positiva", serie: "positiva",
   crise: "negativa", derrotas: "negativa", fimserie: "negativa", primeira: "positiva", lider: "positiva", descida: "negativa", tema: "neutra",
 };
 
@@ -231,6 +231,30 @@ export function createStories({ broadcast, log }) {
       dados: matchData,
       verificar: { pt: ["Maiores goleadas da época na competição", "Histórico de confrontos"], en: ["Biggest wins of the season in the competition", "Head-to-head record"] },
     });
+
+    // 4b. expulsão: a equipa jogou em inferioridade
+    for (const r of ficha.vermelhos) {
+      const daCasa = norm(r.equipa) === norm(m.home);
+      const lado = daCasa ? sides[0] : sides[1];
+      const adv = daCasa ? sides[1] : sides[0];
+      const venceu = lado.goals > lado.opp;
+      push({
+        ...common, id: `s:expulsao:${m.id}:${r.jogador || r.min}`, tipo: "expulsao", equipas: [r.equipa],
+        crests: [crestOf(r.equipa, daCasa ? m.homeLogo : m.awayLogo)],
+        tom: venceu ? "positiva" : "negativa",
+        crit: ["emocao", ...(r.min && parseInt(r.min, 10) <= 45 ? ["impacto"] : []), ...noto(r.equipa, daCasa ? m.homeTeamId : m.awayTeamId), ...prox(r.equipa)],
+        t: {
+          pt: `${r.equipa} jogou com dez contra o ${adv.name}${r.jogador ? `: expulsão de ${r.jogador}` : ""}`,
+          en: `${r.equipa} played with ten men against ${adv.name}${r.jogador ? `: ${r.jogador} sent off` : ""}`,
+        },
+        angulo: {
+          pt: `Expulsão${r.min ? ` aos ${r.min}` : ""} e ${venceu ? "vitória mesmo assim" : `resultado de ${lado.goals}-${lado.opp}`}. O lance, o critério do árbitro e o que mudou na equipa.`,
+          en: `Sent off${r.min ? ` at ${r.min}` : ""} and ${venceu ? "still won" : `lost ${lado.goals}-${lado.opp}`}. The incident, the referee's call and how the side changed.`,
+        },
+        dados: matchData,
+        verificar: { pt: ["Imagens do lance e eventual revisão do VAR", "Castigo previsto e jogos de suspensão", ...verificarJogo.pt], en: ["Footage of the incident and any VAR review", "Likely ban and games suspended", ...verificarJogo.en] },
+      });
+    }
 
     // 5. séries das duas equipas
     for (const side of sides) {

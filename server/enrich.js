@@ -107,18 +107,18 @@ export const MODALIDADES = {
   hoquei_patins: { pt: "Hóquei em patins", en: "Roller hockey", re: /h[oó]quei em patins|roller hockey|rink hockey/i },
   hoquei_gelo: { pt: "Hóquei no gelo", en: "Ice hockey", re: /h[oó]quei no gelo|ice hockey|\bnhl\b/i },
   futebol_americano: { pt: "Futebol americano", en: "American football", re: /futebol americano|american football|\bnfl\b|quarterback|touchdown|college football|super bowl/i },
-  tenis: { pt: "Ténis", en: "Tennis", re: /t[eé]nis|tennis|us open|wimbledon|roland garros|atp\b|wta\b/i },
+  tenis: { pt: "Ténis", en: "Tennis", re: /\bt[eé]nis\b|\btennis\b|\bus open\b|wimbledon|roland garros|\batp\b|\bwta\b/i },
   padel: { pt: "Padel", en: "Padel", re: /p[aá]del|padel/i },
-  ciclismo: { pt: "Ciclismo", en: "Cycling", re: /ciclismo|cycling|volta a|tour de france|giro|vuelta/i },
-  atletismo: { pt: "Atletismo", en: "Athletics", re: /atletismo|athletics|maratona|marathon|salto com vara|pole vault/i },
+  ciclismo: { pt: "Ciclismo", en: "Cycling", re: /\bciclismo\b|\bcycling\b|volta a portugal|volta a espanha|tour de france|giro d'?italia|\bla vuelta\b|pelot[aã]o|\bciclista\b|\bUCI\b/i },
+  atletismo: { pt: "Atletismo", en: "Athletics", re: /\batletismo\b|\bathletics\b|maratona|marathon|salto com vara|pole vault|\b(100|200|400|800|1500|5000|10000) ?m(etros)?\b/i },
   natacao: { pt: "Natação", en: "Swimming", re: /nata[cç][aã]o|swimming/i },
   automobilismo: { pt: "Automobilismo", en: "Motorsport", re: /f[oó]rmula ?1|formula ?1|\bf1\b|grande pr[eé]mio|grand prix|motogp|nascar|rali|rally/i },
-  golfe: { pt: "Golfe", en: "Golf", re: /golfe|\bgolf\b|ryder cup|solheim|irish open/i },
+  golfe: { pt: "Golfe", en: "Golf", re: /\bgolfe\b|\bgolf\b|ryder cup|solheim|irish open|\bbirdie\b|\bfourballs?\b/i },
   ragby: { pt: "Râguebi", en: "Rugby", re: /r[aá]guebi|rugby/i },
   criquete: { pt: "Críquete", en: "Cricket", re: /cr[ií]quete|cricket|\btest match\b/i },
   beisebol: { pt: "Beisebol", en: "Baseball", re: /beisebol|baseball|\bmlb\b/i },
-  combate: { pt: "Desportos de combate", en: "Combat sports", en_: 1, re: /boxe|boxing|\bufc\b|\bmma\b|judo|karate/i },
-  equestre: { pt: "Equestre", en: "Equestrian", re: /hip[ií]smo|horse racing|\bracing\b|doncaster|st leger|equestre/i },
+  combate: { pt: "Desportos de combate", en: "Combat sports", re: /\bboxe\b|\bboxing\b|\bufc\b|\bmma\b|\bjudo\b|karate/i },
+  equestre: { pt: "Equestre", en: "Equestrian", re: /hip[ií]smo|horse racing|corrida de cavalos|doncaster cup|st leger|equestre|\bjóquei\b|\bjockey\b/i },
   outra: { pt: "Outra modalidade", en: "Other sport", re: /dardos|darts|snooker|xadrez|chess|esports|surf/i },
 };
 export const modalidadeDe = (texto) => Object.entries(MODALIDADES).find(([, m]) => m.re.test(texto))?.[0] || null;
@@ -134,7 +134,7 @@ export const RULES = [
   ["estatisticas", /estat[ií]stica|statistics|ranking|xg\b|m[eé]dia de idades|n[uú]meros e curiosidades/i],
 ];
 // palavras que marcam uma notícia como sendo de outra modalidade, e não de futebol de onze
-export const NAO_FUTEBOL = /cricket|horse racing|doncaster|st leger|nfl\b|quarterback|touchdown|college football|super league|rugby|nba\b|golf|padel|p[aá]del|t[eé]nis|tennis|us open|f[oó]rmula ?1|formula ?1|\bf1\b|grand prix|motogp|ciclismo|cycling|volta a espanha|atletismo|nata[cç][aã]o|voleibol|volleyball|andebol|handball|futsal|h[oó]quei|ehf|euroleague|final four/i;
+export const NAO_FUTEBOL = /\bcricket\b|horse racing|corrida de cavalos|doncaster cup|st leger|\bnfl\b|quarterback|touchdown|college football|super league|\brugby\b|\br[aá]guebi\b|\bnba\b|\bwnba\b|\bgolfe?\b|\bpadel\b|p[aá]del|\bt[eé]nis\b|\btennis\b|\bus open\b|f[oó]rmula ?1|formula ?1|\bf1\b|grand prix|grande pr[eé]mio|motogp|\bciclismo\b|\bciclista|\bcycling\b|volta a portugal|volta a espanha|\batletismo\b|nata[cç][aã]o|voleibol|volleyball|andebol|handball|futsal|h[oó]quei|\behf\b|euroleague|final four|\bnhl\b|\bmlb\b/i;
 export function fallback(post) {
   const lines = post.text.split("\n").map((l) => l.trim()).filter(Boolean);
   const title = (lines[0] || post.text).replace(/\s+/g, " ").slice(0, 140);

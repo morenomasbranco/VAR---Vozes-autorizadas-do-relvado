@@ -34,8 +34,9 @@ const BIG3 = ["porto", "sporting", "benfica"];
 const isNational = (it) => !it.cats.includes("modalidades") && !it.cats.includes("portugueses") && (it.paisTema ? it.paisTema === "pt" : it.cats.some((c) => BIG3.includes(c)));
 const inSection = (it, s) => {
   if (s === "historias" || s === "favoritos") return false;
-  if (s === "live") return true;
   if (s === "resultados") return !!it.score;
+  if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
+  if (s === "live") return true;
   if (it.src === "resultados") return false; // notícias dos resultados em direto só no Live e nos Resultados
   if (s === "destaque") return (it.imp || 0) >= 3;
   if (s === "futebol") return isNational(it);
@@ -50,6 +51,7 @@ const UI = {
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco" },
     eventsTitle: "Acontecimentos", noEvents: "Os golos, intervalos e finais dos jogos aparecem aqui assim que acontecem.",
     goals: "Golos", reds: "Expulsões", matchStats: "Estatísticas do jogo", tableLbl: "Classificação", pts: "pts", ord: (n) => `${n}.º`,
+    settings: "Definições", settingsHint: "Escolhe as fontes e as ligas que queres ver.",
     allSports: "Todas as modalidades", sourcesLbl: "Fontes", confirmed: (n) => `Confirmada por ${n} fontes`,
     about: "Sobre", aboutTitle: (c) => `Notícia sobre: ${c}`, fromTitle: (c) => `Origem: ${c}`,
     pending: (n) => `Mostrar ${n} ${n === 1 ? "nova notícia" : "novas notícias"}`,
@@ -78,6 +80,7 @@ const UI = {
     share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish" },
     eventsTitle: "Match events", noEvents: "Goals, half-times and full-times appear here as they happen.",
     goals: "Goals", reds: "Red cards", matchStats: "Match stats", tableLbl: "Table", pts: "pts", ord: (n) => `#${n}`,
+    settings: "Settings", settingsHint: "Choose the sources and leagues you want to see.",
     allSports: "All sports", sourcesLbl: "Sources", confirmed: (n) => `Confirmed by ${n} sources`,
     about: "About", aboutTitle: (c) => `Story about: ${c}`, fromTitle: (c) => `Source: ${c}`,
     pending: (n) => `Show ${n} new ${n === 1 ? "story" : "stories"}`,
@@ -107,7 +110,7 @@ const isHot = (it) => (it.imp || 0) >= 4;
 const relevance = (it, now) => (it.imp || 1) / (1 + (now - it.ts) / 3600000 / 3);
 const TOP_N = 8;
 const byTime = (a, b) => b.ts - a.ts; // mais recente primeiro
-const MAX_ITEMS = 500;
+const MAX_ITEMS = 4000; // arquivo que o site mantém aberto
 
 /* ───────── Utilitários ───────── */
 const strip = (s) => s.replace(/==/g, "");
@@ -314,7 +317,16 @@ const CSS = `
 .apito .textbtn.off{opacity:.45;cursor:not-allowed}
 .apito .notice{font-size:13px;color:var(--muted);padding:14px 0 0}
 .apito .layout{display:grid;grid-template-columns:minmax(0,1fr);gap:40px;padding:10px 0 64px}
-@media(min-width:1000px){.apito .layout{grid-template-columns:minmax(0,1fr) 250px} .apito .layout.res{grid-template-columns:minmax(0,1fr) 360px}}
+@media(min-width:1000px){.apito .layout.res{grid-template-columns:minmax(0,1fr) 360px}}
+.apito .layout.one{grid-template-columns:minmax(0,1fr)}
+.apito .settings{position:relative}
+.apito .settings .backdrop{position:fixed;inset:0;z-index:40}
+.apito .settings .menu{position:absolute;top:calc(100% + 8px);right:0;z-index:41;width:min(320px,calc(100vw - 32px));
+  max-height:min(70vh,560px);overflow:auto;background:var(--raise);border:1px solid var(--line);border-radius:12px;
+  padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.28)}
+.apito .settings .menu .panel{position:static}
+.apito .menusep{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.apito .brand .logo{flex:none}
 .apito .events .evlist{list-style:none;margin:10px 0 0;padding:0 4px 0 0;max-height:calc(100vh - 230px);overflow:auto}
 .apito .ev{border-left:3px solid var(--live);padding:6px 0 8px 10px;margin-bottom:8px;animation:evin .45s ease-out}
 .apito .evh{display:flex;align-items:center;gap:6px;font-size:12px}
@@ -474,6 +486,21 @@ export default function App() {
     try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   useEffect(() => { try { localStorage.setItem("var-favoritos", JSON.stringify(favs)); } catch { /* sem armazenamento */ } }, [favs]);
+  // ao voltar ao separador, busca o que entrou enquanto o site esteve em segundo plano
+  useEffect(() => {
+    const onBack = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch(`${API}/api/items?limit=400`).then((r) => r.json()).then((list) => {
+        setItems((l) => {
+          const known = new Set(l.map((x) => x.id));
+          const novos = list.filter((x) => !known.has(x.id));
+          return novos.length ? [...novos, ...l].sort(byTime).slice(0, MAX_ITEMS) : l;
+        });
+      }).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onBack);
+    return () => document.removeEventListener("visibilitychange", onBack);
+  }, []);
   const isFav = (id) => favs.some((f) => f.id === id);
   const toggleFav = (it) => setFavs((f) => (f.some((x) => x.id === it.id)
     ? f.filter((x) => x.id !== it.id)
@@ -513,7 +540,7 @@ export default function App() {
     fetch(`${API}/api/leagues`).then((r) => r.json()).then((l) => !stop && setLeagues(l)).catch(() => {});
     fetch(`${API}/api/stories`).then((r) => r.json()).then((l) => !stop && setStories(l)).catch(() => {});
 
-    fetch(`${API}/api/items`)
+    fetch(`${API}/api/items?limit=1500`)
       .then((r) => r.json())
       .then((list) => {
         if (stop) return;
@@ -671,7 +698,7 @@ export default function App() {
   };
 
   const resultsFeed = useMemo(() => items
-    .filter((it) => it.src === "resultados" && !it.id.endsWith(":live") && ligaOn(it) && matches(it))
+    .filter((it) => it.src === "resultados" && !it.board && !it.id.endsWith(":live") && ligaOn(it) && matches(it))
     .sort(byTime).slice(0, 80),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [items, ligasOn, query, lang]);
@@ -702,6 +729,31 @@ export default function App() {
     for (const it of items) if (it.cats.includes("modalidades") && it.mod) c.set(it.mod, (c.get(it.mod) || 0) + 1);
     return [...c.entries()].sort((a, b) => b[1] - a[1]);
   }, [items]);
+
+  const leaguesPanel = (
+    <div className="panel">
+      <div className="panel-head">
+        <h2>{ui.leaguesTitle}</h2>
+        <div>
+          <button className="textbtn" onClick={() => { setLigasOn(null); try { localStorage.removeItem("var-ligas"); } catch { /* */ } }}>{ui.all}</button>
+          <button className="textbtn" onClick={() => { setLigasOn(new Set()); try { localStorage.setItem("var-ligas", "[]"); } catch { /* */ } }}>{ui.none}</button>
+        </div>
+      </div>
+      <ul className="srclist">
+        {leagues.map((l) => {
+          const on = ligasOn === null || ligasOn.has(l.key);
+          return (
+            <li key={l.key}>
+              <button className="srcrow" aria-pressed={on} onClick={() => toggleLiga(l.key)}>
+                <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
+                <span className="nm">{lang === "en" ? l.nome_en || l.nome : l.nome}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 
   const sourcesPanel = (
     <div className="panel">
@@ -737,11 +789,13 @@ export default function App() {
         <div className="wrap">
           <div className="bar">
             <div className="brand">
-              <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-                <rect x="1.5" y="2.5" width="23" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
-                <line x1="15.5" y1="5.5" x2="15.5" y2="15.5" stroke="var(--accent)" strokeWidth="2" strokeDasharray="2 2" />
-                <line x1="13" y1="18.5" x2="13" y2="22.5" stroke="currentColor" strokeWidth="2" />
-                <line x1="8" y1="23.5" x2="18" y2="23.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <svg className="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+                <rect x="7" y="11.5" width="50" height="33" rx="6" fill="none" stroke="currentColor" strokeWidth="4.4" />
+                <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
+                  <path d="M15.5 21.5h15" /><path d="M15.5 28h10" /><path d="M15.5 34.5h13" />
+                </g>
+                <path d="M41.5 17v22" stroke="var(--accent)" strokeWidth="4.4" strokeLinecap="round" strokeDasharray="3.4 4.6" />
+                <path d="M32 44.5v6.5M22 55.5h20" stroke="currentColor" strokeWidth="4.4" strokeLinecap="round" />
               </svg>
               <b>VAR</b>
               <span className="tagline">{ui.tagline}</span>
@@ -763,9 +817,21 @@ export default function App() {
                 aria-label={theme === "dark" ? ui.toLight : ui.toDark} title={theme === "dark" ? ui.toLight : ui.toDark}>
                 {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </button>
-              <button className="icon-btn mob" onClick={() => setShowSources((v) => !v)} aria-expanded={showSources} aria-label={ui.sources} title={ui.sources}>
-                <SlidersHorizontal size={16} />
-              </button>
+              <div className="settings">
+                <button className="icon-btn" onClick={() => setShowSources((v) => !v)} aria-expanded={showSources}
+                  aria-label={ui.settings} title={ui.settings}>
+                  <SlidersHorizontal size={16} />
+                </button>
+                {showSources && (
+                  <>
+                    <div className="backdrop" onClick={() => setShowSources(false)} aria-hidden="true" />
+                    <div className="menu" role="dialog" aria-label={ui.settings}>
+                      {sourcesPanel}
+                      {leagues.length > 0 && <div className="menusep">{leaguesPanel}</div>}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <nav className="tabs" aria-label={ui.sectionsLabel}>
@@ -782,10 +848,8 @@ export default function App() {
 
       <div className="wrap">
         {conn === "offline" && <p className="notice">{ui.offlineNote}</p>}
-        <div className={`layout ${section === "resultados" ? "res" : ""}`}>
+        <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
           <main>
-            {showSources && <div className="mobpanel">{sourcesPanel}</div>}
-
             <div className="feedhead">
               <h1 className={section === "historias" ? "hist" : ""}>{CAT[section][lang]}</h1>
               {section === "resultados" && leagues.length > 0 && (
@@ -797,30 +861,7 @@ export default function App() {
               <button className="textbtn" onClick={markAllRead}><CheckCheck size={15} />{ui.markRead}</button>
             </div>
 
-            {section === "resultados" && showLeagues && (
-              <div className="mobpanel leagues">
-                <div className="panel-head">
-                  <h2>{ui.leaguesTitle}</h2>
-                  <div>
-                    <button className="textbtn" onClick={() => { setLigasOn(null); try { localStorage.removeItem("var-ligas"); } catch { /* */ } }}>{ui.all}</button>
-                    <button className="textbtn" onClick={() => { setLigasOn(new Set()); try { localStorage.setItem("var-ligas", "[]"); } catch { /* */ } }}>{ui.none}</button>
-                  </div>
-                </div>
-                <ul className="srclist cols">
-                  {leagues.map((l) => {
-                    const on = ligasOn === null || ligasOn.has(l.key);
-                    return (
-                      <li key={l.key}>
-                        <button className="srcrow" aria-pressed={on} onClick={() => toggleLiga(l.key)}>
-                          <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
-                          <span className="nm">{lang === "en" ? l.nome_en || l.nome : l.nome}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
+            {section === "resultados" && showLeagues && <div className="mobpanel leagues">{leaguesPanel}</div>}
 
             {pending.length > 0 && (
               <button className="pending" onClick={() => { setPaused(false); flush(); }}>{ui.pending(pending.length)}</button>
@@ -943,7 +984,7 @@ export default function App() {
             )}
           </main>
 
-          <aside className="desk">{section === "resultados" ? eventsPanel : sourcesPanel}</aside>
+          {section === "resultados" && <aside className="desk">{eventsPanel}</aside>}
         </div>
       </div>
     </div>

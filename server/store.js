@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const FILE = fileURLToPath(new URL("../data/items.json", import.meta.url));
-const MAX = 2000;
+const MAX = Number(process.env.ARQUIVO_MAX) || 30000; // notícias guardadas em data/items.json
 let items = []; // mais recentes primeiro
 let dirty = false;
 
@@ -12,7 +12,7 @@ export function load() {
 }
 
 export const count = () => items.length;
-export const all = (limit = 400) => [...items].sort((a, b) => b.ts - a.ts).slice(0, limit);
+export const all = (limit = 1000) => [...items].sort((a, b) => b.ts - a.ts).slice(0, limit);
 export const get = (id) => items.find((i) => i.id === id);
 
 // true se o post já foi tratado (como notícia principal ou como fonte adicional)

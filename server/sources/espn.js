@@ -8,6 +8,19 @@ const BASE = process.env.ESPN_BASE || "https://site.api.espn.com/apis/site/v2/sp
 const LIVE_MS = Math.max(5, Number(process.env.ESPN_SEGUNDOS) || 10) * 1000; // ritmo dos jogos a decorrer
 const IDLE_MAX = 10 * 60e3;
 const NOTHING_TODAY = 30 * 60e3;
+// lances do jogo que dão notícia além dos golos: expulsões, penáltis e decisões do VAR
+const LANCES = [
+  ["segundo_amarelo", /second yellow|yellow ?red|duplo amarelo|segundo amarelo/i],
+  ["vermelho", /red card|cart[aã]o vermelho|expuls/i],
+  ["var", /\bvar\b|video (assistant )?referee|video review|revis[aã]o de v[ií]deo/i],
+  ["anulado", /disallow|goal cancell|anulad|ruled out|chalked off/i],
+  ["penalti_falhado", /penalty\b[^a-z]*(missed|saved|blocked)|penalty miss|pen[aá]lti (falhado|defendido)/i],
+  ["penalti_marcado", /penalty\b[^a-z]*(scored|converted|goal)/i],
+  ["penalti", /penalty\b[^a-z]*(awarded|won|conceded|given)|penalty kick|pen[aá]lti/i],
+  ["autogolo", /own goal|autogolo/i],
+];
+const tipoLance = (texto) => LANCES.find(([, re]) => re.test(texto))?.[0] || null;
+
 const BIG3 = [["benfica", /\bbenfica\b/], ["porto", /\bporto\b/], ["sporting", /^sporting( cp| lisbon| clube de portugal)?$/]];
 
 async function getJson(url) {
@@ -50,6 +63,20 @@ export function normalizeEvent(ev) {
     lastScorer: last?.athletesInvolved?.[0]?.displayName || "",
     lastScorerMinute: last?.clock?.displayValue || "",
     lastScorerHome: last ? String(last.team?.id) === String(home.team?.id) : null,
+    // todos os lances relevantes que a ESPN dá, para comparar de leitura em leitura
+    plays: (comp.details || []).map((d) => {
+      const texto = `${d.type?.text || ""} ${d.type?.abbreviation || ""}`;
+      const tipo = tipoLance(texto);
+      if (!tipo) return null;
+      const label = d.clock?.displayValue || "";
+      return {
+        tipo,
+        label,
+        who: d.athletesInvolved?.[0]?.displayName || "",
+        home: String(d.team?.id) === String(home.team?.id),
+        key: `${tipo}|${label}|${d.athletesInvolved?.[0]?.id || d.athletesInvolved?.[0]?.displayName || ""}|${d.team?.id || ""}`,
+      };
+    }).filter(Boolean),
   };
 }
 
@@ -75,12 +102,43 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
   const liveCard = (m, lg) => upsert({
     ...base(m, lg),
     id: `r:espn:${m.id}:live`,
+    board: true, // só aparece no quadro de resultados
     ts: Date.now(),
     t: { pt: `Em direto: ${sc(m)}`, en: `Live: ${sc(m)}` },
     b: { pt: [lg.nome], en: [lg.nome_en || lg.nome] },
     imp: 1,
     score: score(m, lg),
   });
+
+  // notícia de um lance: expulsão, penálti, golo anulado, autogolo ou revisão do VAR
+  const playNews = (p, m, lg) => {
+    const equipa = p.home ? m.home : m.away;
+    const isBig = big(m, lg);
+    const quando = p.label ? ` aos ${p.label}` : "";
+    const whenEn = p.label ? ` (${p.label})` : "";
+    const quem = p.who ? `==${p.who}== (${equipa})` : `==${equipa}==`;
+    const whoEn = p.who ? `==${p.who}== (${equipa})` : `==${equipa}==`;
+    const T = {
+      vermelho: [`Cartão vermelho para ${quem}${quando}`, `Red card for ${whoEn}${whenEn}`, isBig ? 4 : 3],
+      segundo_amarelo: [`Segundo amarelo e expulsão de ${quem}${quando}`, `Second yellow and red for ${whoEn}${whenEn}`, isBig ? 4 : 3],
+      var: [`Lance revisto pelo VAR no ==${m.home}==–==${m.away}==${quando}`, `VAR review in ==${m.home}== v ==${m.away}==${whenEn}`, isBig ? 4 : 3],
+      anulado: [`Golo anulado ao ==${equipa}==${quando}`, `Goal ruled out for ==${equipa}==${whenEn}`, isBig ? 4 : 3],
+      penalti: [`Penálti para o ==${equipa}==${quando}`, `Penalty for ==${equipa}==${whenEn}`, isBig ? 4 : 3],
+      penalti_falhado: [`Penálti falhado por ${quem}${quando}`, `Penalty missed by ${whoEn}${whenEn}`, isBig ? 4 : 3],
+      penalti_marcado: [`Golo de penálti de ${quem}${quando}: ${sc(m)}`, `Penalty scored by ${whoEn}${whenEn}: ${sc(m)}`, isBig ? 4 : 3],
+      autogolo: [`Autogolo no ==${m.home}==–==${m.away}==${quando}: ${sc(m)}`, `Own goal in ==${m.home}== v ==${m.away}==${whenEn}: ${sc(m)}`, isBig ? 4 : 3],
+    }[p.tipo];
+    if (!T) return;
+    publish({
+      ...base(m, lg),
+      id: `r:espn:${m.id}:${p.key}`,
+      ts: Date.now(),
+      t: { pt: T[0], en: T[1] },
+      b: { pt: [sc(m), lg.nome], en: [sc(m), lg.nome_en || lg.nome] },
+      imp: T[2],
+      score: score(m, lg),
+    });
+  };
 
   const news = (kind, m, lg) => {
     const isBig = big(m, lg);
@@ -126,10 +184,16 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
       tracked.delete(m.id);
       return;
     }
+    // lances novos desde a última leitura (expulsões, penáltis, VAR, golos anulados)
+    if (lg.sport === "soccer") {
+      const antes = new Set((prev.plays || []).map((p) => p.key));
+      for (const p of m.plays || []) if (!antes.has(p.key)) playNews(p, m, lg);
+    }
     const scored = m.hs > prev.hs || m.as > prev.as;
     // no basquetebol não há notícia por cesto: o cartão em direto vai mostrando o resultado
-    if (lg.sport === "soccer" && scored) news("golo", m, lg);
-    if (lg.sport === "soccer" && (m.hs < prev.hs || m.as < prev.as)) news("anulado", m, lg);
+    const novoLance = (t) => (m.plays || []).some((p) => p.tipo === t && !(prev.plays || []).some((q) => q.key === p.key));
+    if (lg.sport === "soccer" && scored && !novoLance("penalti_marcado") && !novoLance("autogolo")) news("golo", m, lg);
+    if (lg.sport === "soccer" && (m.hs < prev.hs || m.as < prev.as) && !novoLance("anulado")) news("anulado", m, lg);
     if (m.ht && !prev.ht) news("intervalo", m, lg);
     if (m.hs !== prev.hs || m.as !== prev.as || m.clock !== prev.clock) liveCard(m, lg);
     tracked.set(m.id, m);
