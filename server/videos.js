@@ -14,34 +14,47 @@ const IDADE_MAX = (Number(process.env.VIDEOS_HORAS) || 72) * 3600e3;
 const JANELA_REPETIDO = 45 * 60e3; // o mesmo lance publicado por duas fontes aparece com poucos minutos de diferença
 
 /* ───────── Categorias ───────── */
-// ordem de decisão: o que é mais específico primeiro (uma expulsão com o resultado no título continua a ser expulsão)
-const CATEGORIAS = [
-  ["red", /red card|straight red|sent off|second yellow|\bexpuls|cart[aã]o vermelho|\bvermelho direto|segundo amarelo|tarjeta roja|\broja directa|🟥/i],
-  ["save", /\b(great|incredible|amazing|brilliant|double|triple|fantastic|huge|crucial|stunning|superb)\s+save|\bsaves?\b(?! the day)|penalty (saved|stopped)|pen(alty)? save|grande defesa|defesa (incr[ií]vel|brilhante|espetacular|fant[aá]stica|enorme|apertada)|defes[ãa]o|defende (o )?pen[aá]lti|paradon|parad[oó]n|🧤/i],
-  ["var", /\bvar\b|disallowed|ruled out|chalked off|golo anulado|gol anulado|\banulad[oa]\b|fora de jogo|offside|penalty (overturned|decision|call|shout|not given)|pen[aá]lti (anulado|revertido)/i],
-  ["goal", /\[\d+\]|\bgoal\b|\bgoals\b|\bgol\b|\bgolo\b|\bgola[cç]o\b|\bgolazo\b|\bscores?\b|\bscored\b|\bmarca\b|⚽/i],
-  ["skill", /\bskill|nutmeg|\bdribbl|\bfinta|\bdrible|\bcueca\b|rabona|el[aá]stico|\bruleta|roulette|\bflick\b|\bbicycle kick|\bpisadinha|\bhabilidade/i],
-  ["highlight", /highlights|extended|resumo|melhores momentos|best moments|all goals|todos os golos|\bchance\b|\bmiss(ed)?\b|\bsitter\b|\bfalhan[cç]o|\boportunidade|\bbest bits\b|\bresumen\b|\bocasi[oó]n|\bclearance|\bgoal[- ]line|\btackle|\bassist\b/i],
-];
+// A ordem de decisão vai do mais específico para o mais geral:
+// 1) expulsões e VAR (um golo anulado ou um vermelho com o resultado no título continuam a ser isso);
+// 2) o resultado com a equipa que marcou entre parênteses retos, formato do r/soccer para golos;
+// 3) defesas ditas por extenso («great save», «grande defesa», «penálti defendido»);
+// 4) golos ditos por extenso; 5) resumos e melhores momentos; 6) fintas; 7) lances perigosos, que também são highlights.
+const RE = {
+  red: /red card|straight red|sent off|sending off|second yellow|double yellow|yellow[- ]red|\bexpuls|cart[aã]o vermelho|vermelho direto|segundo amarelo|duplo amarelo|tarjeta roja|roja directa|doble amarilla|cartellino rosso|espulsion|carton rouge|rote karte|gelb[- ]rot|🟥/i,
+  var: /\bvar\b|disallowed|ruled out|chalked off|overturned|golo anulado|gol anulado|\banulad[oa]\b|\banula(do)? o golo|fora de jogo|offside|penalty (overturned|decision|call|shout|not given|review)|pen[aá]lti (anulado|revertido|revisto)|\bvideo ?(review|referee)|revis[aã]o (do |de )?v[ií]deo|\bvar check|gol annullato|but refus[ée]|tor aberkannt/i,
+  save: /\b(great|incredible|amazing|brilliant|double|triple|fantastic|huge|crucial|stunning|superb|world[- ]class|reflex|unreal|insane|outstanding|massive)\s+(save|stop)|\bsaves? (a |the )?(pen|penalty|shot|header|free[- ]kick)|penalty (saved|stopped)|pen(alty)? save|keeper (denies|saves)|\bdenies\b|grande defesa|defesa (incr[ií]vel|brilhante|espetacular|fant[aá]stica|enorme|apertada|de reflexos|a dobrar|tripla|dupla)|\bdefes[ãa]o|defende (o |um )?pen[aá]lti|pen[aá]lti defendido|paradon|parad[oó]n|gran parada|parata|parade\b|arr[eê]t (d[ée]cisif|incroyable)|🧤/i,
+  goal: /\bgoal\b|\bgoals\b|\bgol\b|\bgolo\b|\bgola[cç]o\b|\bgolazo\b|\bgolea(da)?\b|\bscores?\b|\bscored\b|\bnets\b|\bheader\b|\bfree[- ]kick\b|\bpenalty (goal|scored|converted)|\bown goal\b|autogolo|\bmarca (o|um|de|na|no)\b|\bmarcou\b|\bbis(a)?\b|\bhat[- ]trick\b|\bdoppietta\b|\btreffer\b|⚽/i,
+  highlight: /highlights|extended|resumo|sum[aá]rio|compacto|melhores (momentos|lances)|best moments|all goals|todos os golos|todos los goles|tutti i gol|alle tore|\bresumen\b|\bsintesi\b|\br[ée]sum[ée]\b|\bzusammenfassung\b|\bbest bits\b/i,
+  skill: /\bskill|nutmeg|\bdribbl|\bfinta|\bdrible|\bcueca\b|t[uú]nel\b|rabona|el[aá]stico|\bruleta|roulette|\bflick\b|\bbicycle kick|\bbicicleta\b|\bpisadinha|\bhabilidade|\bcaneta\b|\btrivela\b|\bchap[eé]u\b|\bsombrero\b|\bossinho/i,
+  lance: /\bchance\b|\bmiss(ed)?\b|\bsitter\b|\bfalhan[cç]o|\bfalha(do)?\b|\boportunidade|\bocasi[oó]n|\bclearance|\bgoal[- ]line|\btackle|\bassist\b|\bassist[eê]ncia|\bwoodwork|\bhits? the (post|bar|crossbar)|\bposte\b|\bbarra\b|\btrave\b|\bcorte\b/i,
+};
 export const CATEGORIA_IDS = ["goal", "highlight", "save", "red", "var", "skill", "other"];
 
 // flair do Reddit que diz diretamente o que é o vídeo (os subreddits portugueses usam «Golo», «Resumo»…)
 const FLAIR = [
-  ["goal", /golo|gol|goal/i], ["highlight", /resumo|highlight|melhores/i], ["save", /defesa|save/i],
-  ["red", /vermelho|red|expuls/i], ["var", /\bvar\b/i], ["skill", /skill|finta|drible/i],
+  ["red", /vermelho|red card|expuls|cart[aã]o/i], ["var", /\bvar\b|anulad/i], ["save", /defesa|save/i],
+  ["goal", /golo|\bgol\b|goal/i], ["highlight", /resumo|highlight|melhores/i], ["skill", /skill|finta|drible/i],
 ];
 
 export function categoria(titulo, flair = "") {
   const t = String(titulo || "");
-  // um resultado com a equipa que marcou entre parênteses retos é o formato do r/soccer para golos
-  const temMarcador = /\[\d+\]\s*[-–x:]\s*\d+|\d+\s*[-–x:]\s*\[\d+\]/.test(t);
-  for (const [id, re] of CATEGORIAS) {
-    if (id === "goal" && temMarcador) return "goal";
-    if (re.test(t)) return id;
-  }
-  if (temMarcador || /\b\d+\s*[-–x]\s*\d+\b.*\d{1,3}\s*['’]/.test(t)) return "goal";
   const f = String(flair || "").replace(/:[a-z_]+:/gi, "").trim();
-  if (f && !/^media$/i.test(f)) for (const [id, re] of FLAIR) if (re.test(f)) return id;
+  // a flair de um subreddit que a usa para dizer o que é o vídeo manda (não a genérica «Media»)
+  if (f && !/^(media|video|v[ií]deo|outros?|other)$/i.test(f)) for (const [id, re] of FLAIR) if (re.test(f)) return id;
+  if (RE.red.test(t)) return "red";
+  if (RE.var.test(t)) return "var";
+  // resultado com a equipa que marcou entre parênteses retos: é golo
+  const temMarcador = /\[\d+\]\s*[-–x:]\s*\d+|\d+\s*[-–x:]\s*\[\d+\]/.test(t);
+  if (temMarcador) return "goal";
+  if (RE.save.test(t)) return "save";
+  if (RE.highlight.test(t)) return "highlight"; // «Resumo: Benfica 3-1 Porto» é resumo, não golo
+  if (RE.goal.test(t)) return "goal";
+  // resultado seguido de minuto («Benfica 1-0 Porto - Pavlidis 67'») também é golo
+  if (/\b\d+\s*[-–x]\s*\d+\b.*\d{1,3}(\+\d{1,2})?\s*['’]/.test(t)) return "goal";
+  if (RE.skill.test(t)) return "skill";
+  if (RE.lance.test(t)) return "highlight";
+  // «defesa» sozinho é ambíguo (é também a posição); só com um guarda-redes ou um lance por perto
+  if (/\bdefesa\b/i.test(t) && /guarda-redes|\bgr\b|remate|livre|cabeceamento/i.test(t)) return "save";
   return "other";
 }
 
@@ -136,6 +149,13 @@ const idade = (v) => Date.now() - v.created_time;
 export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () => [], emblemas = null } = {}) {
   let videos = [];
   try { videos = JSON.parse(fs.readFileSync(FILE, "utf8")).filter((v) => idade(v) < IDADE_MAX); } catch { videos = []; }
+  // as regras da classificação mudam com o tempo: os vídeos guardados são revistos à entrada
+  // (os da VSPORTS trazem a categoria do próprio site e ficam como estão)
+  for (const v of videos) {
+    if (v.sources?.some((x) => x.canal === "vsports")) continue;
+    const nova = v.sources?.map((x) => categoria(x.title)).find((c) => c !== "other") || categoria(v.title);
+    if (nova !== "other" || v.category === "other") v.category = nova;
+  }
   const vistos = new Set(videos.flatMap((v) => v.sources.map((s) => s.post_id)));
   const estado = { recebidos: 0, aceites: 0, repetidos: 0, ignorados: 0, fontes: {} };
   let sujo = false;
@@ -236,7 +256,9 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
       igual.sources.push(fonte);
       if (raw.regiao === "pt") igual.portugues = true;
       for (const k of ["home_team", "away_team", "score", "player", "minute"]) if (!igual[k] && info[k]) igual[k] = info[k];
-      if (igual.category === "other" && cat !== "other") igual.category = cat;
+      // a categoria mais específica ganha: um «highlight» ou «other» visto noutra fonte como golo, VAR… passa a isso
+      const PESO = { red: 5, var: 5, save: 4, goal: 3, skill: 2, highlight: 1, other: 0 };
+      if ((PESO[cat] || 0) > (PESO[igual.category] || 0)) igual.category = cat;
       aplicaPrincipal(igual);
       igual.upd = Date.now();
       estado.repetidos++;
@@ -283,8 +305,9 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
       .slice(0, Math.min(limit, 300));
   }
   const ignorar = () => { estado.ignorados++; };
+  const contagem = () => videos.reduce((o, v) => { o[v.category] = (o[v.category] || 0) + 1; return o; }, {});
 
-  return { add, latest, ignorar, estado: () => ({ ...estado, total: videos.length }) };
+  return { add, latest, ignorar, estado: () => ({ ...estado, total: videos.length, categorias: contagem() }) };
 }
 
 export const _test = { limpa, norm };

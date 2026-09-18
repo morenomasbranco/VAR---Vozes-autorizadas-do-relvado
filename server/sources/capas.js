@@ -1,4 +1,7 @@
-// Capas dos jornais desportivos do dia, lidas na página do SAPO (https://sapo.pt/noticias/jornais/desporto).
+// Capas dos jornais desportivos, lidas na página do SAPO (https://sapo.pt/noticias/jornais/desporto).
+// Além das capas do dia, o servidor guarda as da última semana: as que vai vendo ao longo dos dias e as
+// que vai buscar à página datada de cada jornal (…/desporto/a-bola-4137/20260916), para a semana ficar
+// completa mesmo depois de o servidor reiniciar.
 // A página é lida de 20 em 20 minutos (de 5 em 5 entre a meia-noite e as 9h de Lisboa, que é quando as
 // capas novas saem). Cada capa guarda o endereço da imagem; o site mostra-a através do servidor
 // (/api/capas/img/<id>), com cópia em memória, para a imagem aparecer sempre mesmo que o SAPO recuse
@@ -9,8 +12,33 @@ import { sleep, slug, norm } from "../util.js";
 const PAGINA = process.env.CAPAS_PAGINA || "https://sapo.pt/noticias/jornais/desporto";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const FICHEIRO = new URL("../../data/capas.json", import.meta.url);
+const FICHEIRO_SEMANA = new URL("../../data/capas-semana.json", import.meta.url);
+const DIAS = Math.max(1, Number(process.env.CAPAS_DIAS) || 7); // dias guardados, contando com hoje
 const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39": "'", "#x27": "'" };
 const decode = (s) => String(s || "").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&([a-z#0-9]+);/gi, (m, n) => ENT[n] ?? m);
+
+// dia de Lisboa (AAAA-MM-DD) de um instante, e o dia de há n dias
+export const diaLisboa = (ts = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon" }).format(new Date(ts));
+const diaMenos = (dia, n) => { const d = new Date(`${dia}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+// data escrita na página ou no endereço da imagem: «16/09/2026», «2026-09-16», «20260916», «2026/09/16»
+export function dataEm(texto) {
+  const t = String(texto || "");
+  let m = t.match(/\b(\d{2})[/.-](\d{2})[/.-](20\d{2})\b/);
+  if (m) return valida(`${m[3]}-${m[2]}-${m[1]}`);
+  m = t.match(/\b(20\d{2})[/-](\d{2})[/-](\d{2})\b/);
+  if (m) return valida(`${m[1]}-${m[2]}-${m[3]}`);
+  m = t.match(/(?:^|[^\d])(20\d{2})(\d{2})(\d{2})(?:[^\d]|$)/);
+  if (m) return valida(`${m[1]}-${m[2]}-${m[3]}`);
+  return null;
+}
+function valida(dia) {
+  const d = new Date(`${dia}T12:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== dia) return null;
+  const hoje = diaLisboa();
+  return dia <= hoje && dia >= diaMenos(hoje, 60) ? dia : null; // datas absurdas (ids, tamanhos) ficam de fora
+}
+// endereço base da página de um jornal, sem data no fim («…/a-bola-4137»)
+const baseJornal = (u) => String(u || "").replace(/[?#].*$/, "").replace(/\/(\d{8}|arquivo)\/?$/, "").replace(/\/+$/, "");
 
 // país de cada jornal, pelo nome; os que não estão aqui ficam em «Outros»
 const PAISES = [
@@ -65,7 +93,9 @@ export function lerCapas(html, estrito = true) {
     if (!nome || /^(capa|jornal|imagem|image|ver)$/i.test(nome)) nome = nomeDoSlug(href);
     const chave = slug(nomeDoSlug(href) || nome);
     if (!chave || capas.has(chave)) continue;
-    capas.set(chave, { id: chave, nome: nome || nomeDoSlug(href), img: absoluto(url), pagina: absoluto(href) });
+    // data da capa: na ligação, no texto do bloco ou no endereço da imagem
+    const data = dataEm(href) || dataEm(bloco.replace(/<[^>]+>/g, " ")) || dataEm(url);
+    capas.set(chave, { id: chave, nome: nome || nomeDoSlug(href), img: absoluto(url), pagina: absoluto(href), data });
   }
   if (!capas.size && estrito) return lerCapas(html, false);
   // 2) páginas feitas em Next.js: os dados vêm num JSON dentro da página
@@ -80,7 +110,7 @@ export function lerCapas(html, estrito = true) {
           const nome = o.name || o.title || o.nome || o.publicationName;
           if (img && typeof nome === "string" && nome.length < 60) {
             const chave = slug(nome);
-            if (chave && !capas.has(chave)) capas.set(chave, { id: chave, nome, img, pagina: o.url ? absoluto(o.url) : PAGINA, data: o.date || o.publishedAt || null });
+            if (chave && !capas.has(chave)) capas.set(chave, { id: chave, nome, img, pagina: o.url ? absoluto(o.url) : PAGINA, data: dataEm(o.date || o.publishedAt || "") || dataEm(img) });
           }
           Object.values(o).forEach(visitar);
         };
@@ -91,15 +121,69 @@ export function lerCapas(html, estrito = true) {
   return [...capas.values()].map((c) => ({ ...c, pais: paisDe(c.nome) }));
 }
 
-export function createCapas({ log = () => {} } = {}) {
+// imagem da capa na página datada de um jornal: primeiro uma imagem com a data no endereço, depois uma com o
+// nome do jornal no texto alternativo, e por fim a imagem de partilha da página (og:image)
+export function imagemDaPagina(html, nome, dia) {
+  const src = String(html || "");
+  const compacto = dia.replace(/-/g, "");
+  const cands = [];
+  for (const tag of src.match(/<(img|source)\b[^>]*>/gi) || []) {
+    const at = (n) => tag.match(new RegExp(`\\b${n}="([^"]*)"`, "i"))?.[1];
+    const url = melhorSrcset(at("srcset") || at("data-srcset")) || at("data-src") || at("data-original") || at("src");
+    if (!url || /^data:|\.svg(\?|$)|logo|icon|avatar|sprite|placeholder/i.test(url)) continue;
+    cands.push({ url: absoluto(url), alt: decode(at("alt") || at("title") || "") });
+  }
+  const og = src.match(/<meta\b[^>]*property="og:image"[^>]*content="([^"]+)"/i)?.[1] || src.match(/<meta\b[^>]*content="([^"]+)"[^>]*property="og:image"/i)?.[1];
+  const comData = cands.find((c) => c.url && (c.url.includes(compacto) || c.url.includes(dia) || c.url.includes(dia.replace(/-/g, "/"))));
+  const n = norm(nome).split(" ").filter((w) => w.length > 2);
+  const comNome = cands.find((c) => c.alt && n.length && n.every((w) => norm(c.alt).includes(w)));
+  const escolhida = comData?.url || comNome?.url || (og && !/logo|default|share/i.test(og) ? absoluto(og) : null);
+  // a página diz que data mostra? se disser outra, a imagem não é deste dia
+  const escrita = dataEm(src.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || "");
+  if (escrita && escrita !== dia) return null;
+  return escolhida;
+}
+
+export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
   let capas = [];
   try { capas = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { capas = []; }
-  const estado = { at: null, erro: null, total: capas.length, amostra: null };
-  const cache = new Map(); // id → { url, tipo, buf, at }
+  // arquivo da semana: uma entrada por jornal e por dia
+  let semana = [];
+  try { semana = JSON.parse(fs.readFileSync(FICHEIRO_SEMANA, "utf8")); } catch { semana = []; }
+  const estado = { at: null, erro: null, total: capas.length, amostra: null, semana: { at: null, dias: 0, capas: 0, pedidos: 0, falhas: 0 } };
+  const cache = new Map(); // «id|dia» → { url, tipo, buf, at }
 
   const gravar = () => {
-    try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(capas)); } catch { /* só em memória */ }
+    try {
+      fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true });
+      fs.writeFileSync(FICHEIRO, JSON.stringify(capas));
+      fs.writeFileSync(FICHEIRO_SEMANA, JSON.stringify(semana));
+    } catch { /* só em memória */ }
   };
+  const podar = () => {
+    const limite = diaMenos(diaLisboa(), DIAS - 1);
+    semana = semana.filter((c) => c.dia >= limite);
+  };
+  // guarda uma capa no arquivo; devolve true se for nova ou tiver mudado
+  const arquivar = (c, dia, via) => {
+    if (!c.img || !dia) return false;
+    const i = semana.findIndex((x) => x.id === c.id && x.dia === dia);
+    // a mesma imagem já arquivada noutro dia: a data da página datada vale mais do que a da lista
+    // (que é só o dia em que o servidor a viu); fora disso, fica a data que já estava
+    const outro = semana.find((x) => x.id === c.id && x.dia !== dia && x.img === c.img);
+    if (outro) {
+      if (!(via === "pagina" && outro.via === "lista")) return false;
+      semana = semana.filter((x) => x !== outro);
+    }
+    const novo = { id: c.id, nome: c.nome, pais: c.pais || paisDe(c.nome), img: c.img, pagina: baseJornal(c.pagina), dia, via, desde: i >= 0 && semana[i].img === c.img ? semana[i].desde : Date.now() };
+    if (i >= 0) {
+      if (semana[i].img === c.img) return false;
+      semana[i] = novo;
+    } else semana.push(novo);
+    return true;
+  };
+  // dia de uma capa da lista: o do arquivo para a mesma imagem manda (pode ter sido corrigido pela página datada)
+  const diaDe = (c) => semana.find((x) => x.id === c.id && x.img === c.img)?.dia || c.dia || c.data || (c.desde ? diaLisboa(c.desde) : null);
 
   async function ler() {
     const res = await fetch(PAGINA, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml", "Accept-Language": "pt-PT,pt;q=0.9" } });
@@ -112,37 +196,103 @@ export function createCapas({ log = () => {} } = {}) {
     }
     const agora = Date.now();
     const antes = new Map(capas.map((c) => [c.id, c]));
+    const hoje = diaLisboa(agora);
+    let mudou = false;
     capas = novas.map((c) => {
       const a = antes.get(c.id);
       // «desde»: quando esta imagem apareceu; muda quando o jornal publica a capa do dia seguinte
-      return { ...c, desde: a && a.img === c.img ? a.desde : agora, visto: agora };
+      const desde = a && a.img === c.img ? a.desde : agora;
+      if (!a || a.img !== c.img) mudou = true;
+      // dia da capa: o que a página indica; senão, o que já estava no arquivo para esta imagem; senão, o dia em que apareceu
+      const arquivada = semana.find((x) => x.id === c.id && x.img === c.img);
+      const dia = c.data || arquivada?.dia || diaLisboa(desde);
+      return { ...c, desde, visto: agora, dia };
     });
-    for (const [id, c] of cache) if (!capas.some((x) => x.id === id && x.img === c.url)) cache.delete(id);
+    for (const c of capas) if (c.dia >= diaMenos(hoje, DIAS - 1) && arquivar(c, c.dia, "lista")) mudou = true;
+    podar();
+    for (const k of cache.keys()) if (!semana.some((x) => `${x.id}|${x.dia}` === k) && !capas.some((x) => x.id === k)) cache.delete(k);
     Object.assign(estado, { at: agora, erro: null, total: capas.length, amostra: null });
     gravar();
+    if (mudou) broadcast("capas", { at: agora });
+  }
+
+  // completa a semana: para cada jornal e cada dia em falta, lê a página datada do jornal no SAPO
+  let aCompletar = false;
+  async function completarSemana() {
+    if (aCompletar || !capas.length) return;
+    aCompletar = true;
+    const hoje = diaLisboa();
+    let novas = 0;
+    try {
+      for (let n = 0; n < DIAS; n++) {
+        const dia = diaMenos(hoje, n);
+        for (const c of capas) {
+          if (semana.some((x) => x.id === c.id && x.dia === dia)) continue;
+          const base = baseJornal(c.pagina);
+          if (!base || base === baseJornal(PAGINA)) continue;
+          estado.semana.pedidos++;
+          try {
+            const r = await fetch(`${base}/${dia.replace(/-/g, "")}`, { headers: { "User-Agent": UA, Accept: "text/html", "Accept-Language": "pt-PT,pt;q=0.9" }, redirect: "follow" });
+            // a página redirecionou para outro dia (ou para a capa atual): não serve
+            if (!r.ok || (r.redirected && !r.url.includes(dia.replace(/-/g, "")))) { estado.semana.falhas++; await sleep(800); continue; }
+            const img = imagemDaPagina(await r.text(), c.nome, dia);
+            if (img && arquivar({ ...c, img }, dia, "pagina")) novas++;
+          } catch { estado.semana.falhas++; }
+          await sleep(1200); // um pedido de cada vez, com calma
+        }
+      }
+    } finally {
+      aCompletar = false;
+      podar();
+      Object.assign(estado.semana, { at: Date.now(), dias: new Set(semana.map((x) => x.dia)).size, capas: semana.length });
+      gravar();
+      if (novas) { log(`[Capas] semana: mais ${novas} capas de dias anteriores`); broadcast("capas", { at: Date.now() }); }
+    }
   }
 
   async function start() {
+    let ultimoCompletar = 0;
     for (;;) {
       try { await ler(); } catch (e) { estado.erro = e.message; log(`[Capas] ${e.message}`); }
+      // a semana completa-se no arranque e depois de seis em seis horas (e logo que muda o dia)
+      const diaAgora = diaLisboa();
+      if (Date.now() - ultimoCompletar > 6 * 3600e3 || diaLisboa(ultimoCompletar) !== diaAgora) {
+        ultimoCompletar = Date.now();
+        completarSemana().catch((e) => log(`[Capas] semana: ${e.message}`));
+      }
       const hora = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Lisbon", hour: "2-digit", hour12: false }).format(new Date()));
       await sleep((hora < 9 ? 5 : 20) * 60e3);
     }
   }
 
-  // imagem da capa, pedida pelo servidor e guardada em memória enquanto for a mesma
-  async function imagem(id) {
-    const c = capas.find((x) => x.id === id);
+  // imagem da capa, pedida pelo servidor e guardada em memória enquanto for a mesma;
+  // com «dia», é a capa desse dia no arquivo da semana
+  async function imagem(id, dia = null) {
+    const c = dia ? semana.find((x) => x.id === id && x.dia === dia) || (capas.find((x) => x.id === id && x.dia === dia)) : capas.find((x) => x.id === id);
     if (!c?.img) return null;
-    const em = cache.get(id);
+    const chave = dia ? `${id}|${dia}` : id;
+    const em = cache.get(chave);
     if (em && em.url === c.img) return em;
     const r = await fetch(c.img, { headers: { "User-Agent": UA, Referer: PAGINA, Accept: "image/avif,image/webp,image/*,*/*;q=0.8" } });
     if (!r.ok) throw new Error(`imagem respondeu ${r.status}`);
     const buf = Buffer.from(await r.arrayBuffer());
     const novo = { url: c.img, tipo: r.headers.get("content-type") || "image/jpeg", buf, at: Date.now() };
-    cache.set(id, novo);
+    cache.set(chave, novo);
+    if (cache.size > 400) cache.delete(cache.keys().next().value); // memória limitada
     return novo;
   }
 
-  return { start, all: () => capas, imagem, estado: () => estado };
+  // capas de hoje (só as que são mesmo de hoje) e arquivo da semana, do dia mais recente para o mais antigo
+  const hoje = () => { const d = diaLisboa(); return capas.filter((c) => diaDe(c) === d).map((c) => ({ ...c, dia: d })); };
+  const daSemana = () => {
+    const porChave = new Map(semana.map((c) => [`${c.id}|${c.dia}`, c]));
+    for (const c of capas) {
+      const d = diaDe(c);
+      if (d && !porChave.has(`${c.id}|${d}`) && ![...porChave.values()].some((x) => x.id === c.id && x.img === c.img)) porChave.set(`${c.id}|${d}`, { ...c, dia: d });
+    }
+    const limite = diaMenos(diaLisboa(), DIAS - 1);
+    return [...porChave.values()].filter((c) => c.dia >= limite).sort((a, b) => b.dia.localeCompare(a.dia));
+  };
+
+  return { start, all: () => capas, hoje, semana: daSemana, imagem, estado: () => ({ ...estado, arquivo: semana.length }) };
 }

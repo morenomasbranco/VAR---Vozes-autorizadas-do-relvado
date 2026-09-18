@@ -105,7 +105,7 @@
       "col": "pt",
       "soDesporto": true,
       "rapido": true,
-      "google": "site:sapo.pt desporto"
+      "google": "site:sapo.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")"
     },
     {
       "id": "observador",
@@ -114,9 +114,11 @@
       "feed": "https://observador.pt/seccao/desporto/feed/",
       "pais": "pt",
       "col": "pt",
-      "google": "site:observador.pt desporto",
+      "google": "site:observador.pt (futebol OR Benfica OR Sporting OR \"FC Porto\" OR modalidades)",
       "lang": "pt",
-      "rapido": true
+      "rapido": true,
+      "soDesporto": true,
+      "categoriasFiaveis": true
     },
     {
       "id": "rtpdesporto",
@@ -126,7 +128,8 @@
       "col": "pt",
       "lang": "pt",
       "feed": "https://www.rtp.pt/noticias/rss/desporto",
-      "rapido": true
+      "rapido": true,
+      "soDesporto": true
     },
     {
       "id": "renascenca",
@@ -134,7 +137,7 @@
       "site": "https://rr.pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:rr.pt desporto",
+      "google": "site:rr.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "lang": "pt",
       "feed": "https://rr.pt/rssfeed-ultimas",
       "soDesporto": true
@@ -148,7 +151,8 @@
       "pais": "pt",
       "col": "pt",
       "rapido": true,
-      "google": "site:noticiasaominuto.com desporto"
+      "google": "site:noticiasaominuto.com desporto",
+      "soDesporto": true
     },
     {
       "id": "publico",
@@ -157,7 +161,7 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:publico.pt desporto",
+      "google": "site:publico.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "feed": "https://feeds.feedburner.com/PublicoRSS",
       "soDesporto": true
     },
@@ -168,7 +172,7 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:jn.pt desporto",
+      "google": "site:jn.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "feed": "https://www.jn.pt/rss/desporto.xml",
       "feeds": [
         "https://www.jn.pt/rss/ultimas.xml",
@@ -183,7 +187,7 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:dn.pt desporto",
+      "google": "site:dn.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "feed": "https://www.dn.pt/rss/ultimas.xml",
       "feeds": [
         "https://www.dn.pt/feed"
@@ -207,7 +211,7 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:sicnoticias.pt desporto",
+      "google": "site:sicnoticias.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "feed": "https://sicnoticias.pt/rss",
       "feeds": [
         "https://sicnoticias.pt/rss/ultimas"
@@ -221,7 +225,7 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:cnnportugal.iol.pt desporto",
+      "google": "site:cnnportugal.iol.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "feed": "https://cnnportugal.iol.pt/rss",
       "soDesporto": true
     },
@@ -232,7 +236,7 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt",
-      "google": "site:tsf.pt desporto",
+      "google": "site:tsf.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
       "feed": "https://www.tsf.pt/rss/ultimas.xml",
       "feeds": [
         "https://www.tsf.pt/feed"
@@ -793,6 +797,106 @@
       "col": "de",
       "lang": "en",
       "google": "site:transfermarkt.com news"
+    },
+    {
+      "id": "transfermarkt-de",
+      "nome": "Transfermarkt Alemanha",
+      "site": "https://www.transfermarkt.de/",
+      "feed": "https://www.transfermarkt.de/rss/news",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:transfermarkt.de"
+    },
+    {
+      "id": "transfermarkt-at",
+      "nome": "Transfermarkt Áustria",
+      "site": "https://www.transfermarkt.at/",
+      "feed": "https://www.transfermarkt.at/rss/news",
+      "pais": "at",
+      "col": "mundo",
+      "lang": "de",
+      "google": "site:transfermarkt.at"
+    },
+    {
+      "id": "transfermarkt-ch",
+      "nome": "Transfermarkt Suíça",
+      "site": "https://www.transfermarkt.ch/",
+      "feed": "https://www.transfermarkt.ch/rss/news",
+      "pais": "ch",
+      "col": "mundo",
+      "lang": "de",
+      "google": "site:transfermarkt.ch"
+    },
+    {
+      "id": "transfermarkt-tr",
+      "nome": "Transfermarkt Turquia",
+      "site": "https://www.transfermarkt.com.tr/",
+      "feed": "https://www.transfermarkt.com.tr/rss/news",
+      "pais": "tr",
+      "col": "mundo",
+      "lang": "tr",
+      "google": "site:transfermarkt.com.tr"
+    },
+    {
+      "id": "transfermarkt-it",
+      "nome": "Transfermarkt Itália",
+      "site": "https://www.transfermarkt.it/",
+      "feed": "https://www.transfermarkt.it/rss/news",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:transfermarkt.it"
+    },
+    {
+      "id": "transfermarkt-pl",
+      "nome": "Transfermarkt Polónia",
+      "site": "https://www.transfermarkt.pl/",
+      "feed": "https://www.transfermarkt.pl/rss/news",
+      "pais": "pl",
+      "col": "mundo",
+      "lang": "pl",
+      "google": "site:transfermarkt.pl"
+    },
+    {
+      "id": "transfermarkt-uk",
+      "nome": "Transfermarkt Reino Unido",
+      "site": "https://www.transfermarkt.co.uk/",
+      "feed": "https://www.transfermarkt.co.uk/rss/news",
+      "pais": "gb-eng",
+      "col": "en",
+      "lang": "en",
+      "google": "site:transfermarkt.co.uk"
+    },
+    {
+      "id": "transfermarkt-es",
+      "nome": "Transfermarkt Espanha",
+      "site": "https://www.transfermarkt.es/",
+      "feed": "https://www.transfermarkt.es/rss/news",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:transfermarkt.es"
+    },
+    {
+      "id": "transfermarkt-nl",
+      "nome": "Transfermarkt Países Baixos",
+      "site": "https://www.transfermarkt.nl/",
+      "feed": "https://www.transfermarkt.nl/rss/news",
+      "pais": "nl",
+      "col": "mundo",
+      "lang": "nl",
+      "google": "site:transfermarkt.nl"
+    },
+    {
+      "id": "transfermarkt-pt",
+      "nome": "Transfermarkt Portugal",
+      "site": "https://www.transfermarkt.pt/",
+      "feed": "https://www.transfermarkt.pt/rss/news",
+      "pais": "pt",
+      "col": "pt",
+      "lang": "pt",
+      "google": "site:transfermarkt.pt"
     },
     {
       "id": "bundesliga",

@@ -11,7 +11,7 @@ const BATCH_WAIT = Number(process.env.GEMINI_ESPERA_MS) || 4000;
 const BATCH_MAX = 12;
 
 const SECCOES = ["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios", "portugueses"];
-const IDIOMAS = ["pt", "en", "es", "it", "fr", "de", "tr", "outro"];
+const IDIOMAS = ["pt", "en", "es", "it", "fr", "de", "tr", "nl", "pl", "outro"];
 
 const SCHEMA = {
   type: "ARRAY",
@@ -73,7 +73,9 @@ Importância, do ponto de vista de um adepto português
 
 País a que a notícia se refere (pais_tema)
 - Código do país do clube, da competição ou da seleção de que a notícia trata, em minúsculas: pt, es, fr, it, de, nl, br, us, sa, tr…
-- Inglaterra gb-eng, Escócia gb-sct, País de Gales gb-wls. Competições da UEFA: eu. Competições mundiais ou notícias sobre vários países: un.
+- Inglaterra gb-eng, Escócia gb-sct, País de Gales gb-wls.
+- Numa competição internacional (Liga dos Campeões, Liga Europa, Mundial de Clubes, Libertadores…), o país é o do clube de que a notícia trata: um jogo do Arsenal na Liga dos Campeões é gb-eng, uma notícia do Benfica na Liga Europa é pt. Numa seleção, o país da seleção.
+- eu só quando a notícia é sobre a competição europeia em geral (sorteio, regulamento, UEFA) sem um clube em destaque; un só para competições mundiais ou notícias sobre vários países ao mesmo tempo.
 - Um português num clube estrangeiro conta como o país desse clube. Um jogo entre seleções conta como a seleção de que a notícia trata.
 - Este campo decide a coluna em que a notícia aparece na página inicial (Portugal, Inglaterra, Espanha, Itália, Alemanha, França, Resto do Mundo), por isso preenche-o sempre que for possível.
 - Se não for possível saber, null.
@@ -93,7 +95,8 @@ Repetidos (igual_a)
 - Caso contrário, null.
 
 Não é notícia (relevante = false)
-- Publicidade, apostas, passatempos, pedidos para seguir ou ver um canal, grelha de programação sem notícia, posts só com link ou emojis e tudo o que não seja desporto.`;
+- Publicidade, apostas, passatempos, pedidos para seguir ou ver um canal, grelha de programação sem notícia, posts só com link ou emojis e tudo o que não seja desporto.
+- Jornais generalistas (Observador, Público, JN, DN, SIC, CNN Portugal, TSF, Renascença, SAPO, Notícias ao Minuto, RTP) também publicam política, economia, sociedade, justiça, cultura, saúde, meteorologia e crime. Tudo isso é relevante = false, mesmo que fale de uma figura ligada ao desporto, de dinheiro público para estádios ou de um clube em contexto que não é desportivo. Só é relevante quando o assunto principal é desporto: competições, atletas, treinadores, clubes enquanto equipas, transferências, arbitragem.`;
 
 // classificação de recurso, sem modelo
 // modalidade concreta de cada notícia que não é futebol de onze

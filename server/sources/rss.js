@@ -30,7 +30,7 @@ const FAST = Math.max(1, Number(process.env.RSS_RAPIDO_SEGUNDOS) || 1) * 1000;
 const FAST_STEPS = [[10 * 60e3, FAST], [60 * 60e3, 5000], [Infinity, 15000]]; // parado há X → ler a cada Y
 const GOOGLE_INTERVAL = Math.max(10, Number(process.env.GOOGLE_NEWS_SEGUNDOS) || 30) * 1000; // o Google News indexa com alguns minutos de atraso; ler mais vezes encurta só a última espera
 const GOOGLE_BASE = process.env.GOOGLE_NEWS_BASE || "https://news.google.com/rss/search";
-const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it", de: "hl=de&gl=DE&ceid=DE:de" };
+const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it", de: "hl=de&gl=DE&ceid=DE:de", tr: "hl=tr&gl=TR&ceid=TR:tr", nl: "hl=nl&gl=NL&ceid=NL:nl", pl: "hl=pl&gl=PL&ceid=PL:pl" };
 const STALE_MS = 7 * 86400e3;
 const ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", hellip: "…", mdash: "—", ndash: "–", laquo: "«", raquo: "»", eacute: "é", egrave: "è", ecirc: "ê", aacute: "á", agrave: "à", acirc: "â", atilde: "ã", iacute: "í", icirc: "î", oacute: "ó", ocirc: "ô", otilde: "õ", uacute: "ú", ccedil: "ç", ntilde: "ñ", uuml: "ü", Eacute: "É", Aacute: "Á", Atilde: "Ã", Iacute: "Í", Oacute: "Ó", Uacute: "Ú", Ccedil: "Ç", Eacute2: "É" };
 const decode = (t) => t
@@ -50,24 +50,23 @@ const SEC_DESPORTO = /[/._=-](despo[rt]\w*|sport\w*|esporte\w*|futebol|football|
 const SEC_OUTRA = /[/._=-](politica|economia|dinheiro|negocios|mundo|internacional|sociedade|pais|nacional|local|locais|cultura|cultura-e-espetaculos|tecnologia|ciencia|saude|opiniao|opinion|editorial|lifestyle|vida|famosos|media|televisao|tv-e-media|autos|motores|casas|imobiliario|educacao|justica|crime|ambiente|clima|autarquicas|eleicoes|politics|business|world|health|science|culture|entertainment|lifestyle)([/._=?-]|$)/i;
 // palavras que só aparecem em notícias de desporto (sem «liga», «mundial», «clube» ou «vitória»
 // isolados, que davam entrada a política, economia e notícias da cidade de Braga)
-const DESPORTO = new RegExp([
-  "despo[rt]\\w*", "futebol", "f[uú]tsal", "andebol", "basquete\\w*", "v[oó]lei\\w*", "h[oó]quei",
-  "atletismo", "ciclismo", "t[eé]nis", "nata[cç][aã]o", "r[aá]guebi", "rugby", "automobilismo",
-  "f[oó]rmula ?1", "motogp", "golfe", "surf", "judo", "jud[oó]ca",
+const DESPORTO = new RegExp(`(?<![\\p{L}\\p{N}])(?:${[
+  "despo[rt]\\w*", "futebol\\w*", "f[uú]tsal", "andebol", "basquete\\w*", "v[oó]lei\\w*", "h[oó]quei",
+  "atletismo", "ciclismo", "ciclista", "t[eé]nis\\b", "tenista", "nata[cç][aã]o", "nadador\\w*", "r[aá]guebi", "rugby", "automobilismo",
+  "f[oó]rmula ?1", "motogp", "golfe", "golfista", "surf\\w*", "jud[oó]ca", "jogos ol[ií]mpicos", "paral[ií]mpic\\w*", "medalha de (ouro|prata|bronze)",
   // clubes e competições, sempre em forma que não se confunde com outra coisa
-  "benfica", "sporting", "fc porto", "sl benfica", "scp", "sad",
+  "benfica", "sporting", "fc porto", "sl benfica", "scp\\b", "sad\\b",
   "vit[oó]ria de (guimar[aã]es|set[uú]bal)", "sporting de braga", "sc braga", "gil vicente", "casa pia",
   "liga (dos campe[oõ]es|europa|confer[eê]ncia|portugal|betclic|nacional|revela[cç][aã]o)",
-  "(primeira|segunda|1\\.ª|2\\.ª) liga", "ta[cç]a (de portugal|da liga)", "supertaça", "supertaca",
-  "campeonato (do mundo|da europa|nacional|de \\w+)", "mundial de \\w+", "euro 20\\d\\d",
-  "sele[cç][aã]o (nacional|portuguesa|de \\w+)", "premier league", "laliga", "la liga", "champions",
+  "(primeira|segunda|1\\.ª|2\\.ª) liga", "ta[cç]a (de portugal|da liga)", "superta[cç]a",
+  "campeonato (do mundo|da europa|nacional) de \\w+", "mundial de (futebol|clubes|atletismo|\\w+ol)", "euro 20\\d\\d",
+  "sele(c|ç|cç)[aã]o (nacional|portuguesa)", "sele(c|ç|cç)[aã]o das quinas", "premier league", "laliga", "la liga", "champions",
   // o que se passa dentro do jogo
-  "golo\\b", "golos\\b", "golea\\w*", "marcou de", "penálti", "penalti", "grande penalidade",
-  "[aá]rbitro", "arbitragem", "d[eé]rbi", "derby", "balne[aá]rio", "est[aá]dio", "relvado",
-  "treinador", "adjunto do treinador", "guarda-redes", "avan[cç]ado", "m[eé]dio ala", "defesa central",
-  "jogador d[eo] \\w+", "plantel", "convocat[oó]ria", "titular\\b", "suplentes\\b",
-  "mercado de transfer[eê]ncias", "janela de transfer[eê]ncias", "contratou o", "renovou contrato",
-].join("|"), "i");
+  "golo\\b", "golos\\b", "golea\\w*", "marcou de", "pen[aá]lti", "grande penalidade",
+  "[aá]rbitro (do jogo|da partida|assistente)", "videoárbitro", "\\bvar\\b", "d[eé]rbi", "derby", "cl[aá]ssico (entre|com|no|frente)", "balne[aá]rio", "relvado",
+  "treinador", "guarda-redes", "ponta de lan[cç]a", "m[eé]dio ala", "defesa central", "extremo (direito|esquerdo)",
+  "plantel", "convocat[oó]ria", "jornada\\b", "mercado de transfer[eê]ncias", "janela de transfer[eê]ncias", "renovou contrato",
+].join("|")})`, "iu");
 // feeds de um jornal desportivo inteiro (ex. Sky Sports, B/R): só entra futebol de onze
 const OUTRAS = /cricket|horse racing|\bracing\b|doncaster|st leger|\bnfl\b|quarterback|touchdown|college football|super league|rugby|\bnba\b|\bwnba\b|golf|p[aá]del|tennis|t[eé]nis|us open|formula ?1|f[oó]rmula ?1|\bf1\b|grand prix|motogp|cycling|ciclismo|athletics|swimming|boxing|ufc|darts|snooker|netball|nhl\b|mlb\b/i;
 const FUTEBOL = /football|soccer|futebol|premier league|laliga|la liga|serie a|bundesliga|ligue 1|champions league|europa league|transfer|\bfc\b|\bcf\b|goalkeeper|midfielder|striker|golo|golos/i;
@@ -188,12 +187,17 @@ export function startRss(sources, onPost, log, estado = new Map()) {
             }
             if (s.soDesporto) {
               const link = it.link || "";
-              const cats = (it.categories || []).join(" ");
+              // categorias do feed como «/Desporto/Futebol/», sem acentos, para as expressões de secção as reconhecerem
+              const cats = `/${(it.categories || []).map((c) => (typeof c === "string" ? c : c?._ || c?.term || "")).join("/")}/`
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-");
               const secDesporto = SEC_DESPORTO.test(link) || SEC_DESPORTO.test(cats);
               // o endereço ou a categoria dizem que é desporto: entra sem mais perguntas
               if (!secDesporto) {
                 // o endereço aponta para outra secção do jornal: não entra
                 if (SEC_OUTRA.test(link) || SEC_OUTRA.test(cats)) continue;
+                // o feed tem categorias e nenhuma é de desporto (nem um clube, nem uma modalidade): num jornal
+                // generalista com categorias fiáveis (Observador), é uma notícia de outra secção
+                if (s.categoriasFiaveis && cats.length > 2 && !DESPORTO.test(cats.replace(/[/-]/g, " "))) continue;
                 // sem secção reconhecida, exige-se vocabulário inequívoco de desporto no texto
                 if (!DESPORTO.test(`${title} ${it.contentSnippet || ""}`)) continue;
               }
@@ -254,3 +258,5 @@ export function startRss(sources, onPost, log, estado = new Map()) {
     }
   }
 }
+export const _test = { DESPORTO, SEC_DESPORTO, SEC_OUTRA };
+export const eDesporto = (t) => DESPORTO.test(String(t || ""));

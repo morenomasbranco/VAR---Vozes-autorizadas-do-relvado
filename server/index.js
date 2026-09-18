@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import * as store from "./store.js";
 import { createEnricher, fallback, RULES, NAO_FUTEBOL, MODALIDADES, modalidadeDe } from "./enrich.js";
-import { startRss } from "./sources/rss.js";
+import { startRss, eDesporto } from "./sources/rss.js";
 import { startTelegram } from "./sources/telegram.js";
 import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
@@ -20,6 +20,7 @@ import { startReddit } from "./sources/reddit.js";
 import { startTgVideos } from "./sources/tgvideos.js";
 import { startVsports } from "./sources/vsports.js";
 import { createCapas } from "./sources/capas.js";
+import { createEfemerides } from "./sources/efemerides.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
@@ -45,6 +46,15 @@ store.load();
 // (o servidor reiniciou depois de o jogo acabar): saem, para o jogo não aparecer como a decorrer
 for (const it of store.all(100000)) {
   if (it.board && it.id.endsWith(":live") && Date.now() - (it.upd || it.ts) > 20 * 60000) store.remove(it.id);
+}
+// notícias de jornais generalistas guardadas antes de o filtro de desporto ficar mais apertado
+// (política, economia, sociedade do Observador e companhia): saem no arranque
+const SO_DESPORTO = new Set(RSS.filter((s) => s.soDesporto).map((s) => s.id));
+for (const it of store.all(100000)) {
+  if (!SO_DESPORTO.has(it.src) || it.score) continue;
+  // só sai o que não tem nada de desporto: nem palavras, nem clubes, nem secções, nem modalidade
+  if (it.equipas?.length || it.cats?.length || it.mod) continue;
+  if (!eDesporto(`${it.text || ""} ${it.t?.pt || ""} ${(it.b?.pt || []).join(" ")} ${it.url || ""}`)) store.remove(it.id);
 }
 const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
 const clients = new Set();
@@ -204,8 +214,11 @@ const videos = createVideos({
   emblemas: teams,
 });
 
-// Capas dos jornais desportivos do dia (página de jornais de desporto do SAPO)
-const capas = createCapas({ log });
+// Capas dos jornais desportivos do dia e da última semana (página de jornais de desporto do SAPO)
+const capas = createCapas({ log, broadcast: (e, d) => broadcast(e, d) });
+
+// «Neste dia»: o que aconteceu no desporto no dia de hoje, há 1, 2, 3, 4, 5, 10, 15… 100 anos
+const efemerides = createEfemerides({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS });
 
 const app = express();
 const ORIGINS = (process.env.ALLOWED_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);
@@ -311,17 +324,21 @@ app.post("/api/videos/relay", express.json({ limit: "512kb" }), (req, res) => {
   ESTADO_VIDEOS.relay = { ultimo: Date.now(), recebidos: posts.length, aceites, via: req.body?.via || null };
   res.json({ ok: true, aceites });
 });
-app.get("/api/capas", (req, res) => res.json(capas.all()));
+app.get("/api/capas", (req, res) => res.json(capas.hoje())); // só as capas que são mesmo de hoje
+app.get("/api/capas/semana", (req, res) => res.json(capas.semana())); // as da última semana, com o dia de cada uma
 app.get("/api/capas/estado", (req, res) => res.json(capas.estado()));
 app.get("/api/capas/img/:id", async (req, res) => {
   try {
-    const img = await capas.imagem(String(req.params.id));
+    const dia = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dia || "")) ? String(req.query.dia) : null;
+    const img = await capas.imagem(String(req.params.id), dia);
     if (!img) return res.status(404).end();
     res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=900" }).send(img.buf);
   } catch (e) {
     res.status(502).json({ erro: e.message });
   }
 });
+app.get("/api/efemerides", (req, res) => res.json(efemerides.para(String(req.query.lang || "pt"))));
+app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
@@ -351,11 +368,24 @@ startReddit(VIDEOS_CFG.reddit || [], (p) => videos.add(p), log, ESTADO_VIDEOS.re
 startTgVideos(VIDEOS_CFG.telegram || [], (p) => videos.add(p), log, ESTADO_VIDEOS.telegram);
 startVsports((p) => videos.add(p), log, ESTADO_VIDEOS.vsports);
 capas.start();
+efemerides.start();
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear
 const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log, { upsert, remove: removeItem });
 const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
 stories.watch(espnLeagues);
-teams.load(espnLeagues);
+// quando o diretório de emblemas fica pronto, as notícias já guardadas recebem o país de cada clube
+// (serve para pôr cada notícia na coluna certa da página inicial)
+teams.load(espnLeagues).then(() => {
+  let n = 0;
+  for (const it of store.all(100000)) {
+    for (const e of it.equipas || []) {
+      if (e.pais) continue;
+      const t = teams.find(e.nome);
+      if (t?.pais) { e.pais = t.pais; n++; }
+    }
+  }
+  if (n) { store.touch(); log(`[Emblemas] país acrescentado a ${n} clubes de notícias guardadas`); }
+}).catch((e) => log(`[Emblemas] ${e.message}`));
 setTimeout(() => stories.backfill(espnLeagues), 15000); // depois de as fontes arrancarem

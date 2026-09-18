@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, X as Fechar } from "lucide-react";
+import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
 const SOURCES = []; // a lista de fontes vem do servidor (/api/sources)
@@ -13,6 +13,7 @@ const CATS = [
   { id: "destaque", pt: "Live", en: "Live", es: "Live", fr: "Live", it: "Live", de: "Live", hl: "dest" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
   { id: "capas", pt: "Capas", en: "Front pages", es: "Portadas", fr: "Unes", it: "Prime pagine", de: "Titelseiten" },
+  { id: "efemerides", pt: "Neste dia", en: "On this day", es: "Tal día como hoy", fr: "Ce jour-là", it: "Accadde oggi", de: "An diesem Tag", hl: "efem" },
   { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", es: "Benfica", fr: "Benfica", it: "Benfica", de: "Benfica", club: true },
@@ -39,11 +40,21 @@ const COLS = [
 ];
 // país de que a notícia trata → coluna; os países que não estão aqui caem no Resto do Mundo
 const PAIS_COL = { pt: "pt", gb: "en", "gb-eng": "en", es: "es", it: "it", de: "de", fr: "fr" };
+// ligas e clubes que identificam um dos seis países quando a notícia não diz de que país trata
+const PAIS_TEXTO = [
+  ["pt", /liga portugal|primeira liga|liga betclic|ta[cç]a de portugal|ta[cç]a da liga|\bfc porto\b|\bsporting cp\b|\bsporting (clube de )?portugal\b|\bbenfica\b|\bsc braga\b|vit[oó]ria (sc|de guimar[aã]es)|\bsele[cç][aã]o nacional\b/i],
+  ["en", /premier league|\befl\b|fa cup|carabao|\barsenal\b|\bchelsea\b|\bliverpool\b|manchester (city|united)|\bman (city|utd|united)\b|tottenham|newcastle united|aston villa|west ham|\beverton\b|brighton|nottingham forest|crystal palace|\bfulham\b|brentford|bournemouth|wolverhampton/i],
+  ["es", /\blaliga\b|\bla liga\b|copa del rey|real madrid|\bbarcelona\b|\bbar[cç]a\b|atl[eé]tico (de )?madrid|\bsevilla\b|\bvalencia cf\b|villarreal|real betis|real sociedad|athletic (club|bilbao)/i],
+  ["it", /\bserie a\b|coppa italia|juventus|\bac milan\b|\bmilan\b|\binter(nazionale| de mil[aã]o| milan)\b|\bnapoli\b|\bas roma\b|\blazio\b|atalanta|fiorentina|\bbologna\b|\btorino\b/i],
+  ["de", /bundesliga|dfb[- ]pokal|bayern|borussia dortmund|\bdortmund\b|leverkusen|rb leipzig|\bstuttgart\b|eintracht frankfurt|wolfsburg|m[oö]nchengladbach|union berlin|werder bremen/i],
+  ["fr", /ligue 1|coupe de france|\bpsg\b|paris saint[- ]germain|olympique (de )?marseille|\bmarseille\b|olympique lyonnais|\blyon\b|\bas monaco\b|\bmonaco\b|\blosc\b|\blille\b|stade rennais|ogc nice/i],
+];
+const paisPeloTexto = (t) => PAIS_TEXTO.find(([, re]) => re.test(t))?.[0] || null;
 const COL_N = 14; // notícias por coluna
 const MIN_IMP_COL = 2; // importância mínima para entrar nos Destaques
 
 const inSection = (it, s) => {
-  if (s === "historias" || s === "favoritos" || s === "capas") return false;
+  if (s === "historias" || s === "favoritos" || s === "capas" || s === "efemerides") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
@@ -57,7 +68,7 @@ const UI = {
   pt: {
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
-    share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco" },
+    share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
     eventsTitle: "Acontecimentos", noEvents: "Os golos, intervalos e finais dos jogos aparecem aqui assim que acontecem.",
     goals: "Golos", reds: "Expulsões", matchStats: "Estatísticas do jogo", tableLbl: "Classificação", pts: "pts", ord: (n) => `${n}.º`,
     approx: "Hora aproximada: a fonte não datou a notícia",
@@ -99,7 +110,7 @@ const UI = {
   en: {
     live: "Live", paused: "Paused", nSources: (n) => `${n} sources`, markRead: "Mark all as read",
     pause: "Pause", resume: "Resume", search: "Search news", copy: "Copy", copied: "Copied",
-    share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish" },
+    share: "Share", viewX: "View on X", trFrom: { pt: "Translated from Portuguese", en: "Translated from English", fr: "Translated from French", es: "Translated from Spanish", it: "Translated from Italian", de: "Translated from German", tr: "Translated from Turkish", nl: "Translated from Dutch", pl: "Translated from Polish" },
     eventsTitle: "Match events", noEvents: "Goals, half-times and full-times appear here as they happen.",
     goals: "Goals", reds: "Red cards", matchStats: "Match stats", tableLbl: "Table", pts: "pts", ord: (n) => `#${n}`,
     approx: "Approximate time: the source did not date this story",
@@ -141,7 +152,7 @@ const UI = {
   es: {
     live: "En directo", paused: "En pausa", nSources: (n) => `${n} fuentes`, markRead: "Marcar todo como leído",
     pause: "Pausar", resume: "Reanudar", search: "Buscar noticias", copy: "Copiar", copied: "Copiado",
-    share: "Compartir", viewX: "Ver en X", trFrom: { pt: "Traducido del portugués", en: "Traducido del inglés", fr: "Traducido del francés", es: "Traducido del español", it: "Traducido del italiano", de: "Traducido del alemán", tr: "Traducido del turco" },
+    share: "Compartir", viewX: "Ver en X", trFrom: { pt: "Traducido del portugués", en: "Traducido del inglés", fr: "Traducido del francés", es: "Traducido del español", it: "Traducido del italiano", de: "Traducido del alemán", tr: "Traducido del turco", nl: "Traducido del neerlandés", pl: "Traducido del polaco" },
     eventsTitle: "Acontecimientos", noEvents: "Los goles, descansos y finales de los partidos aparecen aquí en cuanto ocurren.",
     goals: "Goles", reds: "Expulsiones", matchStats: "Estadísticas del partido", tableLbl: "Clasificación", pts: "pts", ord: (n) => `${n}.º`,
     approx: "Hora aproximada: la fuente no fechó la noticia",
@@ -183,7 +194,7 @@ const UI = {
   fr: {
     live: "En direct", paused: "En pause", nSources: (n) => `${n} sources`, markRead: "Tout marquer comme lu",
     pause: "Mettre en pause", resume: "Reprendre", search: "Rechercher une actualité", copy: "Copier", copied: "Copié",
-    share: "Partager", viewX: "Voir sur X", trFrom: { pt: "Traduit du portugais", en: "Traduit de l'anglais", fr: "Traduit du français", es: "Traduit de l'espagnol", it: "Traduit de l'italien", de: "Traduit de l'allemand", tr: "Traduit du turc" },
+    share: "Partager", viewX: "Voir sur X", trFrom: { pt: "Traduit du portugais", en: "Traduit de l'anglais", fr: "Traduit du français", es: "Traduit de l'espagnol", it: "Traduit de l'italien", de: "Traduit de l'allemand", tr: "Traduit du turc", nl: "Traduit du néerlandais", pl: "Traduit du polonais" },
     eventsTitle: "Faits de match", noEvents: "Les buts, mi-temps et fins de match apparaissent ici dès qu'ils arrivent.",
     goals: "Buts", reds: "Cartons rouges", matchStats: "Statistiques du match", tableLbl: "Classement", pts: "pts", ord: (n) => `${n}e`,
     approx: "Heure approximative : la source n'a pas daté l'information",
@@ -225,7 +236,7 @@ const UI = {
   it: {
     live: "In diretta", paused: "In pausa", nSources: (n) => `${n} fonti`, markRead: "Segna tutto come letto",
     pause: "Metti in pausa", resume: "Riprendi", search: "Cerca notizie", copy: "Copia", copied: "Copiato",
-    share: "Condividi", viewX: "Vedi su X", trFrom: { pt: "Tradotto dal portoghese", en: "Tradotto dall'inglese", fr: "Tradotto dal francese", es: "Tradotto dallo spagnolo", it: "Tradotto dall'italiano", de: "Tradotto dal tedesco", tr: "Tradotto dal turco" },
+    share: "Condividi", viewX: "Vedi su X", trFrom: { pt: "Tradotto dal portoghese", en: "Tradotto dall'inglese", fr: "Tradotto dal francese", es: "Tradotto dallo spagnolo", it: "Tradotto dall'italiano", de: "Tradotto dal tedesco", tr: "Tradotto dal turco", nl: "Tradotto dall'olandese", pl: "Tradotto dal polacco" },
     eventsTitle: "Eventi della partita", noEvents: "Gol, primi tempi e finali compaiono qui appena accadono.",
     goals: "Gol", reds: "Espulsioni", matchStats: "Statistiche della partita", tableLbl: "Classifica", pts: "pt", ord: (n) => `${n}º`,
     approx: "Ora approssimativa: la fonte non ha datato la notizia",
@@ -267,7 +278,7 @@ const UI = {
   de: {
     live: "Live", paused: "Pausiert", nSources: (n) => `${n} Quellen`, markRead: "Alles als gelesen markieren",
     pause: "Pausieren", resume: "Fortsetzen", search: "Nachrichten suchen", copy: "Kopieren", copied: "Kopiert",
-    share: "Teilen", viewX: "Auf X ansehen", trFrom: { pt: "Aus dem Portugiesischen übersetzt", en: "Aus dem Englischen übersetzt", fr: "Aus dem Französischen übersetzt", es: "Aus dem Spanischen übersetzt", it: "Aus dem Italienischen übersetzt", de: "Aus dem Deutschen übersetzt", tr: "Aus dem Türkischen übersetzt" },
+    share: "Teilen", viewX: "Auf X ansehen", trFrom: { pt: "Aus dem Portugiesischen übersetzt", en: "Aus dem Englischen übersetzt", fr: "Aus dem Französischen übersetzt", es: "Aus dem Spanischen übersetzt", it: "Aus dem Italienischen übersetzt", de: "Aus dem Deutschen übersetzt", tr: "Aus dem Türkischen übersetzt", nl: "Aus dem Niederländischen übersetzt", pl: "Aus dem Polnischen übersetzt" },
     eventsTitle: "Spielereignisse", noEvents: "Tore, Halbzeit- und Endstände erscheinen hier, sobald sie passieren.",
     goals: "Tore", reds: "Rote Karten", matchStats: "Spielstatistik", tableLbl: "Tabelle", pts: "Pkt.", ord: (n) => `${n}.`,
     approx: "Ungefähre Zeit: die Quelle hat die Nachricht nicht datiert",
@@ -550,21 +561,32 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
 
 /* ───────── Capas ───────── */
 const CAPTXT = {
-  pt: { today: "Capas de hoje", all: "Ver todas", empty: "As capas aparecem aqui assim que o SAPO as publicar.", from: "Capas via SAPO", hoje: "Hoje", others: "Outros" },
-  en: { today: "Today's front pages", all: "See all", empty: "Front pages appear here as soon as SAPO publishes them.", from: "Front pages via SAPO", hoje: "Today", others: "Others" },
-  es: { today: "Portadas de hoy", all: "Ver todas", empty: "Las portadas aparecen aquí en cuanto SAPO las publica.", from: "Portadas vía SAPO", hoje: "Hoy", others: "Otros" },
-  fr: { today: "Unes du jour", all: "Tout voir", empty: "Les unes apparaissent ici dès que SAPO les publie.", from: "Unes via SAPO", hoje: "Aujourd'hui", others: "Autres" },
-  it: { today: "Prime pagine di oggi", all: "Vedi tutte", empty: "Le prime pagine compaiono qui appena SAPO le pubblica.", from: "Prime pagine via SAPO", hoje: "Oggi", others: "Altri" },
-  de: { today: "Titelseiten von heute", all: "Alle ansehen", empty: "Die Titelseiten erscheinen hier, sobald SAPO sie veröffentlicht.", from: "Titelseiten über SAPO", hoje: "Heute", others: "Andere" },
+  pt: { today: "Capas de hoje", all: "Ver a semana", empty: "As capas aparecem aqui assim que o SAPO as publicar.", from: "Capas dos últimos sete dias, via SAPO", hoje: "Hoje", others: "Outros", noDay: "Ainda não há capas deste dia.", nToday: "As capas de hoje aparecem aqui assim que os jornais as publicarem." },
+  en: { today: "Today's front pages", all: "See the week", empty: "Front pages appear here as soon as SAPO publishes them.", from: "Front pages from the last seven days, via SAPO", hoje: "Today", others: "Others", noDay: "No front pages for this day yet.", nToday: "Today's front pages appear here as soon as the papers publish them." },
+  es: { today: "Portadas de hoy", all: "Ver la semana", empty: "Las portadas aparecen aquí en cuanto SAPO las publica.", from: "Portadas de los últimos siete días, vía SAPO", hoje: "Hoy", others: "Otros", noDay: "Todavía no hay portadas de este día.", nToday: "Las portadas de hoy aparecen aquí en cuanto los periódicos las publican." },
+  fr: { today: "Unes du jour", all: "Voir la semaine", empty: "Les unes apparaissent ici dès que SAPO les publie.", from: "Unes des sept derniers jours, via SAPO", hoje: "Aujourd'hui", others: "Autres", noDay: "Pas encore de unes pour ce jour.", nToday: "Les unes du jour apparaissent ici dès que les journaux les publient." },
+  it: { today: "Prime pagine di oggi", all: "Vedi la settimana", empty: "Le prime pagine compaiono qui appena SAPO le pubblica.", from: "Prime pagine degli ultimi sette giorni, via SAPO", hoje: "Oggi", others: "Altri", noDay: "Ancora nessuna prima pagina per questo giorno.", nToday: "Le prime pagine di oggi compaiono qui appena i giornali le pubblicano." },
+  de: { today: "Titelseiten von heute", all: "Die Woche ansehen", empty: "Die Titelseiten erscheinen hier, sobald SAPO sie veröffentlicht.", from: "Titelseiten der letzten sieben Tage, über SAPO", hoje: "Heute", others: "Andere", noDay: "Für diesen Tag gibt es noch keine Titelseiten.", nToday: "Die heutigen Titelseiten erscheinen hier, sobald die Zeitungen sie veröffentlichen." },
 };
 const ORDEM_CAPAS = ["pt", "es", "fr", "it", "de", "gb-eng", "br", "ar"];
 const diaLisboa = (ts) => new Date(ts).toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" });
-function Capa({ c, lang, onOpen, pequena }) {
+// «Hoje», «Ontem», «qua., 16 set.» — nome curto de um dia (AAAA-MM-DD) na língua do site
+const ONTEM = { pt: "Ontem", en: "Yesterday", es: "Ayer", fr: "Hier", it: "Ieri", de: "Gestern" };
+function nomeDia(d, lang, relativo = true) {
+  const hoje = diaLisboa(Date.now());
+  if (relativo && d === hoje) return (CAPTXT[lang] || CAPTXT.pt).hoje;
+  if (relativo && d === diaLisboa(Date.now() - 86400e3)) return ONTEM[lang] || ONTEM.pt;
+  return new Date(`${d}T12:00:00Z`).toLocaleDateString(UI[lang]?.locale || "pt-PT", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+function Capa({ c, lang, onOpen, pequena, semDia }) {
   const [direta, setDireta] = useState(false);
   const [falhou, setFalhou] = useState(false);
   const tx = CAPTXT[lang] || CAPTXT.pt;
-  const src = direta ? c.img : `${API}/api/capas/img/${encodeURIComponent(c.id)}?v=${c.desde || 0}`;
-  const dia = c.desde ? (diaLisboa(c.desde) === diaLisboa(Date.now()) ? tx.hoje : new Date(c.desde).toLocaleDateString(UI[lang]?.locale, { day: "numeric", month: "short" })) : null;
+  const hoje = diaLisboa(Date.now());
+  // capas de outros dias vêm do arquivo da semana, pedido com o dia
+  const src = direta ? c.img : `${API}/api/capas/img/${encodeURIComponent(c.id)}?v=${c.desde || 0}${c.dia && c.dia !== hoje ? `&dia=${c.dia}` : ""}`;
+  const d = c.dia || (c.desde ? diaLisboa(c.desde) : null);
+  const dia = semDia || !d ? null : d === hoje ? tx.hoje : nomeDia(d, lang, false);
   return (
     <figure className={`capa ${pequena ? "mini" : ""}`}>
       <button onClick={() => onOpen(c)} aria-label={c.nome}>
@@ -1018,15 +1040,59 @@ const CSS = `
 .apito .cacts .textbtn:last-child,.apito .cacts a.textbtn{margin-left:auto}
 .apito .cempty{font-size:13px;color:var(--muted);padding:6px 0}
 @media(max-width:640px){.apito .cols{grid-auto-columns:minmax(84vw,1fr);scroll-snap-type:x mandatory}.apito .col{scroll-snap-align:start}}
-.apito .cols.comvid{grid-template-columns:minmax(300px,1.3fr)}
-@media(max-width:640px){.apito .cols.comvid{grid-template-columns:minmax(88vw,1fr)}}
-.apito .vcol .colh{border-bottom-color:var(--live)}
-.apito .vcol .colh .pulse i{display:inline-block}
-.apito .vfil{display:flex;flex-wrap:wrap;gap:4px;border:0;padding:0;background:none;margin:0 0 10px}
+/* faixa horizontal de vídeos, por cima das notícias */
+.apito .vbar{margin:0 0 18px}
+.apito .vbar .livehead{flex-wrap:wrap;gap:8px 12px}
+.apito .vbar .capash{display:inline-flex;align-items:center;gap:6px}
+.apito .vfil{display:flex;flex-wrap:wrap;gap:4px;border:0;padding:0;background:none;margin:0}
 .apito .vfil button{padding:2px 9px;font-size:12px;border:1px solid var(--line);background:var(--raise)}
 .apito .vfil button[aria-pressed="true"]{border-color:var(--ink)}
-.apito .vlist{list-style:none;margin:0;padding:0 4px 0 0;max-height:calc(100vh - 150px);overflow-y:auto;scrollbar-width:thin}
-.apito .vcard{padding:0 0 12px;margin:0 0 12px;border-bottom:1px solid var(--line);animation:evin .45s ease-out}
+.apito .seg .ct{margin-left:5px;font-size:11px;font-weight:700;opacity:.65;font-variant-numeric:tabular-nums}
+.apito .varrows{display:flex;gap:6px;margin-left:auto}
+.apito .varrows .icon-btn{width:30px;height:30px}
+.apito .vlist{list-style:none;margin:0;padding:0}
+.apito .vrow{display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:0 0 10px;scroll-snap-type:x proximity;scrollbar-width:thin;overscroll-behavior-x:contain}
+.apito .vrow::-webkit-scrollbar{height:7px}
+.apito .vrow::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .vcard{flex:0 0 300px;min-width:0;scroll-snap-align:start;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--raise);animation:evin .45s ease-out}
+.apito .vcard.cat-goal{border-top:3px solid var(--accent)}
+.apito .vcard.cat-red{border-top:3px solid #D7263D}
+.apito .vcard.cat-var{border-top:3px solid var(--hist)}
+.apito .vcard.cat-save{border-top:3px solid var(--sporting)}
+.apito .vmaisli{flex:0 0 auto;display:flex;align-items:center}
+.apito .vrow .vmais{height:100%;min-height:120px;padding:0 18px;margin:0;white-space:nowrap}
+@media(max-width:640px){.apito .vcard{flex-basis:82vw} .apito .varrows{display:none}}
+/* nome do site: volta à página inicial */
+.apito .brandbtn{display:inline-flex;align-items:center;gap:10px;text-align:left}
+.apito .brandbtn:hover .tagline{text-decoration:underline;text-underline-offset:3px}
+/* Capas: dias da semana */
+.apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
+/* Neste dia */
+.apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
+.apito .efem{max-width:900px}
+.apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
+.apito .eftipos .flag{vertical-align:-2px}
+.apito .efgrupo{margin:0 0 22px}
+.apito .efh{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:10px;margin:0 0 6px;padding:6px 0 8px;background:var(--bg);border-bottom:2px solid var(--accent);font-family:var(--display);font-size:19px;letter-spacing:-.015em}
+.apito .efh .muted{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.apito .eflist{list-style:none;margin:0;padding:0}
+.apito .efitem{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.apito .efitem p{margin:0;line-height:1.4}
+.apito .efimg{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none;background:var(--raise)}
+.apito .efico{width:44px;height:44px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--raise);font-size:20px}
+.apito .eftxt{flex:1;min-width:0}
+.apito .eftag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-right:4px}
+.apito .ef-jogo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
+.apito .efliga{grid-column:1;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.apito .efres{grid-column:1;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;font-family:var(--display);font-weight:600;font-size:16px}
+.apito .efres b{font-size:19px;font-variant-numeric:tabular-nums;min-width:44px;text-align:center}
+.apito .efteam{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apito .efteam.h{justify-content:flex-end}
+.apito .efpen{grid-column:1;font-size:12px;text-align:center}
+.apito .efgolos{grid-column:1;font-size:12px;text-align:center}
+.apito .efespn{grid-column:2;grid-row:1 / span 3}
+.apito .efmais{width:100%;justify-content:center;border:1px dashed var(--line);margin:8px 0}
 .apito .vthumb{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000}
 .apito .vthumb iframe,.apito .vthumb .vplayer{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
 .apito .vplay{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -1082,6 +1148,91 @@ const CSS = `
 }
 `;
 
+/* ───────── Neste dia ───────── */
+const EFTXT = {
+  pt: { note: "O que aconteceu no desporto neste dia, há 1, 2, 3, 4, 5, 10, 15, 20… 100 anos. A lista muda sozinha à meia-noite e é revista ao longo do dia.", ago: (n) => (n === 1 ? "Há 1 ano" : `Há ${n} anos`), tipos: { todos: "Tudo", jogo: "Jogos", acontecimento: "Acontecimentos", nascimento: "Nascimentos", morte: "Mortes" }, born: "Nasceu", died: "Morreu", loading: "A preparar a lista de hoje…", none: "Nada de desporto registado para estes aniversários.", pt: "Só Portugal", src: "Fontes: Wikipédia, Wikidata e ESPN", pens: "g.p.", more: (n) => `Mais ${n} jogos`, less: "Mostrar menos", today: (d) => `Hoje, ${d}` },
+  en: { note: "What happened in sport on this day, 1, 2, 3, 4, 5, 10, 15, 20… 100 years ago. The list changes by itself at midnight and is refreshed during the day.", ago: (n) => (n === 1 ? "1 year ago" : `${n} years ago`), tipos: { todos: "All", jogo: "Matches", acontecimento: "Events", nascimento: "Births", morte: "Deaths" }, born: "Born", died: "Died", loading: "Preparing today's list…", none: "Nothing sporting on record for these anniversaries.", pt: "Portugal only", src: "Sources: Wikipedia, Wikidata and ESPN", pens: "pens", more: (n) => `${n} more matches`, less: "Show less", today: (d) => `Today, ${d}` },
+  es: { note: "Lo que pasó en el deporte tal día como hoy, hace 1, 2, 3, 4, 5, 10, 15, 20… 100 años. La lista cambia sola a medianoche y se revisa durante el día.", ago: (n) => (n === 1 ? "Hace 1 año" : `Hace ${n} años`), tipos: { todos: "Todo", jogo: "Partidos", acontecimento: "Acontecimientos", nascimento: "Nacimientos", morte: "Fallecimientos" }, born: "Nació", died: "Murió", loading: "Preparando la lista de hoy…", none: "No hay nada de deporte registrado para estos aniversarios.", pt: "Solo Portugal", src: "Fuentes: Wikipedia, Wikidata y ESPN", pens: "pen.", more: (n) => `${n} partidos más`, less: "Mostrar menos", today: (d) => `Hoy, ${d}` },
+  fr: { note: "Ce qui s'est passé dans le sport ce jour-là, il y a 1, 2, 3, 4, 5, 10, 15, 20… 100 ans. La liste change toute seule à minuit et est revue pendant la journée.", ago: (n) => (n === 1 ? "Il y a 1 an" : `Il y a ${n} ans`), tipos: { todos: "Tout", jogo: "Matchs", acontecimento: "Événements", nascimento: "Naissances", morte: "Décès" }, born: "Naissance", died: "Décès", loading: "Préparation de la liste du jour…", none: "Rien de sportif enregistré pour ces anniversaires.", pt: "Portugal seulement", src: "Sources : Wikipédia, Wikidata et ESPN", pens: "t.a.b.", more: (n) => `${n} matchs de plus`, less: "Afficher moins", today: (d) => `Aujourd'hui, ${d}` },
+  it: { note: "Cosa è successo nello sport in questo giorno, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa. L'elenco cambia da solo a mezzanotte e viene rivisto durante il giorno.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di oggi…", none: "Niente di sportivo registrato per questi anniversari.", pt: "Solo Portogallo", src: "Fonti: Wikipedia, Wikidata ed ESPN", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", today: (d) => `Oggi, ${d}` },
+  de: { note: "Was an diesem Tag im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren. Die Liste wechselt um Mitternacht von selbst und wird im Laufe des Tages überprüft.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die heutige Liste wird vorbereitet…", none: "Für diese Jahrestage ist nichts Sportliches verzeichnet.", pt: "Nur Portugal", src: "Quellen: Wikipedia, Wikidata und ESPN", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", today: (d) => `Heute, ${d}` },
+};
+const PT_RE = /portug|benfica|sporting|porto\b|braga|vit[oó]ria|guimar|boavista|belenenses|acad[eé]mica|eus[eé]bio|figo|ronaldo|mourinho|lusitan/i;
+const JOGOS_POR_ANO = 6; // os restantes jogos de cada ano ficam atrás de «mais»
+
+function EfemeridesView({ dados, lang, theme, query }) {
+  const tx = EFTXT[lang] || EFTXT.pt;
+  const [tipo, setTipo] = useState("todos");
+  const [soPt, setSoPt] = useState(false);
+  const [abertos, setAbertos] = useState({});
+  const q = query.trim().toLowerCase();
+  const itens = (dados?.itens || []).filter((it) => (tipo === "todos" || it.tipo === tipo)
+    && (!soPt || it.portugues || it.bandeira === "pt" || PT_RE.test(`${it.nome || ""} ${it.desc || ""} ${it.texto || ""} ${it.casa || ""} ${it.fora || ""}`))
+    && (!q || `${it.nome || ""} ${it.desc || ""} ${it.texto || ""} ${it.casa || ""} ${it.fora || ""} ${it.liga || ""}`.toLowerCase().includes(q)));
+  const grupos = [];
+  for (const it of itens) {
+    const g = grupos[grupos.length - 1];
+    if (g && g.anos === it.anos) g.lista.push(it); else grupos.push({ anos: it.anos, ano: it.ano, lista: [it] });
+  }
+  const contagem = (t) => (dados?.itens || []).filter((it) => t === "todos" || it.tipo === t).length;
+  const hojeTxt = dados?.dia ? new Date(`${dados.dia}T12:00:00Z`).toLocaleDateString(UI[lang]?.locale || "pt-PT", { day: "numeric", month: "long", timeZone: "UTC" }) : "";
+  return (
+    <div className="efem">
+      <p className="efdia">{tx.today(hojeTxt)}</p>
+      <p className="xnote">{tx.note}</p>
+      <div className="seg lvls eftipos" role="group">
+        {Object.entries(tx.tipos).map(([k, n]) => (
+          <button key={k} aria-pressed={tipo === k} onClick={() => setTipo(k)}>{n}<span className="ct">{contagem(k)}</span></button>
+        ))}
+        <button aria-pressed={soPt} onClick={() => setSoPt((v) => !v)}><Flag code="pt" lang={lang} /> {tx.pt}</button>
+      </div>
+      {!dados?.pronto ? <p className="empty">{tx.loading}</p> : grupos.length === 0 ? <p className="empty">{tx.none}</p> : grupos.map((g) => {
+        const jogos = g.lista.filter((it) => it.tipo === "jogo");
+        const outros = g.lista.filter((it) => it.tipo !== "jogo");
+        const aberto = !!abertos[g.anos];
+        const jogosVis = aberto ? jogos : jogos.slice(0, JOGOS_POR_ANO);
+        return (
+          <section key={g.anos} className="efgrupo">
+            <h2 className="efh"><b>{tx.ago(g.anos)}</b><span className="muted">{g.ano}</span></h2>
+            <ul className="eflist">
+              {outros.map((it) => (
+                <li key={it.id} className={`efitem ef-${it.tipo}`}>
+                  {it.img ? <img className="efimg" src={it.img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : <span className="efico" aria-hidden="true">{it.tipo === "nascimento" ? "🎂" : it.tipo === "morte" ? "🕊" : "🏆"}</span>}
+                  <div className="eftxt">
+                    {it.nome ? (
+                      <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
+                    ) : (
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}</p>
+                    )}
+                  </div>
+                  {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}
+                </li>
+              ))}
+              {jogosVis.map((j) => (
+                <li key={j.id} className="efitem ef-jogo">
+                  <span className="efliga"><Flag code={j.bandeira} lang={lang} /> {lang === "pt" ? j.liga : j.liga_en || j.liga}{j.fase && !/^\d{4}/.test(j.fase) ? ` · ${j.fase}` : ""}</span>
+                  <div className="efres">
+                    <span className="efteam h">{j.casa}{j.logoCasa && <Crest e={{ nome: j.casa, logo: j.logoCasa }} theme={theme} size={22} />}</span>
+                    <b>{j.hs}–{j.as}</b>
+                    <span className="efteam">{j.logoFora && <Crest e={{ nome: j.fora, logo: j.logoFora }} theme={theme} size={22} />}{j.fora}</span>
+                  </div>
+                  {j.penaltis && <span className="muted efpen">({j.penaltis} {tx.pens})</span>}
+                  {j.golos?.length > 0 && <p className="efgolos muted">{j.golos.map((x) => `${x.quem || "?"} ${x.min}`).join(" · ")}</p>}
+                  <a className="textbtn efespn" href={j.link} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>
+                </li>
+              ))}
+              {jogos.length > JOGOS_POR_ANO && (
+                <li><button className="textbtn efmais" onClick={() => setAbertos((a) => ({ ...a, [g.anos]: !aberto }))}>{aberto ? tx.less : tx.more(jogos.length - JOGOS_POR_ANO)}</button></li>
+              )}
+            </ul>
+          </section>
+        );
+      })}
+      <p className="xnote">{tx.src}</p>
+    </div>
+  );
+}
+
 /* ───────── App ───────── */
 export default function App() {
   const [theme, setTheme] = useState(() =>
@@ -1111,8 +1262,12 @@ export default function App() {
   const [vFiltro, setVFiltro] = useState("all");
   const [vN, setVN] = useState(20);
   const [aTocar, setATocar] = useState(null); // vídeo que está a tocar dentro do cartão
-  const [capas, setCapas] = useState([]); // capas dos jornais desportivos do dia
+  const [capas, setCapas] = useState([]); // capas dos jornais desportivos de hoje (só as que são mesmo de hoje)
+  const [capasSemana, setCapasSemana] = useState([]); // capas dos últimos sete dias, com o dia de cada uma
+  const [capasDia, setCapasDia] = useState(null); // dia escolhido na secção Capas (null = o mais recente)
   const [capaAberta, setCapaAberta] = useState(null);
+  const [efem, setEfem] = useState(null); // «Neste dia»: o que aconteceu no desporto neste dia, há 1, 2… 100 anos
+  const vRef = useRef(null); // faixa horizontal dos vídeos
   const [modFilter, setModFilter] = useState("todas");
   const [favs, setFavs] = useState(() => {
     try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -1127,13 +1282,23 @@ export default function App() {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, []);
-  // capas dos jornais: lidas no arranque e de dez em dez minutos
+  // capas dos jornais: lidas no arranque, sempre que o servidor avisa que mudaram (evento «capas»),
+  // de cinco em cinco minutos por segurança e quando muda o dia
+  const lerCapas = () => {
+    fetch(`${API}/api/capas`).then((r) => r.json()).then((l) => Array.isArray(l) && setCapas(l)).catch(() => {});
+    fetch(`${API}/api/capas/semana`).then((r) => r.json()).then((l) => Array.isArray(l) && setCapasSemana(l)).catch(() => {});
+  };
   useEffect(() => {
-    const load = () => fetch(`${API}/api/capas`).then((r) => r.json()).then((l) => Array.isArray(l) && setCapas(l)).catch(() => {});
-    load();
-    const t = setInterval(load, 10 * 60000);
+    const t = setInterval(lerCapas, 5 * 60000); // a primeira leitura é feita pelo efeito do dia, mais abaixo
     return () => clearInterval(t);
   }, []);
+  // «Neste dia»: lido no arranque, quando muda a língua e quando o servidor avisa que a lista mudou
+  const lerEfem = (l = lang) => fetch(`${API}/api/efemerides?lang=${l}`).then((r) => r.json()).then((d) => d && setEfem(d)).catch(() => {});
+  const langRef = useRef(lang);
+  useEffect(() => { langRef.current = lang; lerEfem(lang); }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  // à meia-noite de Lisboa, as capas de hoje e o «Neste dia» mudam de dia sem ser preciso recarregar a página
+  const diaHoje = diaLisboa(now);
+  useEffect(() => { lerCapas(); lerEfem(langRef.current); setCapasDia(null); }, [diaHoje]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!capaAberta) return undefined;
     const esc = (e) => e.key === "Escape" && setCapaAberta(null);
@@ -1258,6 +1423,10 @@ export default function App() {
     };
     es.addEventListener("video", vidEntra);
     es.addEventListener("video-update", vidEntra);
+    // capas novas (o jornal publicou a de amanhã, ou chegou uma capa de outro dia da semana)
+    es.addEventListener("capas", () => lerCapas());
+    // a lista do «Neste dia» foi refeita (mudou o dia ou foi revista)
+    es.addEventListener("efemerides", () => lerEfem(langRef.current));
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
       setItems((l) => l.filter((x) => x.id !== id));
@@ -1350,10 +1519,25 @@ export default function App() {
   const srcPais = useMemo(() => Object.fromEntries(sourceList.map(([h, , p]) => [h, p])), [sourceList]);
   const srcCol = useMemo(() => Object.fromEntries(sourceList.map(([h, , , c]) => [h, c])), [sourceList]);
   // coluna dos Destaques: o país de que a notícia trata manda; sem essa indicação, vale a proveniência da fonte
+  // O «Resto do Mundo» é só para notícias de outros países, venha a notícia da fonte que vier.
+  // Ordem: o país de que a notícia trata; se for «eu»/«un» ou não houver, o país dos clubes envolvidos;
+  // depois as secções dos três grandes e os nomes de ligas e clubes no texto; por fim, a coluna da fonte,
+  // desde que não seja a do Resto do Mundo. Sem nada disto, a notícia fica fora das colunas.
   const colOf = (it) => {
     if (it.cats?.includes("portugueses")) return "portugueses";
-    if (it.paisTema) return PAIS_COL[it.paisTema] || "mundo";
-    return srcCol[it.src] || PAIS_COL[srcPais[it.src]] || "mundo";
+    const tema = it.paisTema;
+    if (tema && PAIS_COL[tema]) return PAIS_COL[tema];
+    if (tema && tema !== "eu" && tema !== "un") return "mundo"; // outro país identificado
+    const doClube = (it.equipas || []).map((e) => e.pais).filter(Boolean);
+    const grande = doClube.find((p) => PAIS_COL[p]);
+    if (grande) return PAIS_COL[grande];
+    if (it.cats?.some((c) => c === "porto" || c === "sporting" || c === "benfica")) return "pt";
+    const peloTexto = paisPeloTexto(`${T(it)} ${B(it).join(" ")} ${it.text || ""}`);
+    if (peloTexto) return peloTexto;
+    if (doClube.length) return "mundo"; // só clubes de outros países
+    const daFonte = srcCol[it.src] || PAIS_COL[srcPais[it.src]];
+    if (daFonte && daFonte !== "mundo") return daFonte;
+    return null;
   };
   const flagOf = (it) => (it.src === "resultados" ? null : it.pais || srcPais[it.src]); // país da fonte
   const topicOf = (it) => it.paisTema || (it.src === "resultados" ? leagueByKey[it.liga]?.pais || it.pais : null); // país de que a notícia trata
@@ -1391,7 +1575,8 @@ export default function App() {
       if (it.board || it.score || it.src === "resultados") continue; // resultados têm secção própria
       if ((it.imp || 0) < MIN_IMP_COL) continue;
       if (!srcOn(it) || !matches(it)) continue;
-      (out[colOf(it)] || out.mundo).push(it);
+      const col = colOf(it);
+      if (col && out[col]) out[col].push(it);
     }
     for (const k of Object.keys(out)) {
       out[k] = out[k].sort((a, b) => relevance(b, minuto * 60000) - relevance(a, minuto * 60000)).slice(0, COL_N);
@@ -1459,11 +1644,35 @@ export default function App() {
     const ia = ORDEM_CAPAS.indexOf(a.pais), ib = ORDEM_CAPAS.indexOf(b.pais);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.nome).localeCompare(String(b.nome), "pt");
   }), [capas]);
+  // secção Capas: os dias da semana que têm capas, do mais recente para o mais antigo, e as capas
+  // do dia escolhido agrupadas por país
+  const diasCapas = useMemo(() => {
+    const d = new Set(capasSemana.map((c) => c.dia).filter(Boolean));
+    if (capas.length) d.add(diaHoje);
+    return [...d].sort().reverse();
+  }, [capasSemana, capas, diaHoje]);
+  const diaCapasSel = capasDia && diasCapas.includes(capasDia) ? capasDia : diasCapas[0] || diaHoje;
   const capasPorPais = useMemo(() => {
+    const doDia = capasSemana.filter((c) => c.dia === diaCapasSel);
+    // hoje: as capas da lista atual contam mesmo que ainda não tenham chegado ao arquivo
+    const lista = diaCapasSel === diaHoje ? [...doDia, ...capas.filter((c) => !doDia.some((x) => x.id === c.id))] : doDia;
+    const ord = [...lista].sort((a, b) => {
+      const ia = ORDEM_CAPAS.indexOf(a.pais), ib = ORDEM_CAPAS.indexOf(b.pais);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.nome).localeCompare(String(b.nome), "pt");
+    });
     const g = new Map();
-    for (const c of capasOrd) { if (!g.has(c.pais)) g.set(c.pais, []); g.get(c.pais).push(c); }
+    for (const c of ord) { if (!g.has(c.pais)) g.set(c.pais, []); g.get(c.pais).push(c); }
     return [...g.entries()];
-  }, [capasOrd]);
+  }, [capasSemana, capas, diaCapasSel, diaHoje]);
+  // vídeos por categoria, para os separadores da faixa de vídeos
+  const vContagem = useMemo(() => {
+    const o = { all: videos.length };
+    for (const v of videos) { o[v.category] = (o[v.category] || 0) + 1; if (v.category === "red") o.cards = (o.cards || 0) + 1; }
+    return o;
+  }, [videos]);
+  const rolaVideos = (dir) => { const el = vRef.current; if (el) el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.85), behavior: "smooth" }); };
+  // volta à página inicial (clicar no nome do site)
+  const irInicio = () => { setSection("destaque"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const srcCounts = useMemo(() => {
     const out = {};
@@ -1662,6 +1871,7 @@ export default function App() {
         <div className="wrap">
           <div className="bar">
             <div className="brand">
+              <button className="brandbtn" onClick={irInicio} title={emLingua(CAT.destaque, lang)} aria-label={`VAR — ${ui.tagline}`}>
               <svg className="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
                 <rect x="7" y="11.5" width="50" height="33" rx="6" fill="none" stroke="currentColor" strokeWidth="4.4" />
                 <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
@@ -1672,6 +1882,7 @@ export default function App() {
               </svg>
               <b>VAR</b>
               <span className="tagline">{ui.tagline}</span>
+              </button>
               <div className="status">
                 <span className={`pulse ${live ? "" : "off"}`}><i />{paused ? ui.paused : conn !== "ok" ? ui.offline : xStatus !== "ligado" ? ui.connecting : ""}</span>
                 <span className="muted">{ui.nSources(enabled === null ? sourceList.length : enabled.size)}</span>
@@ -1730,10 +1941,15 @@ export default function App() {
               {section === "resultados" && leagues.length > 0 && (
                 <button className="textbtn" onClick={() => setShowLeagues((v) => !v)} aria-expanded={showLeagues}><ListFilter size={15} />{ui.pickLeagues}</button>
               )}
-              <button className="textbtn" onClick={togglePause}>
-                {paused ? <Play size={15} /> : <Pause size={15} />}{paused ? ui.resume : ui.pause}
-              </button>
-              <button className="textbtn" onClick={markAllRead}><CheckCheck size={15} />{ui.markRead}</button>
+              {/* pausar e marcar como lido só fazem sentido nas listas de notícias, não na página inicial */}
+              {!["destaque", "capas", "efemerides"].includes(section) && (
+                <>
+                  <button className="textbtn" onClick={togglePause}>
+                    {paused ? <Play size={15} /> : <Pause size={15} />}{paused ? ui.resume : ui.pause}
+                  </button>
+                  <button className="textbtn" onClick={markAllRead}><CheckCheck size={15} />{ui.markRead}</button>
+                </>
+              )}
             </div>
 
             {section === "resultados" && showLeagues && <div className="mobpanel leagues">{leaguesPanel}</div>}
@@ -1806,37 +2022,45 @@ export default function App() {
                     </ul>
                   ) : <p className="cempty">{ui.noLive}</p>}
                 </section>
-                {capasOrd.length > 0 && (
-                  <section className="capasbar">
-                    <div className="livehead">
-                      <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
-                      <button className="textbtn" onClick={() => setSection("capas")}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
+                <section className="vbar" aria-label={(VTXT[lang] || VTXT.pt).title}>
+                  <div className="livehead">
+                    <b className="capash"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</b>
+                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
+                      {VFILTROS.map(([k, n]) => (
+                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setVN(20); if (vRef.current) vRef.current.scrollLeft = 0; }}>
+                          {n[lang] || n.en}<span className="ct">{vContagem[k] || 0}</span>
+                        </button>
+                      ))}
                     </div>
+                    <div className="varrows">
+                      <button className="icon-btn" onClick={() => rolaVideos(-1)} aria-label="←"><ChevronLeft size={16} /></button>
+                      <button className="icon-btn" onClick={() => rolaVideos(1)} aria-label="→"><ChevronRight size={16} /></button>
+                    </div>
+                  </div>
+                  {videosVis.length === 0 ? <p className="cempty">{(VTXT[lang] || VTXT.pt).empty}</p> : (
+                    <ul className="vlist vrow" ref={vRef} aria-live="polite">
+                      {videosVis.slice(0, vN).map((v) => (
+                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} />
+                      ))}
+                      {videosVis.length > vN && <li className="vmaisli"><button className="textbtn vmais" onClick={() => setVN((n) => n + 20)}>{(VTXT[lang] || VTXT.pt).more}</button></li>}
+                    </ul>
+                  )}
+                </section>
+                <section className="capasbar">
+                  <div className="livehead">
+                    <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
+                    <button className="textbtn" onClick={() => { setSection("capas"); setCapasDia(null); }}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
+                  </div>
+                  {capasOrd.length > 0 ? (
                     <div className="capasstrip">
-                      {capasOrd.map((c) => <Capa key={c.id} c={c} lang={lang} onOpen={setCapaAberta} pequena />)}
+                      {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena semDia />)}
                     </div>
-                  </section>
-                )}
+                  ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
+                </section>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
-                <div className="cols comvid" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
-                  <section className="col vcol">
-                    <h2 className="colh"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</h2>
-                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
-                      {VFILTROS.map(([k, n]) => (
-                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setVN(20); }}>{n[lang] || n.en}</button>
-                      ))}
-                    </div>
-                    {videosVis.length === 0 ? <p className="cempty">{(VTXT[lang] || VTXT.pt).empty}</p> : (
-                      <ul className="vlist" aria-live="polite">
-                        {videosVis.slice(0, vN).map((v) => (
-                          <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} />
-                        ))}
-                        {videosVis.length > vN && <li><button className="textbtn vmais" onClick={() => setVN((n) => n + 20)}>{(VTXT[lang] || VTXT.pt).more}</button></li>}
-                      </ul>
-                    )}
-                  </section>
+                <div className="cols" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
                   {COLS.map((c) => (
                     <section key={c.id} className="col">
                       <h2 className="colh"><Flag code={c.pais} lang={lang} /> {emLingua(c, lang)}</h2>
@@ -1883,19 +2107,26 @@ export default function App() {
                 </div>
               </>
             ) : section === "capas" ? (
-              capasPorPais.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
+              diasCapas.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
                 <div className="capasview">
                   <p className="xnote">{(CAPTXT[lang] || CAPTXT.pt).from}</p>
-                  {capasPorPais.map(([pais, lista]) => (
+                  <div className="seg lvls capdias" role="group">
+                    {diasCapas.map((d) => (
+                      <button key={d} aria-pressed={diaCapasSel === d} onClick={() => setCapasDia(d)}>{nomeDia(d, lang)}</button>
+                    ))}
+                  </div>
+                  {capasPorPais.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).noDay}</p> : capasPorPais.map(([pais, lista]) => (
                     <section key={pais} className="capagrupo">
                       <h2 className="colh"><Flag code={pais} lang={lang} /> {pais === "un" ? (CAPTXT[lang] || CAPTXT.pt).others : countryName(pais, lang)}</h2>
                       <div className="capasgrid">
-                        {lista.map((c) => <Capa key={c.id} c={c} lang={lang} onOpen={setCapaAberta} />)}
+                        {lista.map((c) => <Capa key={`${c.id}|${c.dia || ""}`} c={c} lang={lang} onOpen={setCapaAberta} semDia />)}
                       </div>
                     </section>
                   ))}
                 </div>
               )
+            ) : section === "efemerides" ? (
+              <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "historias" ? (
               <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (

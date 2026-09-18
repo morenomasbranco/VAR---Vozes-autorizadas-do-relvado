@@ -22,6 +22,19 @@ const PRIORITY = [
 ];
 // palavras que não ajudam a distinguir clubes («FC Porto» e «Porto» são o mesmo)
 const STOP = new Set(["fc", "cf", "sc", "afc", "ac", "as", "ss", "sl", "cd", "ud", "rc", "rcd", "sad", "club", "clube", "de", "da", "do", "del", "futebol", "football", "calcio", "the"]);
+// país do clube, pela liga nacional da ESPN de onde veio («soccer/eng.1» → Inglaterra); as competições
+// internacionais (UEFA, FIFA, CONMEBOL…) não dizem o país e ficam de fora
+const PAIS_LIGA = { por: "pt", eng: "gb-eng", esp: "es", ita: "it", ger: "de", fra: "fr", ned: "nl", tur: "tr", ksa: "sa", bra: "br", usa: "us",
+  bel: "be", sco: "gb-sct", gre: "gr", sui: "ch", aut: "at", den: "dk", arg: "ar", mex: "mx", jpn: "jp", chn: "cn", rus: "ru", ukr: "ua",
+  nor: "no", swe: "se", pol: "pl", cze: "cz", cro: "hr", srb: "rs", rou: "ro", col: "co", chi: "cl", uru: "uy", par: "py", per: "pe", ecu: "ec",
+  aus: "au", kor: "kr", qat: "qa", uae: "ae", egy: "eg", rsa: "za", mar: "ma", irl: "ie", wal: "gb-wls", nir: "gb-nir", isr: "il", cyp: "cy" };
+const INTERNACIONAL = /^(uefa|fifa|conmebol|concacaf|caf|afc|club\.friendly|friendly|global|olympics)/;
+export const paisDaLiga = (slugPath) => {
+  const [sport, liga = ""] = String(slugPath).split("/");
+  if (sport !== "soccer" || INTERNACIONAL.test(liga)) return null;
+  const cod = liga.split(".")[0];
+  return PAIS_LIGA[cod] || (/^[a-z]{3}$/.test(cod) ? `x-${cod}` : null); // «x-…»: outro país, sem bandeira conhecida
+};
 export const teamKey = (s) => norm(s).replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w && !STOP.has(w)).join(" ");
 // nomes correntes que não coincidem com os da ESPN
 const ALIASES = {
@@ -40,13 +53,19 @@ export function createTeams({ log }) {
   const done = new Set(); // ligas já lidas
   let dirty = false;
 
-  const put = (k, t) => { if (k && !byKey.has(k)) { byKey.set(k, t); dirty = true; } };
+  const put = (k, t) => {
+    if (!k) return;
+    const cur = byKey.get(k);
+    if (!cur) { byKey.set(k, t); dirty = true; return; }
+    // a mesma equipa vista primeiro numa competição da UEFA e depois na liga do país: fica com o país
+    if (!cur.pais && t.pais && cur.logo === t.logo) { cur.pais = t.pais; dirty = true; }
+  };
 
   // o diretório é guardado em disco: no arranque seguinte fica pronto de imediato
   function loadCache() {
     try {
       const c = JSON.parse(fs.readFileSync(FILE, "utf8"));
-      if (!c.at || Date.now() - c.at > MAX_AGE) return false;
+      if (!c.at || Date.now() - c.at > MAX_AGE || c.v !== 2) return false; // v2: as equipas passaram a ter o país
       for (const [k, t] of Object.entries(c.teams || {})) byKey.set(k, t);
       (c.done || []).forEach((x) => done.add(x));
       keys = [...byKey.keys()];
@@ -58,7 +77,7 @@ export function createTeams({ log }) {
     if (!dirty) return;
     try {
       fs.mkdirSync(new URL("../data", import.meta.url), { recursive: true });
-      fs.writeFileSync(FILE, JSON.stringify({ at: Date.now(), teams: Object.fromEntries(byKey), done: [...done] }));
+      fs.writeFileSync(FILE, JSON.stringify({ v: 2, at: Date.now(), teams: Object.fromEntries(byKey), done: [...done] }));
       dirty = false;
     } catch { /* disco cheio ou sem permissão: o diretório fica só em memória */ }
   }
@@ -73,7 +92,7 @@ export function createTeams({ log }) {
       const logos = t.logos || [];
       const logo = logos.find((l) => l.rel?.includes("default"))?.href || logos[0]?.href;
       if (!logo) continue;
-      const team = { nome: t.shortDisplayName || t.displayName, logo, logoDark: logos.find((l) => l.rel?.includes("dark"))?.href };
+      const team = { nome: t.shortDisplayName || t.displayName, logo, logoDark: logos.find((l) => l.rel?.includes("dark"))?.href, pais: paisDaLiga(slugPath) || undefined };
       for (const n of [t.displayName, t.shortDisplayName, t.name, t.location && t.name ? `${t.location} ${t.name}` : null]) put(teamKey(n), team);
     }
     return list.length;
@@ -142,7 +161,7 @@ export function createTeams({ log }) {
     for (const e of list.slice(0, 4)) {
       if (!e?.nome) continue;
       const t = find(e.nome);
-      const item = { nome: t?.nome || e.nome, papel: e.papel || "envolvido", ...(t ? { logo: t.logo, logoDark: t.logoDark } : {}) };
+      const item = { nome: t?.nome || e.nome, papel: e.papel || "envolvido", ...(t ? { logo: t.logo, logoDark: t.logoDark, pais: t.pais } : {}) };
       if (!out.some((o) => o.nome === item.nome && o.papel === item.papel)) out.push(item);
     }
     return out;
