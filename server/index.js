@@ -13,7 +13,13 @@ import { createZapping } from "./sources/zapping.js";
 import { createStories } from "./stories.js";
 import { createDesdobrar, ativo as desdobraAtivo } from "./desdobra.js";
 import { createTeams } from "./teams.js";
+import { createTradutor, LINGUAS as LINGUAS_EXTRA } from "./traduz.js";
 import { slug } from "./util.js";
+import { createVideos } from "./videos.js";
+import { startReddit } from "./sources/reddit.js";
+import { startTgVideos } from "./sources/tgvideos.js";
+import { startVsports } from "./sources/vsports.js";
+import { createCapas } from "./sources/capas.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
@@ -35,6 +41,11 @@ const SOURCES = [
 const ESTADO_RSS = new Map(); // estado de cada feed: qual está em uso, se responde e há quanto tempo trouxe algo
 
 store.load();
+// cartões de jogos em direto que ficaram gravados de uma sessão anterior e que já não são atualizados há muito
+// (o servidor reiniciou depois de o jogo acabar): saem, para o jogo não aparecer como a decorrer
+for (const it of store.all(100000)) {
+  if (it.board && it.id.endsWith(":live") && Date.now() - (it.upd || it.ts) > 20 * 60000) store.remove(it.id);
+}
 const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
 const clients = new Set();
 const status = { x: "ligado", fila: 0, publicadas: 0, juntas: 0, ignoradas: 0, semTraducao: 0 };
@@ -82,6 +93,7 @@ function removeItem(id) {
 // Quando o Gemini responde (poucos segundos depois), o cartão é atualizado com título, secções e tradução;
 // se afinal não for notícia, ou já existir noutra fonte, o cartão sai e junta-se ao existente.
 const teams = createTeams({ log });
+const tradutor = createTradutor({ log }); // tradução automática para francês, alemão, italiano e espanhol
 const zapping = createZapping({ log });
 // sem Gemini, os três grandes ainda recebem o emblema a partir das secções
 const BIG3_NAMES = { porto: "FC Porto", sporting: "Sporting CP", benfica: "Benfica" };
@@ -182,6 +194,19 @@ function onPost(post) {
   enrich(post).then((ai) => { status.fila--; refine(post, ai); });
 }
 
+// Feed de vídeos (golos, resumos, defesas, VAR, expulsões): Reddit e canais públicos do Telegram
+const VIDEOS_CFG = FONTES.videos || {};
+const ESTADO_VIDEOS = { reddit: {}, telegram: {}, vsports: {} };
+const videos = createVideos({
+  broadcast: (e, d) => broadcast(e, d),
+  log,
+  jogos: () => store.all(800).filter((i) => i.score),
+  emblemas: teams,
+});
+
+// Capas dos jornais desportivos do dia (página de jornais de desporto do SAPO)
+const capas = createCapas({ log });
+
 const app = express();
 const ORIGINS = (process.env.ALLOWED_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);
 app.use((req, res, next) => {
@@ -219,6 +244,84 @@ app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/zapping", (req, res) => res.json(zapping.all())); // grelha de transmissões (canal de cada jogo)
 app.get("/api/zapping/estado", (req, res) => res.json(zapping.estado()));
 app.get("/api/stories/estado", (req, res) => res.json(stories.estado())); // diagnóstico da recuperação de pistas
+app.get("/api/tradutor/estado", (req, res) => res.json(tradutor.estado()));
+// tradução automática para as línguas extra: o site pede os títulos que está a mostrar
+// e recebe-os traduzidos; cada tradução fica guardada na notícia e segue para todos os leitores
+app.post("/api/traduzir", express.json({ limit: "64kb" }), async (req, res) => {
+  const lang = String(req.body?.lang || "");
+  if (!LINGUAS_EXTRA[lang]) return res.status(400).json({ erro: "língua não suportada" });
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 40).map(String) : [];
+  // "titulo": só o título, para o feed todo; "tudo": título e pontos, para a secção que está aberta
+  const soTitulo = req.body?.campos === "titulo";
+  const itens = {};
+  const faltam = [];
+  for (const id of ids) {
+    const it = store.get(id);
+    if (!it) continue;
+    const temTitulo = !!it.t?.[lang];
+    const temPontos = !!it.b?.[lang];
+    if (temTitulo && (soTitulo || temPontos)) { itens[id] = { t: it.t[lang], b: it.b?.[lang] }; continue; }
+    const pedido = { id: it.id };
+    if (!temTitulo) pedido.titulo = it.t?.pt || it.t?.en || it.text?.split("\n")[0] || "";
+    if (!soTitulo && !temPontos) pedido.pontos = it.b?.pt?.length ? it.b.pt : it.b?.en || [];
+    if (pedido.titulo || pedido.pontos?.length) faltam.push(pedido);
+  }
+  const feitas = faltam.length ? await tradutor.pedir(lang, faltam) : [];
+  for (const r of feitas) {
+    const it = r && store.get(r.id);
+    if (!it) continue;
+    if (r.t) it.t = { ...it.t, [lang]: r.t };
+    if (r.b?.length) it.b = { ...it.b, [lang]: r.b };
+    store.touch();
+    itens[r.id] = { t: it.t?.[lang], b: it.b?.[lang] };
+    broadcast("update", it); // quem já está a ler nesta língua recebe a tradução sem pedir nada
+  }
+  res.json({ lang, campos: soTitulo ? "titulo" : "tudo", itens, faltam: ids.length - Object.keys(itens).length });
+});
+// vídeos mais recentes, já sem repetidos; ?categoria=goal|highlight|save|red|var|skill|other e ?limit=
+app.get(["/api/videos/latest", "/videos/latest"], (req, res) => {
+  const lista = videos.latest({ limit: Number(req.query.limit) || 60, categoria: req.query.categoria || null });
+  res.json(lista.map((v) => ({
+    video_id: v.video_id, title: v.title, thumbnail: v.thumbnail, video_url: v.video_url, reddit_url: v.reddit_url,
+    category: v.category, teams: v.teams, home_team: v.home_team, away_team: v.away_team, score: v.score, scorer_side: v.scorer_side,
+    player: v.player, minute: v.minute, opponent: v.opponent, competition: v.competition, liga: v.liga, paisTema: v.paisTema, equipas: v.equipas,
+    source: v.subreddit ? `r/${v.subreddit}` : v.canal === "vsports" ? "VSPORTS" : v.canal ? `t.me/${v.canal}` : v.source, subreddit: v.subreddit, author: v.author,
+    sources: v.sources.map((x) => ({ fonte: x.fonte, subreddit: x.subreddit || null, canal: x.canal || null, url: x.reddit_url, created_time: x.created_time })),
+    embed: v.embed, created_time: v.created_time, first_seen: v.first_seen,
+  })));
+});
+app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS }));
+// Retransmissor: um computador de casa lê o Reddit (os servidores de alojamento são bloqueados pelo Reddit)
+// e envia para aqui as publicações com vídeo. Protegido pela chave VIDEOS_RELAY_TOKEN do .env.
+const CAMPOS_RELAY = ["fonte", "post_id", "crosspost_of", "subreddit", "regiao", "title", "reddit_url", "video_url", "hls", "mp4", "height", "thumbnail", "author", "flair", "created_time"];
+app.post("/api/videos/relay", express.json({ limit: "512kb" }), (req, res) => {
+  const chave = process.env.VIDEOS_RELAY_TOKEN;
+  if (!chave || req.get("authorization") !== `Bearer ${chave}`) return res.status(401).json({ erro: "chave do retransmissor em falta ou errada" });
+  const posts = Array.isArray(req.body?.posts) ? req.body.posts.slice(0, 200) : [];
+  let aceites = 0;
+  for (const p of posts) {
+    if (!p || typeof p !== "object") continue;
+    const limpo = Object.fromEntries(CAMPOS_RELAY.filter((k) => p[k] != null).map((k) => [k, typeof p[k] === "string" ? p[k].slice(0, 1000) : p[k]]));
+    if (typeof limpo.post_id !== "string" || !/^https?:\/\//.test(limpo.video_url || "")) continue;
+    limpo.fonte = "reddit";
+    limpo.created_time = Number(limpo.created_time) || Date.now();
+    videos.add(limpo);
+    aceites++;
+  }
+  ESTADO_VIDEOS.relay = { ultimo: Date.now(), recebidos: posts.length, aceites, via: req.body?.via || null };
+  res.json({ ok: true, aceites });
+});
+app.get("/api/capas", (req, res) => res.json(capas.all()));
+app.get("/api/capas/estado", (req, res) => res.json(capas.estado()));
+app.get("/api/capas/img/:id", async (req, res) => {
+  try {
+    const img = await capas.imagem(String(req.params.id));
+    if (!img) return res.status(404).end();
+    res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=900" }).send(img.buf);
+  } catch (e) {
+    res.status(502).json({ erro: e.message });
+  }
+});
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
@@ -244,10 +347,14 @@ app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
 
 startRss(RSS, onPost, log, ESTADO_RSS);
 zapping.start();
+startReddit(VIDEOS_CFG.reddit || [], (p) => videos.add(p), log, ESTADO_VIDEOS.reddit, { relayAtivo: () => Date.now() - (ESTADO_VIDEOS.relay?.ultimo || 0) < 3 * 60e3 });
+startTgVideos(VIDEOS_CFG.telegram || [], (p) => videos.add(p), log, ESTADO_VIDEOS.telegram);
+startVsports((p) => videos.add(p), log, ESTADO_VIDEOS.vsports);
+capas.start();
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear
-const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log);
+const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log, { upsert, remove: removeItem });
 const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
 stories.watch(espnLeagues);
 teams.load(espnLeagues);

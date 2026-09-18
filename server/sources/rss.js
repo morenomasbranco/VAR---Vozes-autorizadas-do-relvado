@@ -40,8 +40,34 @@ const decode = (t) => t
 // o zerozero põe marcas internas no texto: {TEAM_LINK|9|FC Porto} fica só «FC Porto»
 const unmark = (t) => t.replace(/\{[A-Z_]+\|\d+\|([^}]*)\}/g, "$1").replace(/\{[A-Z_]+\|([^}|]*)\}/g, "$1");
 const clean = (html = "") => unmark(decode(String(html).replace(/<[^>]+>/g, " "))).replace(/\s+/g, " ").trim();
-// feeds gerais (ex. destaques do SAPO): só entram as notícias de desporto
-const DESPORTO = /(despo?rt|futebol|f[uú]tsal|andebol|basquete|v[oó]lei|h[oó]quei|at[ée]t?ismo|atletismo|ciclismo|t[ée]nis|nata[cç][aã]o|r[aá]guebi|rugby|automobilismo|f[oó]rmula ?1|motogp|golfe|benfica|sporting|fc porto|braga|vit[oó]ria|liga|sele[cç][aã]o|sele[cç][aã]o|mundial|campeonato|jogador|treinador|clube|est[aá]dio|golo|golos|transfer[eê]ncia)/i;
+// Feeds gerais (ex. últimas do JN, destaques do SAPO): só entram as notícias de desporto.
+// Decide-se por esta ordem: a secção do endereço manda, depois as categorias do feed,
+// e só quando nenhuma das duas diz nada é que se olha para as palavras do título.
+
+// o endereço diz que é desporto: .../desporto/..., /sport/, /futebol/, /deportes/
+const SEC_DESPORTO = /[/._=-](despo[rt]\w*|sport\w*|esporte\w*|futebol|football|soccer|calcio|deporte\w*|fussball|olimp\w*|olympic\w*)([/._=?-]|$)/i;
+// o endereço diz que é outra secção: aí não entra, mesmo que o título fale de um clube
+const SEC_OUTRA = /[/._=-](politica|economia|dinheiro|negocios|mundo|internacional|sociedade|pais|nacional|local|locais|cultura|cultura-e-espetaculos|tecnologia|ciencia|saude|opiniao|opinion|editorial|lifestyle|vida|famosos|media|televisao|tv-e-media|autos|motores|casas|imobiliario|educacao|justica|crime|ambiente|clima|autarquicas|eleicoes|politics|business|world|health|science|culture|entertainment|lifestyle)([/._=?-]|$)/i;
+// palavras que só aparecem em notícias de desporto (sem «liga», «mundial», «clube» ou «vitória»
+// isolados, que davam entrada a política, economia e notícias da cidade de Braga)
+const DESPORTO = new RegExp([
+  "despo[rt]\\w*", "futebol", "f[uú]tsal", "andebol", "basquete\\w*", "v[oó]lei\\w*", "h[oó]quei",
+  "atletismo", "ciclismo", "t[eé]nis", "nata[cç][aã]o", "r[aá]guebi", "rugby", "automobilismo",
+  "f[oó]rmula ?1", "motogp", "golfe", "surf", "judo", "jud[oó]ca",
+  // clubes e competições, sempre em forma que não se confunde com outra coisa
+  "benfica", "sporting", "fc porto", "sl benfica", "scp", "sad",
+  "vit[oó]ria de (guimar[aã]es|set[uú]bal)", "sporting de braga", "sc braga", "gil vicente", "casa pia",
+  "liga (dos campe[oõ]es|europa|confer[eê]ncia|portugal|betclic|nacional|revela[cç][aã]o)",
+  "(primeira|segunda|1\\.ª|2\\.ª) liga", "ta[cç]a (de portugal|da liga)", "supertaça", "supertaca",
+  "campeonato (do mundo|da europa|nacional|de \\w+)", "mundial de \\w+", "euro 20\\d\\d",
+  "sele[cç][aã]o (nacional|portuguesa|de \\w+)", "premier league", "laliga", "la liga", "champions",
+  // o que se passa dentro do jogo
+  "golo\\b", "golos\\b", "golea\\w*", "marcou de", "penálti", "penalti", "grande penalidade",
+  "[aá]rbitro", "arbitragem", "d[eé]rbi", "derby", "balne[aá]rio", "est[aá]dio", "relvado",
+  "treinador", "adjunto do treinador", "guarda-redes", "avan[cç]ado", "m[eé]dio ala", "defesa central",
+  "jogador d[eo] \\w+", "plantel", "convocat[oó]ria", "titular\\b", "suplentes\\b",
+  "mercado de transfer[eê]ncias", "janela de transfer[eê]ncias", "contratou o", "renovou contrato",
+].join("|"), "i");
 // feeds de um jornal desportivo inteiro (ex. Sky Sports, B/R): só entra futebol de onze
 const OUTRAS = /cricket|horse racing|\bracing\b|doncaster|st leger|\bnfl\b|quarterback|touchdown|college football|super league|rugby|\bnba\b|\bwnba\b|golf|p[aá]del|tennis|t[eé]nis|us open|formula ?1|f[oó]rmula ?1|\bf1\b|grand prix|motogp|cycling|ciclismo|athletics|swimming|boxing|ufc|darts|snooker|netball|nhl\b|mlb\b/i;
 const FUTEBOL = /football|soccer|futebol|premier league|laliga|la liga|serie a|bundesliga|ligue 1|champions league|europa league|transfer|\bfc\b|\bcf\b|goalkeeper|midfielder|striker|golo|golos/i;
@@ -161,8 +187,16 @@ export function startRss(sources, onPost, log, estado = new Map()) {
               if (/\/(cricket|rugby|racing|golf|tennis|nfl|nba|f1|boxing|darts|netball|athletics)\//i.test(it.link || "")) continue;
             }
             if (s.soDesporto) {
-              const alvo = `${(it.categories || []).join(" ")} ${it.link || ""} ${title} ${it.contentSnippet || ""}`;
-              if (!DESPORTO.test(alvo)) continue;
+              const link = it.link || "";
+              const cats = (it.categories || []).join(" ");
+              const secDesporto = SEC_DESPORTO.test(link) || SEC_DESPORTO.test(cats);
+              // o endereço ou a categoria dizem que é desporto: entra sem mais perguntas
+              if (!secDesporto) {
+                // o endereço aponta para outra secção do jornal: não entra
+                if (SEC_OUTRA.test(link) || SEC_OUTRA.test(cats)) continue;
+                // sem secção reconhecida, exige-se vocabulário inequívoco de desporto no texto
+                if (!DESPORTO.test(`${title} ${it.contentSnippet || ""}`)) continue;
+              }
             }
             const body = google ? "" : clean(it.contentSnippet || it.content || it.summary || "").replace(/\s*submitted by\s+\/u\/\S+[\s\S]*$/i, "");
             onPost({

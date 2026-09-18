@@ -68,6 +68,32 @@ Com três fontes diferentes, a importância da notícia sobe um nível, o que a 
 
 A deteção de repetidos é feita de duas maneiras: por comparação dos títulos (mesmo endereço, título igual, ou quase todas as palavras em comum, numa janela de 18 horas) e pelo Gemini, que recebe a lista das notícias recentes e diz se o post novo é a mesma coisa — é isto que junta a notícia dada em italiano pela Gazzetta à mesma notícia dada em português pelo Record. Quantas notícias recentes o Gemini compara define-se em `REPETIDOS_JANELA` (80 por omissão): mais notícias detetam mais confirmações, mas cada pedido fica maior e o plano gratuito esgota-se mais depressa.
 
+## Vídeos
+
+A primeira coluna da página inicial é um feed automático de vídeos de futebol: golos, resumos, defesas, VAR, expulsões e fintas. As fontes estão no `fontes.json`, na secção `videos`:
+
+- **VSPORTS** (vsports.pt), o site oficial de vídeos da Liga Portugal: cada golo da Liga Portugal Betclic, da Liga 2 e das taças, publicado poucos minutos depois, e os resumos de cada jogo. Lido a cada 20 segundos (`VSPORTS_SEGUNDOS`). É a fonte principal nos jogos portugueses e não depende do Reddit.
+- **Reddit** (r/Evangelista_TV e r/soccer), lidos num só pedido. Sem conta, o servidor lê o JSON público a cada 8 segundos e, se o Reddit o recusar, passa para o RSS. Com uma app gratuita do Reddit (`REDDIT_CLIENT_ID` e `REDDIT_CLIENT_SECRET` no `.env`) usa a API oficial e lê a cada 3 segundos.
+- **Telegram** (t.me/twclipshdeuropa e t.me/footballlivegoals), lidos pela página pública de cada canal, sem conta, a cada 10 segundos. O Telegram não bloqueia servidores, por isso é a fonte mais fiável em tempo real.
+
+**Tempo real no Reddit.** Desde maio de 2026, o Reddit recusa o JSON público a servidores de alojamento (como o Northflank) e deixa o RSS a cerca de um pedido por minuto, quando o deixa; a API oficial passou a exigir aprovação prévia. Por isso há um retransmissor, que corre num computador de casa, onde o Reddit responde:
+
+```
+VAR_URL=https://o-teu-site VIDEOS_RELAY_TOKEN=uma-chave-tua npm run reddit-relay
+```
+
+No servidor põe-se a mesma `VIDEOS_RELAY_TOKEN`. O retransmissor lê o JSON a cada 5 segundos (se o Reddit também o recusar em casa, passa ao RSS, a cada minuto) e envia os vídeos para `/api/videos/relay`. Enquanto o retransmissor estiver a enviar, o servidor deixa de pedir ao Reddit. Sem ele, o servidor tenta o JSON e depois o RSS sozinho, com o atraso que o Reddit impuser. Os feeds de notícias do Reddit no `fontes.json` passaram a ser lidos de 4 em 4 minutos, para não gastarem o limite que o feed de vídeos precisa.
+
+Só entram publicações com vídeo. Cada vídeo é classificado pelo título e pela flair (Golo, Highlight, Defesa, Expulsão, VAR, Finta, Outros) e o título é lido para tirar as equipas, o resultado, o jogador e o minuto. A competição vem do jogo em direto com as mesmas equipas.
+
+O mesmo vídeo publicado em várias fontes fica num só cartão. A comparação é feita por esta ordem: endereço do vídeo, publicação original de que a outra é partilha, miniatura (imagem exatamente igual) e lance (mesmas equipas, mesmo resultado e mesmo minuto ou jogador). Nos jogos portugueses a fonte principal é o r/Evangelista_TV; nos restantes, quem publicou primeiro.
+
+Os vídeos do YouTube, Streamable, Reddit e Telegram tocam dentro do cartão; os outros abrem no site de origem. A API está em `/videos/latest` (e `/api/videos/latest`, com `?categoria=` e `?limit=`), e o estado das fontes em `/api/videos/estado`. Os vídeos ficam guardados em `data/videos.json`.
+
+## Capas
+
+O separador Capas, e a faixa «Capas de hoje» na página inicial, mostram as capas dos jornais desportivos do dia, agrupadas por país, a partir da página de jornais de desporto do SAPO. A página é relida de 20 em 20 minutos (de 5 em 5 entre a meia-noite e as 9h de Lisboa). As imagens passam pelo servidor (`/api/capas/img/<id>`), para aparecerem mesmo que o SAPO recuse imagens pedidas de outros sites. Se a secção ficar vazia, o `/api/capas/estado` mostra o erro e um excerto da página que o SAPO devolveu.
+
 ## Página inicial
 
 No topo ficam os jogos a decorrer, com resultado ao minuto, emblemas e o canal que os está a transmitir; quando não há jogos em curso, aparecem as próximas transmissões na televisão portuguesa. Abaixo, os Destaques são oito colunas, por origem da notícia: Portugal, Inglaterra, Espanha, Itália, Alemanha, França, Resto do Mundo e Portugueses pelo mundo. A coluna de cada notícia vem do país de que ela trata (`pais_tema`, dado pelo Gemini); quando esse país não é identificado, vale a coluna da fonte (`col` no `fontes.json`). As notícias de portugueses fora de Portugal vão sempre para a última coluna.

@@ -101,7 +101,7 @@ async function list(path, maxPages) {
 export const fetchDay = (date) => list(`/fixtures/date/${date}`, 20);
 export const fetchLive = () => list("/fixtures/live", 5);
 
-export function startResults(leagues, publish, log) {
+export function startResults(leagues, publish, log, { upsert = () => {}, remove = () => {} } = {}) {
   if (!process.env.GOAL_API_KEY) { log("[Resultados] sem GOAL_API_KEY; as ligas sem ESPN não têm resultados em direto"); return { add() {} }; }
   leagues = leagues.map((l) => ({ ...l, key: slug(l.nome) }));
   const state = new Map(); // estado de cada jogo acompanhado
@@ -148,6 +148,15 @@ export function startResults(leagues, publish, log) {
       score: { comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: m.minute, ft: kind === "final" },
     });
   };
+
+  // cartão em direto de cada jogo, atualizado a cada leitura (minuto, resultado e último acontecimento)
+  const liveCard = (m, lg, ult) => upsert({
+    id: `r:${m.id}:live`, src: "resultados", name: "Resultados em direto", orig: "multi", board: true,
+    ts: Date.now(), cats: cats(m, lg), liga: lg.key, paisTema: lg.bandeira, mod: lg.mod,
+    t: { pt: `Em direto: ${m.home} ${m.hs}–${m.as} ${m.away}`, en: `Live: ${m.home} ${m.hs}–${m.as} ${m.away}` },
+    b: { pt: [lg.nome], en: [lg.nome_en || lg.nome] }, imp: 1,
+    score: { comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: m.ht ? null : m.minute, ht: m.ht, ft: false, ult: ult || null },
+  });
 
   // janelas de jogo do dia: do apito inicial até ~2 h depois, juntando as que se sobrepõem
   let windows = null;
@@ -224,7 +233,8 @@ export function startResults(leagues, publish, log) {
         if (!m.ft) live = true;
         const prev = state.get(m.id);
         if (!prev) {
-          state.set(m.id, { m, lg, missing: 0 });
+          state.set(m.id, { m, lg, missing: 0, ult: null });
+          if (m.ft) remove(`r:${m.id}:live`); else liveCard(m, lg, null);
           if (first) { if (!m.ft) emit("direto", m, lg); } // no arranque, mostra o estado atual sem inventar golos
           else if (m.ft) emit("final", m, lg);
           else if (m.hs + m.as === 0) emit("inicio", m, lg);
@@ -232,17 +242,20 @@ export function startResults(leagues, publish, log) {
           continue;
         }
         const p = prev.m;
-        if (m.hs > p.hs) emit("golo", m, lg, { side: "h" });
-        if (m.as > p.as) emit("golo", m, lg, { side: "a" });
-        if (m.hs < p.hs || m.as < p.as) emit("anulado", m, lg);
+        let ult = prev.ult;
+        const golo = (side) => ({ tipo: "golo", label: m.minute || "", who: m.lastScorer || "", home: side === "h", equipa: side === "h" ? m.home : m.away });
+        if (m.hs > p.hs) { emit("golo", m, lg, { side: "h" }); ult = golo("h"); }
+        if (m.as > p.as) { emit("golo", m, lg, { side: "a" }); ult = golo("a"); }
+        if (m.hs < p.hs || m.as < p.as) { emit("anulado", m, lg); ult = { tipo: "anulado", label: m.minute || "", who: "", equipa: m.hs < p.hs ? m.home : m.away }; }
         if (m.ht && !p.ht) emit("intervalo", m, lg);
-        if (m.ft && !p.ft) emit("final", m, lg);
-        state.set(m.id, { m, lg, missing: 0 });
+        if (m.ft && !p.ft) { emit("final", m, lg); remove(`r:${m.id}:live`); }
+        else if (!m.ft) liveCard(m, lg, ult);
+        state.set(m.id, { m, lg, missing: 0, ult });
       }
       // um jogo que sai da lista de jogos em direto duas vezes seguidas terminou
       for (const [id, st] of state) {
         if (now.has(id)) continue;
-        if (++st.missing >= 2) { if (!st.m.ft) emit("final", { ...st.m, ft: true }, st.lg); state.delete(id); }
+        if (++st.missing >= 2) { if (!st.m.ft) emit("final", { ...st.m, ft: true }, st.lg); remove(`r:${id}:live`); state.delete(id); }
       }
       first = false;
     } catch (e) {

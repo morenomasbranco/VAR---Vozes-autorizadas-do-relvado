@@ -12,6 +12,7 @@ const INTERVALO = Math.max(10, Number(process.env.ZAPPING_SEGUNDOS) || 60) * 100
 const VALIDADE = 6 * 3600e3; // tempo que uma transmissão fica guardada depois da hora do jogo
 const JANELA = 5 * 3600e3; // diferença máxima entre a hora do jogo e a hora do cartão
 const UA = "Mozilla/5.0 (compatible; VAR-feed/1.0; agregador de notícias de desporto)";
+const UA_BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const parser = new Parser({ timeout: 10000 });
 
 const FICHEIRO = new URL("../../data/zapping.json", import.meta.url);
@@ -125,7 +126,12 @@ export function createZapping({ log = () => {} } = {}) {
   };
 
   async function ler() {
-    const res = await fetch(FEED, { headers: { "User-Agent": UA, Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8" } });
+    const accept = "application/rss+xml, application/xml;q=0.9, */*;q=0.8";
+    let res = await fetch(FEED, { headers: { "User-Agent": UA, Accept: accept } });
+    // o zerozero recusa por vezes pedidos de programas (403/429): repete uma vez como um browser normal
+    if ([401, 403, 429].includes(res.status)) {
+      res = await fetch(FEED, { headers: { "User-Agent": UA_BROWSER, Accept: accept, "Accept-Language": "pt-PT,pt;q=0.9", Referer: "https://www.zerozero.pt/" } });
+    }
     if (!res.ok) throw new Error(`o feed respondeu ${res.status}`);
     const parsed = await parser.parseString(await res.text());
     for (const it of parsed.items || []) guardar(parseLinha(it.title));

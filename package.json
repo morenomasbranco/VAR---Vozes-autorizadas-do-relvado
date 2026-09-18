@@ -9,6 +9,7 @@
     "telegram-login": "node scripts/telegram-login.js",
     "verificar-fontes": "node scripts/verificar-fontes.js",
     "ligas": "node scripts/ligas.js",
+    "reddit-relay": "node scripts/reddit-relay.js",
     "arrumar-fontes": "node scripts/verificar-fontes.js --corrigir"
   },
   "engines": {

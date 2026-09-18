@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight } from "lucide-react";
+import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
 const SOURCES = []; // a lista de fontes vem do servidor (/api/sources)
@@ -10,32 +10,32 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 
 /* ───────── Secções ───────── */
 const CATS = [
-  { id: "destaque", pt: "Destaques", en: "Top stories", hl: "dest" },
-  { id: "live", pt: "Live", en: "Live", hl: "live" },
-  { id: "resultados", pt: "Resultados", en: "Results" },
-  { id: "porto", pt: "Porto", en: "Porto", club: true },
-  { id: "sporting", pt: "Sporting", en: "Sporting", club: true },
-  { id: "benfica", pt: "Benfica", en: "Benfica", club: true },
-  { id: "mercado", pt: "Mercado", en: "Transfers" },
-  { id: "modalidades", pt: "Modalidades", en: "Other sports" },
-  { id: "estatisticas", pt: "Estatísticas", en: "Stats" },
-  { id: "premios", pt: "Prémios", en: "Awards" },
-  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad" },
-  { id: "historias", pt: "Possíveis histórias", en: "Story leads", hl: "hist" },
-  { id: "favoritos", pt: "Favoritos", en: "Saved", hl: "fav" },
+  { id: "destaque", pt: "Live", en: "Live", es: "Live", fr: "Live", it: "Live", de: "Live", hl: "dest" },
+  { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
+  { id: "capas", pt: "Capas", en: "Front pages", es: "Portadas", fr: "Unes", it: "Prime pagine", de: "Titelseiten" },
+  { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
+  { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
+  { id: "benfica", pt: "Benfica", en: "Benfica", es: "Benfica", fr: "Benfica", it: "Benfica", de: "Benfica", club: true },
+  { id: "mercado", pt: "Mercado", en: "Transfers", es: "Mercado", fr: "Transferts", it: "Mercato", de: "Transfers" },
+  { id: "modalidades", pt: "Modalidades", en: "Other sports", es: "Otros deportes", fr: "Autres sports", it: "Altri sport", de: "Andere Sportarten" },
+  { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
+  { id: "premios", pt: "Prémios", en: "Awards", es: "Premios", fr: "Trophées", it: "Premi", de: "Auszeichnungen" },
+  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
+  { id: "historias", pt: "Possíveis histórias", en: "Story leads", es: "Posibles historias", fr: "Pistes d'articles", it: "Possibili storie", de: "Mögliche Geschichten", hl: "hist" },
+  { id: "favoritos", pt: "Favoritos", en: "Saved", es: "Guardadas", fr: "Enregistrées", it: "Salvate", de: "Gespeichert", hl: "fav" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
 /* ───────── Colunas dos Destaques (proveniência da notícia) ───────── */
 const COLS = [
-  { id: "pt", pt: "Portugal", en: "Portugal", pais: "pt" },
-  { id: "en", pt: "Inglaterra", en: "England", pais: "gb-eng" },
-  { id: "es", pt: "Espanha", en: "Spain", pais: "es" },
-  { id: "it", pt: "Itália", en: "Italy", pais: "it" },
-  { id: "de", pt: "Alemanha", en: "Germany", pais: "de" },
-  { id: "fr", pt: "França", en: "France", pais: "fr" },
-  { id: "mundo", pt: "Resto do Mundo", en: "Rest of the world", pais: "un" },
-  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", pais: "pt" },
+  { id: "pt", pt: "Portugal", en: "Portugal", es: "Portugal", fr: "Portugal", it: "Portogallo", de: "Portugal", pais: "pt" },
+  { id: "en", pt: "Inglaterra", en: "England", es: "Inglaterra", fr: "Angleterre", it: "Inghilterra", de: "England", pais: "gb-eng" },
+  { id: "es", pt: "Espanha", en: "Spain", es: "España", fr: "Espagne", it: "Spagna", de: "Spanien", pais: "es" },
+  { id: "it", pt: "Itália", en: "Italy", es: "Italia", fr: "Italie", it: "Italia", de: "Italien", pais: "it" },
+  { id: "de", pt: "Alemanha", en: "Germany", es: "Alemania", fr: "Allemagne", it: "Germania", de: "Deutschland", pais: "de" },
+  { id: "fr", pt: "França", en: "France", es: "Francia", fr: "France", it: "Francia", de: "Frankreich", pais: "fr" },
+  { id: "mundo", pt: "Resto do Mundo", en: "Rest of the world", es: "Resto del mundo", fr: "Reste du monde", it: "Resto del mondo", de: "Rest der Welt", pais: "un" },
+  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland", pais: "pt" },
 ];
 // país de que a notícia trata → coluna; os países que não estão aqui caem no Resto do Mundo
 const PAIS_COL = { pt: "pt", gb: "en", "gb-eng": "en", es: "es", it: "it", de: "de", fr: "fr" };
@@ -43,7 +43,7 @@ const COL_N = 14; // notícias por coluna
 const MIN_IMP_COL = 2; // importância mínima para entrar nos Destaques
 
 const inSection = (it, s) => {
-  if (s === "historias" || s === "favoritos") return false;
+  if (s === "historias" || s === "favoritos" || s === "capas") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
@@ -138,6 +138,174 @@ const UI = {
     origins: { todas: "All", noticia: "From the news", dados: "From matches" }, originLabel: "Origin",
     consTypes: { desportiva: "Sporting", contratual: "Contractual", financeira: "Financial", competitiva: "Competitive", institucional: "Institutional", disciplinar: "Disciplinary" },
   },
+  es: {
+    live: "En directo", paused: "En pausa", nSources: (n) => `${n} fuentes`, markRead: "Marcar todo como leído",
+    pause: "Pausar", resume: "Reanudar", search: "Buscar noticias", copy: "Copiar", copied: "Copiado",
+    share: "Compartir", viewX: "Ver en X", trFrom: { pt: "Traducido del portugués", en: "Traducido del inglés", fr: "Traducido del francés", es: "Traducido del español", it: "Traducido del italiano", de: "Traducido del alemán", tr: "Traducido del turco" },
+    eventsTitle: "Acontecimientos", noEvents: "Los goles, descansos y finales de los partidos aparecen aquí en cuanto ocurren.",
+    goals: "Goles", reds: "Expulsiones", matchStats: "Estadísticas del partido", tableLbl: "Clasificación", pts: "pts", ord: (n) => `${n}.º`,
+    approx: "Hora aproximada: la fuente no fechó la noticia",
+    settings: "Ajustes", settingsHint: "Elige las fuentes y las ligas que quieres ver.",
+    allSports: "Todos los deportes", sourcesLbl: "Fuentes", confirmed: (n) => `Confirmada por ${n} fuentes`,
+    about: "Sobre", aboutTitle: (c) => `Noticia sobre: ${c}`, fromTitle: (c) => `Origen: ${c}`,
+    pending: (n) => `Mostrar ${n} ${n === 1 ? "noticia nueva" : "noticias nuevas"}`,
+    empty: "No hay noticias en esta sección para las fuentes activas. Activa más fuentes o elige otra sección.",
+    connecting: "Conectando con X", offline: "Sin conexión", offlineNote: "El servidor no responde. Intentando conectar de nuevo…",
+    waiting: "Esperando las primeras noticias. Aparecen aquí en cuanto una fuente publique.",
+    trOther: "Traducido", moreSources: (n) => `+${n} ${n === 1 ? "fuente" : "fuentes"}`,
+    all: "Todas", none: "Ninguna", sources: "Fuentes", hot: "Destacada", fresh: "Nueva", ft: "Final",
+    toLight: "Cambiar a modo claro", toDark: "Cambiar a modo oscuro", locale: "es-ES",
+    tagline: "Verified Action Reports",
+    docTitle: "VAR — Verified Action Reports", langLabel: "Idioma", sectionsLabel: "Secciones", resultsSource: "Resultados en directo",
+    save: "Guardar", saved: "Guardado", noFavs: "Todavía no has guardado noticias. Pulsa «Guardar» en una noticia para encontrarla aquí.",
+    now: "ahora", noResults: "Todavía no hay resultados de las fuentes activas.",
+    noPost: "Esta noticia no tiene enlace a la fuente.", viewSrc: "Ver en la fuente",
+    pickLeagues: "Elegir ligas", leaguesTitle: "Ligas con resultados en directo", processing: "Traduciendo…",
+    levels: { alto: "Interés alto", medio: "Interés medio", baixo: "Interés bajo" }, allLevels: "Todos",
+    tones: { positiva: "Positiva", negativa: "Negativa", neutra: "Neutra" }, allTones: "Todas", toneLabel: "Tono", levelLabel: "Nivel",
+    angle: "Enfoque", data: "Datos", check: "Por verificar", seeNews: "Ver la noticia",
+    noStories: "Todavía no hay pistas. Aparecen cuando los resultados, las clasificaciones o las noticias muestran algo fuera de lo normal.",
+    storiesNote: "Pistas para noticias, encontradas en los resultados y en las noticias que van entrando. El nivel de interés viene de los criterios de noticiabilidad que cumple cada pista. Las posibilidades son hipótesis escritas a partir de lo que dijeron las fuentes, nunca hechos nuevos.",
+    updated: (t, src) => `Actualizado ${t} por ${src}`, agoWord: (t) => `hace ${t}`,
+    colsNote: "Las noticias más relevantes de cada origen, en tiempo real. La columna viene del país del que trata la noticia; cuando no se sabe, viene del país de la fuente.",
+    colEmpty: "Todavía no hay noticias en esta columna.", colAll: "Ver todo de este origen",
+    liveNow: "Partidos en curso", allResults: "Ver todos los resultados", onTv: "Emisión", nextTv: "A continuación en televisión",
+    noLive: "No hay partidos en curso en las ligas elegidas.", countryLabel: "País de la fuente",
+    srcState: (d, g, e) => `${d} con feed propio · ${g} por Google News${e ? ` · ${e} sin responder` : ""}`,
+    onlyProblems: "Solo las que tienen problemas", lastNews: "última noticia", noNews: "todavía no ha traído noticias", srcFail: "no responde",
+    gaveFirst: "Lo dio primero", onlyHere: "Solo en esta fuente", confirms: "Confirmaciones",
+    justConfirmed: "acaba de confirmar", confirmedAt: (t) => `confirmó ${t}`, nConfirms: (n) => `${n} ${n === 1 ? "confirmación" : "confirmaciones"}`,
+    thread: "El hilo de la historia", whatNext: "Lo que puede pasar", consequences: "Consecuencias", ifWord: "si",
+    possNote: "Hipótesis, no hechos: cada una dice de qué depende.",
+    origins: { todas: "Todas", noticia: "De las noticias", dados: "De los partidos" }, originLabel: "Origen",
+    consTypes: { desportiva: "Deportiva", contratual: "Contractual", financeira: "Financiera", competitiva: "Competitiva", institucional: "Institucional", disciplinar: "Disciplinaria" },
+  },
+  fr: {
+    live: "En direct", paused: "En pause", nSources: (n) => `${n} sources`, markRead: "Tout marquer comme lu",
+    pause: "Mettre en pause", resume: "Reprendre", search: "Rechercher une actualité", copy: "Copier", copied: "Copié",
+    share: "Partager", viewX: "Voir sur X", trFrom: { pt: "Traduit du portugais", en: "Traduit de l'anglais", fr: "Traduit du français", es: "Traduit de l'espagnol", it: "Traduit de l'italien", de: "Traduit de l'allemand", tr: "Traduit du turc" },
+    eventsTitle: "Faits de match", noEvents: "Les buts, mi-temps et fins de match apparaissent ici dès qu'ils arrivent.",
+    goals: "Buts", reds: "Cartons rouges", matchStats: "Statistiques du match", tableLbl: "Classement", pts: "pts", ord: (n) => `${n}e`,
+    approx: "Heure approximative : la source n'a pas daté l'information",
+    settings: "Réglages", settingsHint: "Choisis les sources et les compétitions que tu veux voir.",
+    allSports: "Tous les sports", sourcesLbl: "Sources", confirmed: (n) => `Confirmé par ${n} sources`,
+    about: "Sujet", aboutTitle: (c) => `Actualité sur : ${c}`, fromTitle: (c) => `Origine : ${c}`,
+    pending: (n) => `Afficher ${n} ${n === 1 ? "nouvelle actualité" : "nouvelles actualités"}`,
+    empty: "Aucune actualité dans cette rubrique pour les sources actives. Active d'autres sources ou change de rubrique.",
+    connecting: "Connexion à X", offline: "Hors ligne", offlineNote: "Le serveur ne répond pas. Nouvelle tentative de connexion…",
+    waiting: "En attente des premières actualités. Elles apparaissent dès qu'une source publie.",
+    trOther: "Traduit", moreSources: (n) => `+${n} ${n === 1 ? "source" : "sources"}`,
+    all: "Toutes", none: "Aucune", sources: "Sources", hot: "À la une", fresh: "Nouveau", ft: "Terminé",
+    toLight: "Passer en mode clair", toDark: "Passer en mode sombre", locale: "fr-FR",
+    tagline: "Verified Action Reports",
+    docTitle: "VAR — Verified Action Reports", langLabel: "Langue", sectionsLabel: "Rubriques", resultsSource: "Résultats en direct",
+    save: "Enregistrer", saved: "Enregistré", noFavs: "Aucune actualité enregistrée. Appuie sur « Enregistrer » sur une actualité pour la retrouver ici.",
+    now: "maintenant", noResults: "Pas encore de résultats des sources actives.",
+    noPost: "Cette actualité n'a pas de lien vers sa source.", viewSrc: "Voir la source",
+    pickLeagues: "Choisir les compétitions", leaguesTitle: "Compétitions avec résultats en direct", processing: "Traduction…",
+    levels: { alto: "Intérêt élevé", medio: "Intérêt moyen", baixo: "Intérêt faible" }, allLevels: "Tous",
+    tones: { positiva: "Positif", negativa: "Négatif", neutra: "Neutre" }, allTones: "Tous", toneLabel: "Ton", levelLabel: "Niveau",
+    angle: "Angle", data: "Données", check: "À vérifier", seeNews: "Voir l'actualité",
+    noStories: "Pas encore de pistes. Elles apparaissent quand les résultats, les classements ou les actualités sortent de l'ordinaire.",
+    storiesNote: "Des pistes d'articles, trouvées dans les résultats et dans les actualités qui arrivent. Le niveau d'intérêt vient des critères de sélection de l'information que chaque piste remplit. Les possibilités sont des hypothèses écrites à partir de ce que les sources ont dit, jamais des faits nouveaux.",
+    updated: (t, src) => `Mis à jour ${t} par ${src}`, agoWord: (t) => `il y a ${t}`,
+    colsNote: "Les actualités les plus importantes de chaque origine, en temps réel. La colonne suit le pays dont parle l'actualité ; quand il est inconnu, elle suit le pays de la source.",
+    colEmpty: "Pas encore d'actualité dans cette colonne.", colAll: "Tout voir de cette origine",
+    liveNow: "Matchs en cours", allResults: "Voir tous les résultats", onTv: "Diffusion", nextTv: "Prochainement à la télévision",
+    noLive: "Aucun match en cours dans les compétitions choisies.", countryLabel: "Pays de la source",
+    srcState: (d, g, e) => `${d} avec flux propre · ${g} via Google News${e ? ` · ${e} sans réponse` : ""}`,
+    onlyProblems: "Seulement celles qui posent problème", lastNews: "dernière actualité", noNews: "aucune actualité pour l'instant", srcFail: "ne répond pas",
+    gaveFirst: "A sorti l'info", onlyHere: "Source unique", confirms: "Confirmations",
+    justConfirmed: "vient de confirmer", confirmedAt: (t) => `a confirmé ${t}`, nConfirms: (n) => `${n} ${n === 1 ? "confirmation" : "confirmations"}`,
+    thread: "Le fil de l'histoire", whatNext: "Ce qui peut arriver", consequences: "Conséquences", ifWord: "si",
+    possNote: "Des hypothèses, pas des faits : chacune dit de quoi elle dépend.",
+    origins: { todas: "Toutes", noticia: "Des actualités", dados: "Des matchs" }, originLabel: "Origine",
+    consTypes: { desportiva: "Sportive", contratual: "Contractuelle", financeira: "Financière", competitiva: "Compétitive", institucional: "Institutionnelle", disciplinar: "Disciplinaire" },
+  },
+  it: {
+    live: "In diretta", paused: "In pausa", nSources: (n) => `${n} fonti`, markRead: "Segna tutto come letto",
+    pause: "Metti in pausa", resume: "Riprendi", search: "Cerca notizie", copy: "Copia", copied: "Copiato",
+    share: "Condividi", viewX: "Vedi su X", trFrom: { pt: "Tradotto dal portoghese", en: "Tradotto dall'inglese", fr: "Tradotto dal francese", es: "Tradotto dallo spagnolo", it: "Tradotto dall'italiano", de: "Tradotto dal tedesco", tr: "Tradotto dal turco" },
+    eventsTitle: "Eventi della partita", noEvents: "Gol, primi tempi e finali compaiono qui appena accadono.",
+    goals: "Gol", reds: "Espulsioni", matchStats: "Statistiche della partita", tableLbl: "Classifica", pts: "pt", ord: (n) => `${n}º`,
+    approx: "Ora approssimativa: la fonte non ha datato la notizia",
+    settings: "Impostazioni", settingsHint: "Scegli le fonti e i campionati che vuoi vedere.",
+    allSports: "Tutti gli sport", sourcesLbl: "Fonti", confirmed: (n) => `Confermata da ${n} fonti`,
+    about: "Argomento", aboutTitle: (c) => `Notizia su: ${c}`, fromTitle: (c) => `Origine: ${c}`,
+    pending: (n) => `Mostra ${n} ${n === 1 ? "nuova notizia" : "nuove notizie"}`,
+    empty: "Nessuna notizia in questa sezione dalle fonti attive. Attiva più fonti o scegli un'altra sezione.",
+    connecting: "Connessione a X", offline: "Senza connessione", offlineNote: "Il server non risponde. Nuovo tentativo di connessione…",
+    waiting: "In attesa delle prime notizie. Compaiono qui appena una fonte pubblica.",
+    trOther: "Tradotto", moreSources: (n) => `+${n} ${n === 1 ? "fonte" : "fonti"}`,
+    all: "Tutte", none: "Nessuna", sources: "Fonti", hot: "In evidenza", fresh: "Nuova", ft: "Finale",
+    toLight: "Passa alla modalità chiara", toDark: "Passa alla modalità scura", locale: "it-IT",
+    tagline: "Verified Action Reports",
+    docTitle: "VAR — Verified Action Reports", langLabel: "Lingua", sectionsLabel: "Sezioni", resultsSource: "Risultati in diretta",
+    save: "Salva", saved: "Salvata", noFavs: "Non hai ancora salvato notizie. Premi «Salva» su una notizia per ritrovarla qui.",
+    now: "ora", noResults: "Ancora nessun risultato dalle fonti attive.",
+    noPost: "Questa notizia non ha un link alla fonte.", viewSrc: "Vedi sulla fonte",
+    pickLeagues: "Scegli i campionati", leaguesTitle: "Campionati con risultati in diretta", processing: "Traduzione…",
+    levels: { alto: "Interesse alto", medio: "Interesse medio", baixo: "Interesse basso" }, allLevels: "Tutti",
+    tones: { positiva: "Positiva", negativa: "Negativa", neutra: "Neutra" }, allTones: "Tutti", toneLabel: "Tono", levelLabel: "Livello",
+    angle: "Angolo", data: "Dati", check: "Da verificare", seeNews: "Vedi la notizia",
+    noStories: "Ancora nessuna traccia. Compaiono quando risultati, classifiche o notizie mostrano qualcosa fuori dal normale.",
+    storiesNote: "Tracce per notizie, trovate nei risultati e nelle notizie che arrivano. Il livello di interesse viene dai criteri di notiziabilità che ogni traccia soddisfa. Le possibilità sono ipotesi scritte a partire da ciò che le fonti hanno detto, mai fatti nuovi.",
+    updated: (t, src) => `Aggiornato ${t} da ${src}`, agoWord: (t) => `${t} fa`,
+    colsNote: "Le notizie più rilevanti di ogni origine, in tempo reale. La colonna segue il paese di cui parla la notizia; quando non si sa, segue il paese della fonte.",
+    colEmpty: "Ancora nessuna notizia in questa colonna.", colAll: "Vedi tutto di questa origine",
+    liveNow: "Partite in corso", allResults: "Vedi tutti i risultati", onTv: "Trasmissione", nextTv: "Prossima in televisione",
+    noLive: "Nessuna partita in corso nei campionati scelti.", countryLabel: "Paese della fonte",
+    srcState: (d, g, e) => `${d} con feed proprio · ${g} tramite Google News${e ? ` · ${e} senza risposta` : ""}`,
+    onlyProblems: "Solo quelle con problemi", lastNews: "ultima notizia", noNews: "non ha ancora portato notizie", srcFail: "non risponde",
+    gaveFirst: "L'ha data prima", onlyHere: "Solo in questa fonte", confirms: "Conferme",
+    justConfirmed: "ha appena confermato", confirmedAt: (t) => `ha confermato ${t}`, nConfirms: (n) => `${n} ${n === 1 ? "conferma" : "conferme"}`,
+    thread: "Il filo della storia", whatNext: "Cosa può succedere", consequences: "Conseguenze", ifWord: "se",
+    possNote: "Ipotesi, non fatti: ognuna dice da cosa dipende.",
+    origins: { todas: "Tutte", noticia: "Dalle notizie", dados: "Dalle partite" }, originLabel: "Origine",
+    consTypes: { desportiva: "Sportiva", contratual: "Contrattuale", financeira: "Finanziaria", competitiva: "Competitiva", institucional: "Istituzionale", disciplinar: "Disciplinare" },
+  },
+  de: {
+    live: "Live", paused: "Pausiert", nSources: (n) => `${n} Quellen`, markRead: "Alles als gelesen markieren",
+    pause: "Pausieren", resume: "Fortsetzen", search: "Nachrichten suchen", copy: "Kopieren", copied: "Kopiert",
+    share: "Teilen", viewX: "Auf X ansehen", trFrom: { pt: "Aus dem Portugiesischen übersetzt", en: "Aus dem Englischen übersetzt", fr: "Aus dem Französischen übersetzt", es: "Aus dem Spanischen übersetzt", it: "Aus dem Italienischen übersetzt", de: "Aus dem Deutschen übersetzt", tr: "Aus dem Türkischen übersetzt" },
+    eventsTitle: "Spielereignisse", noEvents: "Tore, Halbzeit- und Endstände erscheinen hier, sobald sie passieren.",
+    goals: "Tore", reds: "Rote Karten", matchStats: "Spielstatistik", tableLbl: "Tabelle", pts: "Pkt.", ord: (n) => `${n}.`,
+    approx: "Ungefähre Zeit: die Quelle hat die Nachricht nicht datiert",
+    settings: "Einstellungen", settingsHint: "Wähle die Quellen und Ligen, die du sehen willst.",
+    allSports: "Alle Sportarten", sourcesLbl: "Quellen", confirmed: (n) => `Von ${n} Quellen bestätigt`,
+    about: "Thema", aboutTitle: (c) => `Nachricht über: ${c}`, fromTitle: (c) => `Herkunft: ${c}`,
+    pending: (n) => `${n} ${n === 1 ? "neue Nachricht" : "neue Nachrichten"} anzeigen`,
+    empty: "Keine Nachrichten in dieser Rubrik von den aktiven Quellen. Aktiviere mehr Quellen oder wähle eine andere Rubrik.",
+    connecting: "Verbindung zu X", offline: "Keine Verbindung", offlineNote: "Der Server antwortet nicht. Neuer Verbindungsversuch…",
+    waiting: "Warten auf die ersten Nachrichten. Sie erscheinen, sobald eine Quelle etwas veröffentlicht.",
+    trOther: "Übersetzt", moreSources: (n) => `+${n} ${n === 1 ? "Quelle" : "Quellen"}`,
+    all: "Alle", none: "Keine", sources: "Quellen", hot: "Top-Nachricht", fresh: "Neu", ft: "Endstand",
+    toLight: "Zum hellen Modus wechseln", toDark: "Zum dunklen Modus wechseln", locale: "de-DE",
+    tagline: "Verified Action Reports",
+    docTitle: "VAR — Verified Action Reports", langLabel: "Sprache", sectionsLabel: "Rubriken", resultsSource: "Live-Ergebnisse",
+    save: "Speichern", saved: "Gespeichert", noFavs: "Noch keine Nachrichten gespeichert. Tippe bei einer Nachricht auf «Speichern», um sie hier zu finden.",
+    now: "jetzt", noResults: "Noch keine Ergebnisse von den aktiven Quellen.",
+    noPost: "Diese Nachricht hat keinen Link zur Quelle.", viewSrc: "Bei der Quelle ansehen",
+    pickLeagues: "Ligen auswählen", leaguesTitle: "Ligen mit Live-Ergebnissen", processing: "Übersetzen…",
+    levels: { alto: "Hohes Interesse", medio: "Mittleres Interesse", baixo: "Geringes Interesse" }, allLevels: "Alle",
+    tones: { positiva: "Positiv", negativa: "Negativ", neutra: "Neutral" }, allTones: "Alle", toneLabel: "Ton", levelLabel: "Stufe",
+    angle: "Ansatz", data: "Daten", check: "Zu prüfen", seeNews: "Nachricht ansehen",
+    noStories: "Noch keine Ansätze. Sie erscheinen, wenn Ergebnisse, Tabellen oder Nachrichten etwas Außergewöhnliches zeigen.",
+    storiesNote: "Ansätze für Geschichten, gefunden in den Ergebnissen und in den eingehenden Nachrichten. Die Interessenstufe ergibt sich aus den Nachrichtenwerten, die jeder Ansatz erfüllt. Die Möglichkeiten sind Hypothesen aus dem, was die Quellen gesagt haben, niemals neue Fakten.",
+    updated: (t, src) => `Aktualisiert ${t} von ${src}`, agoWord: (t) => `vor ${t}`,
+    colsNote: "Die wichtigsten Nachrichten jeder Herkunft, in Echtzeit. Die Spalte folgt dem Land, um das es in der Nachricht geht; ist das unbekannt, folgt sie dem Land der Quelle.",
+    colEmpty: "Noch keine Nachrichten in dieser Spalte.", colAll: "Alles aus dieser Herkunft ansehen",
+    liveNow: "Laufende Spiele", allResults: "Alle Ergebnisse ansehen", onTv: "Übertragung", nextTv: "Als Nächstes im Fernsehen",
+    noLive: "Keine laufenden Spiele in den gewählten Ligen.", countryLabel: "Land der Quelle",
+    srcState: (d, g, e) => `${d} mit eigenem Feed · ${g} über Google News${e ? ` · ${e} ohne Antwort` : ""}`,
+    onlyProblems: "Nur die mit Problemen", lastNews: "letzte Nachricht", noNews: "noch keine Nachrichten geliefert", srcFail: "antwortet nicht",
+    gaveFirst: "Zuerst gemeldet", onlyHere: "Nur in dieser Quelle", confirms: "Bestätigungen",
+    justConfirmed: "hat gerade bestätigt", confirmedAt: (t) => `bestätigt ${t}`, nConfirms: (n) => `${n} ${n === 1 ? "Bestätigung" : "Bestätigungen"}`,
+    thread: "Der Verlauf", whatNext: "Was passieren kann", consequences: "Folgen", ifWord: "wenn",
+    possNote: "Hypothesen, keine Fakten: jede nennt, wovon sie abhängt.",
+    origins: { todas: "Alle", noticia: "Aus den Nachrichten", dados: "Aus den Spielen" }, originLabel: "Herkunft",
+    consTypes: { desportiva: "Sportlich", contratual: "Vertraglich", financeira: "Finanziell", competitiva: "Wettbewerblich", institucional: "Institutionell", disciplinar: "Disziplinarisch" },
+  },
 };
 
 const isHot = (it) => (it.imp || 0) >= 4;
@@ -170,23 +338,54 @@ const COUNTRIES = {
   tr: ["Turquia", "Turkey"], sa: ["Arábia Saudita", "Saudi Arabia"], br: ["Brasil", "Brazil"], us: ["Estados Unidos", "United States"],
   eu: ["Europa", "Europe"], un: ["Internacional", "International"],
 };
+// línguas do site: o português e o inglês vêm do enriquecimento de cada notícia;
+// as quatro restantes são traduzidas automaticamente pelo servidor à medida que são pedidas
+const LANGS = [
+  { id: "pt", sigla: "PT", nome: "Português" },
+  { id: "en", sigla: "EN", nome: "English" },
+  { id: "es", sigla: "ES", nome: "Español" },
+  { id: "fr", sigla: "FR", nome: "Français" },
+  { id: "it", sigla: "IT", nome: "Italiano" },
+  { id: "de", sigla: "DE", nome: "Deutsch" },
+];
+const TRADUZIDAS = { es: true, fr: true, it: true, de: true };
+// campo de texto na língua escolhida; enquanto a tradução não chega, mostra-se o que já existe
+const emLingua = (o, lang) => o?.[lang] ?? o?.pt ?? o?.en;
+const ARROW = { pt: "para", en: "to", es: "a", fr: "vers", it: "a", de: "zu" };
 const MOD = {
-  futsal: ["Futsal", "Futsal"], praia: ["Futebol de praia", "Beach soccer"], andebol: ["Andebol", "Handball"],
-  basquetebol: ["Basquetebol", "Basketball"], voleibol: ["Voleibol", "Volleyball"],
-  hoquei_patins: ["Hóquei em patins", "Roller hockey"], hoquei_gelo: ["Hóquei no gelo", "Ice hockey"],
-  futebol_americano: ["Futebol americano", "American football"], tenis: ["Ténis", "Tennis"], padel: ["Padel", "Padel"],
-  ciclismo: ["Ciclismo", "Cycling"], atletismo: ["Atletismo", "Athletics"], natacao: ["Natação", "Swimming"],
-  automobilismo: ["Automobilismo", "Motorsport"], golfe: ["Golfe", "Golf"], ragby: ["Râguebi", "Rugby"],
-  criquete: ["Críquete", "Cricket"], beisebol: ["Beisebol", "Baseball"], combate: ["Desportos de combate", "Combat sports"],
-  equestre: ["Equestre", "Equestrian"], outra: ["Outra modalidade", "Other sport"],
+  futsal: { pt: "Futsal", en: "Futsal", es: "Fútbol sala", fr: "Futsal", it: "Calcio a 5", de: "Futsal" },
+  praia: { pt: "Futebol de praia", en: "Beach soccer", es: "Fútbol playa", fr: "Beach soccer", it: "Beach soccer", de: "Beachsoccer" },
+  andebol: { pt: "Andebol", en: "Handball", es: "Balonmano", fr: "Handball", it: "Pallamano", de: "Handball" },
+  basquetebol: { pt: "Basquetebol", en: "Basketball", es: "Baloncesto", fr: "Basket-ball", it: "Basket", de: "Basketball" },
+  voleibol: { pt: "Voleibol", en: "Volleyball", es: "Voleibol", fr: "Volley-ball", it: "Pallavolo", de: "Volleyball" },
+  hoquei_patins: { pt: "Hóquei em patins", en: "Roller hockey", es: "Hockey patines", fr: "Rink hockey", it: "Hockey su pista", de: "Rollhockey" },
+  hoquei_gelo: { pt: "Hóquei no gelo", en: "Ice hockey", es: "Hockey hielo", fr: "Hockey sur glace", it: "Hockey su ghiaccio", de: "Eishockey" },
+  futebol_americano: { pt: "Futebol americano", en: "American football", es: "Fútbol americano", fr: "Football américain", it: "Football americano", de: "American Football" },
+  tenis: { pt: "Ténis", en: "Tennis", es: "Tenis", fr: "Tennis", it: "Tennis", de: "Tennis" },
+  padel: { pt: "Padel", en: "Padel", es: "Pádel", fr: "Padel", it: "Padel", de: "Padel" },
+  ciclismo: { pt: "Ciclismo", en: "Cycling", es: "Ciclismo", fr: "Cyclisme", it: "Ciclismo", de: "Radsport" },
+  atletismo: { pt: "Atletismo", en: "Athletics", es: "Atletismo", fr: "Athlétisme", it: "Atletica", de: "Leichtathletik" },
+  natacao: { pt: "Natação", en: "Swimming", es: "Natación", fr: "Natation", it: "Nuoto", de: "Schwimmen" },
+  automobilismo: { pt: "Automobilismo", en: "Motorsport", es: "Automovilismo", fr: "Sport automobile", it: "Automobilismo", de: "Motorsport" },
+  golfe: { pt: "Golfe", en: "Golf", es: "Golf", fr: "Golf", it: "Golf", de: "Golf" },
+  ragby: { pt: "Râguebi", en: "Rugby", es: "Rugby", fr: "Rugby", it: "Rugby", de: "Rugby" },
+  criquete: { pt: "Críquete", en: "Cricket", es: "Críquet", fr: "Cricket", it: "Cricket", de: "Cricket" },
+  beisebol: { pt: "Beisebol", en: "Baseball", es: "Béisbol", fr: "Baseball", it: "Baseball", de: "Baseball" },
+  combate: { pt: "Desportos de combate", en: "Combat sports", es: "Deportes de combate", fr: "Sports de combat", it: "Sport da combattimento", de: "Kampfsport" },
+  equestre: { pt: "Equestre", en: "Equestrian", es: "Ecuestre", fr: "Équitation", it: "Equitazione", de: "Reitsport" },
+  outra: { pt: "Outra modalidade", en: "Other sport", es: "Otro deporte", fr: "Autre sport", it: "Altro sport", de: "Andere Sportart" },
 };
-const modName = (id, lang) => (MOD[id] ? MOD[id][lang === "en" ? 1 : 0] : null);
+const modName = (id, lang) => (MOD[id] ? MOD[id][lang] || MOD[id].en : null);
 
-const GB_PARTS = { "gb-sct": ["Escócia", "Scotland"], "gb-wls": ["País de Gales", "Wales"], "gb-nir": ["Irlanda do Norte", "Northern Ireland"] };
+const GB_PARTS = {
+  "gb-sct": { pt: "Escócia", en: "Scotland", es: "Escocia", fr: "Écosse", it: "Scozia", de: "Schottland" },
+  "gb-wls": { pt: "País de Gales", en: "Wales", es: "Gales", fr: "Pays de Galles", it: "Galles", de: "Wales" },
+  "gb-nir": { pt: "Irlanda do Norte", en: "Northern Ireland", es: "Irlanda del Norte", fr: "Irlande du Nord", it: "Irlanda del Nord", de: "Nordirland" },
+};
 function countryName(code, lang) {
   const own = COUNTRIES[code] || GB_PARTS[code];
-  if (own) return own[lang === "en" ? 1 : 0];
-  try { return new Intl.DisplayNames([lang === "en" ? "en" : "pt-PT"], { type: "region" }).of(code.toUpperCase()); } catch { return code.toUpperCase(); }
+  if (own) return own[lang] || own.en;
+  try { return new Intl.DisplayNames([UI[lang]?.locale || "pt-PT"], { type: "region" }).of(code.toUpperCase()); } catch { return code.toUpperCase(); }
 }
 function Flag({ code, lang, title }) {
   if (!code) return null;
@@ -208,6 +407,175 @@ function Tv({ tv, size = 20 }) {
   );
 }
 
+// último acontecimento relevante de um jogo em direto, mostrado ao lado do minuto
+const EVT = {
+  golo: { i: "⚽", pt: "Golo", en: "Goal", es: "Gol", fr: "But", it: "Gol", de: "Tor" },
+  autogolo: { i: "⚽", pt: "Autogolo", en: "Own goal", es: "Autogol", fr: "CSC", it: "Autogol", de: "Eigentor" },
+  penalti_marcado: { i: "⚽", pt: "Golo de penálti", en: "Penalty goal", es: "Gol de penalti", fr: "Penalty marqué", it: "Rigore segnato", de: "Elfmetertor" },
+  penalti: { i: "🎯", pt: "Penálti", en: "Penalty", es: "Penalti", fr: "Penalty", it: "Rigore", de: "Elfmeter" },
+  penalti_falhado: { i: "✗", pt: "Penálti falhado", en: "Penalty missed", es: "Penalti fallado", fr: "Penalty manqué", it: "Rigore sbagliato", de: "Elfmeter verschossen" },
+  vermelho: { i: "🟥", pt: "Vermelho", en: "Red card", es: "Roja", fr: "Carton rouge", it: "Rosso", de: "Rote Karte" },
+  segundo_amarelo: { i: "🟨🟥", pt: "Segundo amarelo", en: "Second yellow", es: "Doble amarilla", fr: "Second jaune", it: "Doppio giallo", de: "Gelb-Rot" },
+  var: { i: "🖥", pt: "VAR", en: "VAR", es: "VAR", fr: "VAR", it: "VAR", de: "VAR" },
+  anulado: { i: "🚫", pt: "Golo anulado", en: "Goal disallowed", es: "Gol anulado", fr: "But refusé", it: "Gol annullato", de: "Tor aberkannt" },
+};
+const HT = { pt: "Intervalo", en: "Half-time", es: "Descanso", fr: "Mi-temps", it: "Intervallo", de: "Halbzeit" };
+const evText = (u, lang) => {
+  if (!u || !EVT[u.tipo]) return null;
+  const e = EVT[u.tipo];
+  const nome = e[lang] || e.en;
+  const quem = u.who ? `${u.who}${u.equipa ? ` (${u.equipa})` : ""}` : `${nome}${u.equipa ? ` · ${u.equipa}` : ""}`;
+  return `${e.i} ${u.label ? `${u.label} ` : ""}${quem}`;
+};
+const minText = (sc, lang, ui) => (sc.ft ? ui.ft : sc.ht ? HT[lang] || HT.en : sc.min || ui.live);
+
+// canal do jogo a partir da grelha do Zapping, para quando o servidor ainda não o juntou ao cartão
+const eqKey = (n) => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/[.'’`-]/g, " ").replace(/\b(fc|sc|cf|ac|sl|cd|ad|afc|sad|ud|cs|gd|ssc|club|clube|de|da|do)\b/g, " ").replace(/\s+/g, " ").trim();
+const eqIgual = (a, b) => {
+  const A = eqKey(a).split(" ").filter(Boolean), B = eqKey(b).split(" ").filter(Boolean);
+  if (!A.length || !B.length) return false;
+  const iguais = A.filter((x) => B.some((y) => x === y || (x.length >= 4 && y.length >= 4 && (x.startsWith(y) || y.startsWith(x))))).length;
+  return iguais / Math.max(A.length, B.length) >= 0.5;
+};
+const tvDaGrelha = (sc, zapping, ts) => zapping.find((z) => !z.qualificador && Math.abs(z.inicio - ts) < 5 * 3600e3 && eqIgual(z.casa, sc.h) && eqIgual(z.fora, sc.a)) || null;
+
+/* ───────── Vídeos ───────── */
+const VCAT = {
+  goal: { i: "⚽", pt: "Golo", en: "Goal", es: "Gol", fr: "But", it: "Gol", de: "Tor" },
+  highlight: { i: "🎥", pt: "Highlight", en: "Highlight", es: "Jugada", fr: "Action", it: "Azione", de: "Highlight" },
+  save: { i: "🧤", pt: "Defesa", en: "Save", es: "Parada", fr: "Arrêt", it: "Parata", de: "Parade" },
+  red: { i: "🟥", pt: "Expulsão", en: "Red card", es: "Expulsión", fr: "Carton rouge", it: "Espulsione", de: "Rote Karte" },
+  var: { i: "🖥", pt: "VAR", en: "VAR", es: "VAR", fr: "VAR", it: "VAR", de: "VAR" },
+  skill: { i: "🔥", pt: "Finta", en: "Skill", es: "Regate", fr: "Geste technique", it: "Giocata", de: "Trick" },
+  other: { i: "🎬", pt: "Outros", en: "Other", es: "Otros", fr: "Autres", it: "Altro", de: "Andere" },
+};
+const VFILTROS = [
+  ["all", { pt: "Todos", en: "All", es: "Todos", fr: "Tous", it: "Tutti", de: "Alle" }],
+  ["goal", { pt: "Golos", en: "Goals", es: "Goles", fr: "Buts", it: "Gol", de: "Tore" }],
+  ["highlight", { pt: "Highlights", en: "Highlights", es: "Jugadas", fr: "Actions", it: "Azioni", de: "Highlights" }],
+  ["save", { pt: "Defesas", en: "Saves", es: "Paradas", fr: "Arrêts", it: "Parate", de: "Paraden" }],
+  ["var", { pt: "VAR", en: "VAR", es: "VAR", fr: "VAR", it: "VAR", de: "VAR" }],
+  ["cards", { pt: "Cartões", en: "Cards", es: "Tarjetas", fr: "Cartons", it: "Cartellini", de: "Karten" }],
+];
+const VTXT = {
+  pt: { title: "Vídeos", watch: "Ver vídeo", close: "Fechar", empty: "Os golos e os melhores momentos aparecem aqui assim que são publicados.", more: "Ver mais", also: (n) => `também em ${n}`, src: "Fonte" },
+  en: { title: "Videos", watch: "Watch video", close: "Close", empty: "Goals and highlights appear here as soon as they are posted.", more: "Show more", also: (n) => `also on ${n}`, src: "Source" },
+  es: { title: "Vídeos", watch: "Ver vídeo", close: "Cerrar", empty: "Los goles y las mejores jugadas aparecen aquí en cuanto se publican.", more: "Ver más", also: (n) => `también en ${n}`, src: "Fuente" },
+  fr: { title: "Vidéos", watch: "Voir la vidéo", close: "Fermer", empty: "Les buts et les temps forts apparaissent ici dès leur publication.", more: "Voir plus", also: (n) => `aussi sur ${n}`, src: "Source" },
+  it: { title: "Video", watch: "Guarda il video", close: "Chiudi", empty: "Gol e momenti migliori compaiono qui appena vengono pubblicati.", more: "Mostra altri", also: (n) => `anche su ${n}`, src: "Fonte" },
+  de: { title: "Videos", watch: "Video ansehen", close: "Schließen", empty: "Tore und Highlights erscheinen hier, sobald sie veröffentlicht werden.", more: "Mehr anzeigen", also: (n) => `auch auf ${n}`, src: "Quelle" },
+};
+const vFonte = (s) => (s.subreddit ? `r/${s.subreddit}` : s.canal === "vsports" ? "VSPORTS" : s.canal ? `t.me/${s.canal}` : s.fonte);
+
+// os vídeos do Reddit vêm em HLS (com som); o Safari toca-os diretamente, os outros browsers com o hls.js,
+// que só é descarregado quando alguém carrega em «Ver vídeo»
+let hlsJs = null;
+const carregaHls = () => (hlsJs ||= new Promise((ok, falha) => {
+  if (window.Hls) return ok(window.Hls);
+  const sc = document.createElement("script");
+  sc.src = "https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js";
+  sc.onload = () => ok(window.Hls);
+  sc.onerror = falha;
+  document.head.appendChild(sc);
+}));
+function VideoHls({ src, mp4 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    let hls = null;
+    if (!el) return undefined;
+    const tocar = () => el.play().catch(() => {});
+    if (el.canPlayType("application/vnd.apple.mpegurl")) { el.src = src; tocar(); }
+    else {
+      carregaHls().then((Hls) => {
+        if (Hls?.isSupported()) { hls = new Hls(); hls.loadSource(src); hls.attachMedia(el); tocar(); }
+        else if (mp4) { el.src = mp4; tocar(); }
+      }).catch(() => { if (mp4) { el.src = mp4; tocar(); } });
+    }
+    return () => hls?.destroy();
+  }, [src, mp4]);
+  return <video ref={ref} className="vplayer" controls playsInline />;
+}
+
+function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
+  const tx = VTXT[lang] || VTXT.pt;
+  const c = VCAT[v.category] || VCAT.other;
+  const [semImg, setSemImg] = useState(false);
+  const outras = [...new Set((v.sources || []).map(vFonte))].filter((f) => f !== v.source);
+  const link = v.embed ? null : (v.reddit_url && /t\.me\//.test(v.reddit_url) ? v.reddit_url : v.video_url || v.reddit_url);
+  const titulo = v.teams
+    ? (
+      <>
+        {v.equipas?.[0]?.logo && <Crest e={v.equipas[0]} theme={theme} size={18} />}
+        <span className={v.scorer_side === "home" ? "vsc" : ""}>{v.teams.home}</span>
+        {v.score ? ` ${v.score.replace("-", "–")} ` : " – "}
+        <span className={v.scorer_side === "away" ? "vsc" : ""}>{v.teams.away}</span>
+        {v.equipas?.[1]?.logo && <Crest e={v.equipas[1]} theme={theme} size={18} />}
+      </>
+    )
+    : v.title;
+  return (
+    <li className={`vcard cat-${v.category}`}>
+      <div className="vthumb">
+        {playing && v.embed ? (
+          v.embed.tipo === "iframe" ? <iframe src={v.embed.src} title={v.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+            : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={v.embed.mp4} />
+              : <video className="vplayer" src={v.embed.src} controls autoPlay playsInline />
+        ) : (
+          <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
+            {v.thumbnail && !semImg ? <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setSemImg(true)} /> : <span className="vph">{c.i}</span>}
+            <span className="vbtn"><Play size={20} fill="currentColor" /></span>
+            <span className="vcat">{c.i} {c[lang] || c.en}</span>
+          </button>
+        )}
+      </div>
+      <h3 className="vtitle">{v.teams && <span className="vico">{c.i}</span>}{titulo}</h3>
+      {(v.player || v.minute) && <p className="vsub">{v.player}{v.player && v.minute ? " " : ""}{v.minute ? `${v.minute}'` : ""}{v.opponent ? <span className="muted"> · vs {v.opponent}</span> : null}</p>}
+      {v.teams && v.title && <p className="vorig" title={v.title}>{v.title}</p>}
+      <div className="vmeta">
+        {v.competition && <span className="muted">{v.competition}</span>}
+        <span className="vsrc" title={outras.length ? tx.also(outras.join(", ")) : undefined}>{v.source}{outras.length > 0 && <b> +{outras.length}</b>}</span>
+        <span className="muted vtime">{agoText(v.created_time, now, ui)}</span>
+      </div>
+      <div className="vacts">
+        {playing
+          ? <button className="textbtn" onClick={() => onPlay(null)}><Fechar size={14} />{tx.close}</button>
+          : <button className="textbtn vwatch" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))}><Play size={14} />{tx.watch}</button>}
+        {v.reddit_url && <a className="textbtn" href={v.reddit_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title={v.reddit_url}><ExternalLink size={13} /></a>}
+      </div>
+    </li>
+  );
+}
+
+/* ───────── Capas ───────── */
+const CAPTXT = {
+  pt: { today: "Capas de hoje", all: "Ver todas", empty: "As capas aparecem aqui assim que o SAPO as publicar.", from: "Capas via SAPO", hoje: "Hoje", others: "Outros" },
+  en: { today: "Today's front pages", all: "See all", empty: "Front pages appear here as soon as SAPO publishes them.", from: "Front pages via SAPO", hoje: "Today", others: "Others" },
+  es: { today: "Portadas de hoy", all: "Ver todas", empty: "Las portadas aparecen aquí en cuanto SAPO las publica.", from: "Portadas vía SAPO", hoje: "Hoy", others: "Otros" },
+  fr: { today: "Unes du jour", all: "Tout voir", empty: "Les unes apparaissent ici dès que SAPO les publie.", from: "Unes via SAPO", hoje: "Aujourd'hui", others: "Autres" },
+  it: { today: "Prime pagine di oggi", all: "Vedi tutte", empty: "Le prime pagine compaiono qui appena SAPO le pubblica.", from: "Prime pagine via SAPO", hoje: "Oggi", others: "Altri" },
+  de: { today: "Titelseiten von heute", all: "Alle ansehen", empty: "Die Titelseiten erscheinen hier, sobald SAPO sie veröffentlicht.", from: "Titelseiten über SAPO", hoje: "Heute", others: "Andere" },
+};
+const ORDEM_CAPAS = ["pt", "es", "fr", "it", "de", "gb-eng", "br", "ar"];
+const diaLisboa = (ts) => new Date(ts).toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" });
+function Capa({ c, lang, onOpen, pequena }) {
+  const [direta, setDireta] = useState(false);
+  const [falhou, setFalhou] = useState(false);
+  const tx = CAPTXT[lang] || CAPTXT.pt;
+  const src = direta ? c.img : `${API}/api/capas/img/${encodeURIComponent(c.id)}?v=${c.desde || 0}`;
+  const dia = c.desde ? (diaLisboa(c.desde) === diaLisboa(Date.now()) ? tx.hoje : new Date(c.desde).toLocaleDateString(UI[lang]?.locale, { day: "numeric", month: "short" })) : null;
+  return (
+    <figure className={`capa ${pequena ? "mini" : ""}`}>
+      <button onClick={() => onOpen(c)} aria-label={c.nome}>
+        {falhou ? <span className="capaph">{c.nome}</span>
+          : <img src={src} alt={c.nome} loading="lazy" onError={() => (direta ? setFalhou(true) : setDireta(true))} />}
+      </button>
+      <figcaption><b>{c.nome}</b>{dia && <span className="muted"> · {dia}</span>}</figcaption>
+    </figure>
+  );
+}
+
 // pistas antigas, guardadas antes de existir o tom, recebem-no pelo tipo
 const TIPO_TOM = { surpresa: "negativa", reviravolta: "positiva", tardio: "positiva", goleada: "positiva", serie: "positiva", crise: "negativa", derrotas: "negativa", fimserie: "negativa", primeira: "positiva", lider: "positiva", descida: "negativa" };
 const toneOf = (s) => s.tom || TIPO_TOM[s.tipo] || "neutra";
@@ -226,7 +594,7 @@ function Crests({ eq, theme, lang }) {
     return (
       <div className="crests transfer" title={`${o?.nome || "?"} → ${d?.nome || "?"}`}>
         {o ? <Crest e={o} theme={theme} /> : <span className="crest-txt">?</span>}
-        <ArrowRight size={15} aria-label={lang === "en" ? "to" : "para"} />
+        <ArrowRight size={15} aria-label={ARROW[lang] || "to"} />
         {d ? <Crest e={d} theme={theme} /> : <span className="crest-txt">?</span>}
       </div>
     );
@@ -247,7 +615,7 @@ function Ficha({ f, lang, ui }) {
         <table className="fstats">
           <caption>{ui.matchStats}</caption>
           <thead><tr><th>{f.casa}</th><th /><th>{f.fora}</th></tr></thead>
-          <tbody>{f.stats.map((st) => <tr key={st.id}><td>{st.casa}</td><td>{lang === "en" ? st.en : st.pt}</td><td>{st.fora}</td></tr>)}</tbody>
+          <tbody>{f.stats.map((st) => <tr key={st.id}><td>{st.casa}</td><td>{st[lang] || st.en || st.pt}</td><td>{st.fora}</td></tr>)}</tbody>
         </table>
       )}
       {f.tabela?.length > 0 && <p><b>{ui.tableLbl}:</b> {f.tabela.map((t) => `${t.equipa} ${ui.ord(t.pos)}${t.pts != null ? ` (${t.pts} ${ui.pts})` : ""}`).join(" · ")}</p>}
@@ -271,15 +639,15 @@ function StoryCard({ s, items, lang, ui, now, onOpen, leagueName, leaguePais, th
         </button>
       </div>
       <Crests eq={s.crests} theme={theme} lang={lang} />
-      <h3 className="title">{s.t[lang]}</h3>
+      <h3 className="title">{emLingua(s.t, lang)}</h3>
       {s.ficha && <Ficha f={s.ficha} lang={lang} ui={ui} />}
-      {s.narrativa?.[lang] && <p className="narr"><b>{ui.thread}:</b> {s.narrativa[lang]}</p>}
+      {emLingua(s.narrativa, lang) && <p className="narr"><b>{ui.thread}:</b> {emLingua(s.narrativa, lang)}</p>}
       {s.possibilidades?.length > 0 && (
         <div className="block poss">
           <b>{ui.whatNext}</b> <span className="muted small">{ui.possNote}</span>
           <ul className="bul">
             {s.possibilidades.map((p, i) => (
-              <li key={i}>{p[lang]}{p.se?.[lang] && <span className="muted"> — {ui.ifWord} {p.se[lang].replace(/^(se|if)\s+/i, "")}</span>}</li>
+              <li key={i}>{emLingua(p, lang)}{emLingua(p.se, lang) && <span className="muted"> — {ui.ifWord} {emLingua(p.se, lang).replace(/^(se|if)\s+/i, "")}</span>}</li>
             ))}
           </ul>
         </div>
@@ -289,18 +657,18 @@ function StoryCard({ s, items, lang, ui, now, onOpen, leagueName, leaguePais, th
           <b>{ui.consequences}</b>
           <ul className="bul">
             {s.consequencias.map((c, i) => (
-              <li key={i}>{c.tipo && <span className="chip tipo">{ui.consTypes[c.tipo] || c.tipo}</span>} {c[lang]}</li>
+              <li key={i}>{c.tipo && <span className="chip tipo">{ui.consTypes[c.tipo] || c.tipo}</span>} {emLingua(c, lang)}</li>
             ))}
           </ul>
         </div>
       )}
-      <p className="angle"><b>{ui.angle}:</b> {s.angulo[lang]}</p>
-      {s.dados?.[lang]?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {s.dados[lang].join(" · ")}</p>}
-      {s.verificar?.[lang]?.length > 0 && (
-        <div className="check"><b>{ui.check}:</b><ul className="bul">{s.verificar[lang].map((v, i) => <li key={i}>{v}</li>)}</ul></div>
+      <p className="angle"><b>{ui.angle}:</b> {emLingua(s.angulo, lang)}</p>
+      {emLingua(s.dados, lang)?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {emLingua(s.dados, lang).join(" · ")}</p>}
+      {emLingua(s.verificar, lang)?.length > 0 && (
+        <div className="check"><b>{ui.check}:</b><ul className="bul">{emLingua(s.verificar, lang).map((v, i) => <li key={i}>{v}</li>)}</ul></div>
       )}
       <div className="chips crit">
-        {s.crit.map((c) => <span key={c.id} className="chip">{c[lang]}</span>)}
+        {s.crit.map((c) => <span key={c.id} className="chip">{emLingua(c, lang)}</span>)}
         {s.noticia && items.some((x) => x.id === s.noticia) && (
           <button className="textbtn" onClick={() => onOpen(s.noticia)}><ExternalLink size={14} />{ui.seeNews}</button>
         )}
@@ -356,6 +724,30 @@ function Rich({ text }) {
   return text.split(/==(.+?)==/g).map((p, i) => (i % 2 ? <mark key={i} className="hl">{p}</mark> : <span key={i}>{p}</span>));
 }
 
+// fontes que confirmaram a notícia depois de quem a deu primeiro: bandeira, nome e quando confirmaram
+function Confirms({ it, lang, ui, now, srcPais }) {
+  if (!it.also?.length) return null;
+  return (
+    <div className="confs">
+      <span className="conflbl">{ui.confirms}</span>
+      {it.also.map((a) => {
+        const quando = a.at || a.ts || it.ts;
+        const recente = now - quando < 10 * 60000;
+        const conteudo = (
+          <>
+            <Flag code={a.pais || srcPais[a.src]} lang={lang} />
+            <b>{a.name || a.src}</b>
+            <span className="muted">{recente ? ui.justConfirmed : ui.confirmedAt(new Date(quando).toLocaleTimeString(ui.locale, { hour: "2-digit", minute: "2-digit" }))}</span>
+          </>
+        );
+        return a.url
+          ? <a key={a.postId || a.src} className={`conf ${recente ? "now" : ""}`} href={a.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }} onClick={(e) => e.stopPropagation()}>{conteudo}</a>
+          : <span key={a.postId || a.src} className={`conf ${recente ? "now" : ""}`}>{conteudo}</span>;
+      })}
+    </div>
+  );
+}
+
 /* ───────── Estilos ───────── */
 const CSS = `
 .apito{--ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -373,7 +765,8 @@ const CSS = `
 .apito .bar{display:flex;align-items:center;gap:12px 16px;padding:14px 0 8px;flex-wrap:wrap}
 .apito .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
 .apito .brand b{font-family:var(--display);font-weight:700;font-size:27px;line-height:1;letter-spacing:-.02em}
-.apito .tagline{font-size:13px;color:var(--muted);margin-right:6px}
+.apito .tagline{font-size:13px;color:#fff;font-weight:700;margin-right:6px}
+.apito[data-theme="light"] .tagline{color:var(--ink)}
 .apito .status{display:flex;align-items:center;gap:10px;font-size:14px}
 .apito .pulse{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--live)}
 .apito .pulse i{width:8px;height:8px;border-radius:50%;background:var(--live);animation:apl 1.6s ease-out infinite}
@@ -384,6 +777,7 @@ const CSS = `
 .apito .search{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--raise);width:230px;color:var(--muted)}
 .apito .search input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;outline:none;width:100%}
 .apito .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--raise)}
+.apito .seg.langs button{padding:4px 7px;font-size:11px;letter-spacing:.02em}
 .apito .seg button{padding:4px 11px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
 .apito .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .apito .icon-btn{width:34px;height:34px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:999px;background:var(--raise)}
@@ -547,7 +941,7 @@ const CSS = `
 .apito .livelist{list-style:none;margin:0;padding:0 0 8px;display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin}
 .apito .livelist::-webkit-scrollbar{height:6px}
 .apito .livelist::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
-.apito .lcard{flex:0 0 auto;width:214px;border:1px solid var(--line);border-top:3px solid var(--live);border-radius:8px;padding:8px 10px 9px;background:var(--raise)}
+.apito .lcard{flex:0 0 auto;width:236px;border:1px solid var(--line);border-top:3px solid var(--live);border-radius:8px;padding:8px 10px 9px;background:var(--raise)}
 .apito .lcard.next{border-top-color:var(--accent)}
 .apito .lcomp{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -555,8 +949,12 @@ const CSS = `
 .apito .lrow b{margin-left:auto;font-size:20px;font-variant-numeric:tabular-nums}
 .apito .lteam{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apito .lfoot{display:flex;align-items:center;gap:8px;margin-top:8px}
-.apito .lmin{font-size:13px;font-weight:700;color:var(--live)}
+.apito .lmin{font-size:13px;font-weight:700;color:var(--live);flex:none}
 .apito .lfoot .tv{margin-left:auto}
+.apito .lult{font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apito .lcard .lult{animation:evin .45s ease-out}
+.apito .ltv{margin-top:6px}
+.apito .lultb{color:var(--ink);font-weight:600}
 .apito .narr{margin:8px 0;max-width:68ch}
 .apito .block{margin:8px 0;max-width:68ch}
 .apito .block .bul{margin-top:3px}
@@ -620,6 +1018,57 @@ const CSS = `
 .apito .cacts .textbtn:last-child,.apito .cacts a.textbtn{margin-left:auto}
 .apito .cempty{font-size:13px;color:var(--muted);padding:6px 0}
 @media(max-width:640px){.apito .cols{grid-auto-columns:minmax(84vw,1fr);scroll-snap-type:x mandatory}.apito .col{scroll-snap-align:start}}
+.apito .cols.comvid{grid-template-columns:minmax(300px,1.3fr)}
+@media(max-width:640px){.apito .cols.comvid{grid-template-columns:minmax(88vw,1fr)}}
+.apito .vcol .colh{border-bottom-color:var(--live)}
+.apito .vcol .colh .pulse i{display:inline-block}
+.apito .vfil{display:flex;flex-wrap:wrap;gap:4px;border:0;padding:0;background:none;margin:0 0 10px}
+.apito .vfil button{padding:2px 9px;font-size:12px;border:1px solid var(--line);background:var(--raise)}
+.apito .vfil button[aria-pressed="true"]{border-color:var(--ink)}
+.apito .vlist{list-style:none;margin:0;padding:0 4px 0 0;max-height:calc(100vh - 150px);overflow-y:auto;scrollbar-width:thin}
+.apito .vcard{padding:0 0 12px;margin:0 0 12px;border-bottom:1px solid var(--line);animation:evin .45s ease-out}
+.apito .vthumb{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000}
+.apito .vthumb iframe,.apito .vthumb .vplayer{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+.apito .vplay{position:absolute;inset:0;width:100%;height:100%;display:block}
+.apito .vplay img{width:100%;height:100%;object-fit:cover;display:block}
+.apito .vph{display:grid;place-items:center;width:100%;height:100%;font-size:42px;background:linear-gradient(135deg,#1c2a23,#0b120e)}
+.apito .vbtn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.6);color:#fff;transition:transform .15s}
+.apito .vplay:hover .vbtn{transform:translate(-50%,-50%) scale(1.1)}
+.apito .vcat{position:absolute;left:8px;top:8px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(0,0,0,.72);color:#fff}
+.apito .cat-goal .vcat{background:var(--accent);color:#1B1B1B}
+.apito .cat-red .vcat{background:#D7263D}
+.apito .vtitle{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.25;letter-spacing:-.015em;margin:7px 0 0}
+.apito .vico{margin-right:5px}
+.apito .vtitle .crest{margin:0 5px;vertical-align:-3px}
+.apito .vsc{font-weight:800}
+.apito .vsub{margin:2px 0 0;font-size:14px;font-weight:600}
+.apito .vorig{margin:2px 0 0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apito .vmeta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin-top:5px}
+.apito .vsrc{font-weight:600}
+.apito .vtime{margin-left:auto}
+.apito .vacts{display:flex;align-items:center;gap:6px;margin-top:4px}
+.apito .vacts .textbtn{font-size:13px;padding:2px 4px}
+.apito .vwatch{color:var(--ink);font-weight:600}
+.apito .vmais{width:100%;justify-content:center;border:1px dashed var(--line);margin-bottom:10px}
+.apito .capasbar{margin:0 0 18px}
+.apito .capash{font-family:var(--display);font-size:15px}
+.apito .capasbar .livehead .textbtn{margin-left:auto}
+.apito .capasstrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 8px;scrollbar-width:thin}
+.apito .capa{margin:0;flex:none}
+.apito .capa button{display:block;width:100%;border-radius:4px;overflow:hidden;box-shadow:0 1px 0 var(--line),0 2px 10px rgba(0,0,0,.12);background:#fff}
+.apito .capa img{display:block;width:100%;height:auto}
+.apito .capa.mini{width:112px}
+.apito .capa.mini img{height:150px;object-fit:cover;object-position:top}
+.apito .capa figcaption{font-size:12px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apito .capaph{display:grid;place-items:center;aspect-ratio:3/4;padding:8px;font-weight:700;color:#333;text-align:center}
+.apito .capasview{max-width:1400px}
+.apito .capagrupo{margin:0 0 26px}
+.apito .capasgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:18px}
+.apito .lightbox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.82);display:grid;place-items:center;padding:24px;overflow:auto}
+.apito .lightbox .capa{width:min(760px,92vw)}
+.apito .lightbox .capa figcaption{color:#fff;font-size:14px}
+.apito .lightbox .capa figcaption .muted{color:#ccc}
+.apito .lbclose{position:fixed;top:16px;right:16px;z-index:61}
 .apito .empty{padding:40px 0 40px 74px;color:var(--muted);max-width:60ch}
 @media(max-width:640px){
   .apito .search{width:100%;order:5}
@@ -658,6 +1107,12 @@ export default function App() {
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
   const [diag, setDiag] = useState({}); // estado de cada fonte: por onde é lida, se responde, última notícia
   const [soProblemas, setSoProblemas] = useState(false);
+  const [videos, setVideos] = useState([]); // feed de vídeos (golos, resumos, defesas…), já sem repetidos
+  const [vFiltro, setVFiltro] = useState("all");
+  const [vN, setVN] = useState(20);
+  const [aTocar, setATocar] = useState(null); // vídeo que está a tocar dentro do cartão
+  const [capas, setCapas] = useState([]); // capas dos jornais desportivos do dia
+  const [capaAberta, setCapaAberta] = useState(null);
   const [modFilter, setModFilter] = useState("todas");
   const [favs, setFavs] = useState(() => {
     try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -672,6 +1127,19 @@ export default function App() {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, []);
+  // capas dos jornais: lidas no arranque e de dez em dez minutos
+  useEffect(() => {
+    const load = () => fetch(`${API}/api/capas`).then((r) => r.json()).then((l) => Array.isArray(l) && setCapas(l)).catch(() => {});
+    load();
+    const t = setInterval(load, 10 * 60000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (!capaAberta) return undefined;
+    const esc = (e) => e.key === "Escape" && setCapaAberta(null);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [capaAberta]);
   // grelha de transmissões: lida no arranque e refrescada de minuto a minuto
   useEffect(() => {
     const load = () => fetch(`${API}/api/zapping`).then((r) => r.json()).then((l) => Array.isArray(l) && setZapping(l)).catch(() => {});
@@ -704,7 +1172,7 @@ export default function App() {
     : [{ ...it, unread: false, fresh: false, favAt: Date.now() }, ...f]));
   // título da página e língua do documento acompanham o botão PT/EN
   useEffect(() => {
-    document.documentElement.lang = lang === "en" ? "en" : "pt-PT";
+    document.documentElement.lang = UI[lang]?.locale || "pt-PT";
     document.title = UI[lang].docTitle;
   }, [lang]);
   const [showSources, setShowSources] = useState(false);
@@ -746,6 +1214,12 @@ export default function App() {
       .catch(() => {});
     fetch(`${API}/api/leagues`).then((r) => r.json()).then((l) => !stop && setLeagues(l)).catch(() => {});
     fetch(`${API}/api/stories`).then((r) => r.json()).then((l) => !stop && setStories(l)).catch(() => {});
+    fetch(`${API}/api/videos/latest?limit=150`).then((r) => r.json())
+      .then((l) => !stop && Array.isArray(l) && setVideos((cur) => {
+        const ids = new Set(cur.map((x) => x.video_id));
+        return [...cur, ...l.filter((x) => !ids.has(x.video_id))].sort((a, b) => b.created_time - a.created_time);
+      }))
+      .catch(() => {});
 
     fetch(`${API}/api/items?limit=1500`)
       .then((r) => r.json())
@@ -776,6 +1250,14 @@ export default function App() {
       const st = JSON.parse(e.data);
       setStories((l) => (l.some((x) => x.id === st.id) ? l : [st, ...l]));
     });
+    // vídeo novo, ou o mesmo vídeo encontrado noutra fonte (atualiza o cartão em vez de o repetir)
+    const vidEntra = (e) => {
+      const v = JSON.parse(e.data);
+      if (v.subreddit || v.canal) v.source = vFonte(v);
+      setVideos((l) => [v, ...l.filter((x) => x.video_id !== v.video_id)].sort((a, b) => b.created_time - a.created_time).slice(0, 400));
+    };
+    es.addEventListener("video", vidEntra);
+    es.addEventListener("video-update", vidEntra);
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
       setItems((l) => l.filter((x) => x.id !== id));
@@ -792,7 +1274,62 @@ export default function App() {
     return () => { stop = true; es.close(); };
   }, []);
 
+  // Tradução automática para espanhol, francês, italiano e alemão, em duas fases.
+  // Fase 1, aqui: os títulos de tudo o que o feed tem, que é o que o leitor percorre com os olhos.
+  // Fase 2, mais abaixo: os pontos, só das notícias da secção que está aberta. Enquanto a tradução
+  // não chega, o cartão mostra o texto que já tem — nunca fica vazio.
+  const pedidosTrad = useRef(new Set());
+  const [aTraduzir, setATraduzir] = useState(0);
+  const traduz = async (campos, alvo, sinal) => {
+    const faltam = alvo.filter((it) => !pedidosTrad.current.has(`${campos}:${lang}:${it.id}`)).slice(0, 60);
+    if (!faltam.length) return;
+    if (pedidosTrad.current.size > 5000) pedidosTrad.current.clear();
+    for (const it of faltam) pedidosTrad.current.add(`${campos}:${lang}:${it.id}`);
+    for (let i = 0; i < faltam.length && !sinal.parado; i += 20) {
+      const lote = faltam.slice(i, i + 20).map((x) => x.id);
+      setATraduzir((n) => n + lote.length);
+      try {
+        const r = await fetch(`${API}/api/traduzir`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lang, ids: lote, campos }),
+        }).then((x) => x.json());
+        const feitas = r?.itens || {};
+        if (!sinal.parado && Object.keys(feitas).length) {
+          setItems((l) => l.map((x) => (feitas[x.id]
+            ? {
+              ...x,
+              t: feitas[x.id].t ? { ...x.t, [lang]: feitas[x.id].t } : x.t,
+              b: feitas[x.id].b?.length ? { ...x.b, [lang]: feitas[x.id].b } : x.b,
+            }
+            : x)));
+        }
+        // as que ficaram por traduzir (limite do Gemini) voltam à fila daqui a um minuto
+        const sobraram = lote.filter((id) => !feitas[id]);
+        if (sobraram.length) setTimeout(() => sobraram.forEach((id) => pedidosTrad.current.delete(`${campos}:${lang}:${id}`)), 60000);
+      } catch { /* sem tradução: fica o texto que já existe */ }
+      setATraduzir((n) => Math.max(0, n - lote.length));
+    }
+  };
+
+  useEffect(() => {
+    if (!TRADUZIDAS[lang]) return;
+    const sinal = { parado: false };
+    const t = setTimeout(() => traduz("titulo", items.filter((it) => !it.score && !it.pending && !it.t?.[lang]), sinal), 400);
+    return () => { sinal.parado = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, items]);
+
+  // ao clicar num cartão, os pontos dessa notícia são traduzidos logo, sem esperar pela fase 2
+  const traduzAoAbrir = (it) => {
+    if (!TRADUZIDAS[lang] || it.score || it.pending || it.b?.[lang]) return;
+    pedidosTrad.current.delete(`tudo:${lang}:${it.id}`);
+    traduz("tudo", [it], { parado: false });
+  };
+
   const ui = UI[lang];
+  const T = (it) => emLingua(it.t, lang) || ""; // título na língua escolhida
+  const B = (it) => emLingua(it.b, lang) || []; // pontos na língua escolhida
   const live = !paused && conn === "ok" && xStatus === "ligado";
 
   const flush = () => {
@@ -809,7 +1346,7 @@ export default function App() {
   const isOn = (h) => enabled === null || enabled.has(h);
   const srcName = (s) => (s.handle === "resultados" ? ui.resultsSource : s.name);
   const leagueByKey = useMemo(() => Object.fromEntries(leagues.map((l) => [l.key, l])), [leagues]);
-  const leagueName = (k) => { const l = leagueByKey[k]; return l ? (lang === "en" ? l.nome_en || l.nome : l.nome) : null; };
+  const leagueName = (k) => { const l = leagueByKey[k]; return l ? (lang === "pt" ? l.nome : l.nome_en || l.nome) : null; };
   const srcPais = useMemo(() => Object.fromEntries(sourceList.map(([h, , p]) => [h, p])), [sourceList]);
   const srcCol = useMemo(() => Object.fromEntries(sourceList.map(([h, , , c]) => [h, c])), [sourceList]);
   // coluna dos Destaques: o país de que a notícia trata manda; sem essa indicação, vale a proveniência da fonte
@@ -834,7 +1371,7 @@ export default function App() {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     const s = srcOf(it);
-    return strip([it.t[lang], ...it.b[lang], s.name, s.handle].join(" ")).toLowerCase().includes(q);
+    return strip([T(it), ...B(it), s.name, s.handle].join(" ")).toLowerCase().includes(q);
   };
 
   const visible = useMemo(() => {
@@ -875,6 +1412,21 @@ export default function App() {
     return () => { ro?.disconnect(); window.removeEventListener("resize", medir); };
   }, [section, lang, colunas]);
 
+  // Fase 2: os pontos, só das notícias que estão à vista na secção aberta — na primeira página
+  // são as das colunas, nas outras secções é a lista. O resto do feed fica só com o título traduzido.
+  useEffect(() => {
+    if (!TRADUZIDAS[lang]) return;
+    const sinal = { parado: false };
+    const t = setTimeout(() => {
+      const aVista = section === "destaque"
+        ? COLS.flatMap((c) => (colunas[c.id] || []).slice(0, 6))
+        : visible.slice(0, 24);
+      traduz("tudo", aVista.filter((it) => !it.score && !it.pending && !it.b?.[lang]), sinal);
+    }, 700);
+    return () => { sinal.parado = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, section, colunas, visible]);
+
   const unreadBy = useMemo(() => {
     const out = {};
     for (const c of CATS) out[c.id] = items.filter((it) => it.unread && srcOn(it) && inSection(it, c.id)).length;
@@ -900,6 +1452,19 @@ export default function App() {
   // próximas transmissões na televisão portuguesa, quando não há jogos a decorrer
   const proximasTv = useMemo(() => zapping.filter((z) => z.inicio > now - 15 * 60000).slice(0, 10), [zapping, now]);
 
+  const videosVis = useMemo(() => videos.filter((v) => vFiltro === "all" || v.category === vFiltro || (vFiltro === "cards" && v.category === "red"))
+    .filter((v) => !query.trim() || `${v.title} ${v.player || ""} ${v.teams?.home || ""} ${v.teams?.away || ""}`.toLowerCase().includes(query.trim().toLowerCase())),
+  [videos, vFiltro, query]);
+  const capasOrd = useMemo(() => [...capas].sort((a, b) => {
+    const ia = ORDEM_CAPAS.indexOf(a.pais), ib = ORDEM_CAPAS.indexOf(b.pais);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.nome).localeCompare(String(b.nome), "pt");
+  }), [capas]);
+  const capasPorPais = useMemo(() => {
+    const g = new Map();
+    for (const c of capasOrd) { if (!g.has(c.pais)) g.set(c.pais, []); g.get(c.pais).push(c); }
+    return [...g.entries()];
+  }, [capasOrd]);
+
   const srcCounts = useMemo(() => {
     const out = {};
     for (const it of items) out[it.src] = (out[it.src] || 0) + 1;
@@ -913,7 +1478,7 @@ export default function App() {
 
   const postText = (it) => {
     const s = srcOf(it);
-    return [strip(it.t[lang]), ...it.b[lang].map((b) => `• ${strip(b)}`), srcName(s), postUrl(it)].filter(Boolean).join("\n");
+    return [strip(T(it)), ...B(it).map((b) => `• ${strip(b)}`), srcName(s), postUrl(it)].filter(Boolean).join("\n");
   };
   const copy = async (it) => {
     const text = postText(it);
@@ -929,7 +1494,7 @@ export default function App() {
   };
   const share = async (it) => {
     if (navigator.share) {
-      try { await navigator.share({ title: strip(it.t[lang]), text: postText(it) }); } catch { /* cancelado */ }
+      try { await navigator.share({ title: strip(T(it)), text: postText(it) }); } catch { /* cancelado */ }
     } else copy(it);
   };
 
@@ -951,8 +1516,8 @@ export default function App() {
                 <span className="muted">{leagueName(it.liga) || it.score?.comp}</span>
                 <span className="muted evt">{agoText(it.ts, now, ui)}</span>
               </div>
-              <p className="evtitle">{it.equipas?.some((e) => e.logo) && <span className="evcrests">{it.equipas.map((e) => e.logo && <Crest key={e.nome} e={e} theme={theme} size={24} />)}</span>}<Rich text={it.t[lang]} /></p>
-              {it.b[lang].filter((b) => !leagueLabels(it).includes(b)).map((b, i) => <p key={i} className="evb"><Rich text={b} /></p>)}
+              <p className="evtitle">{it.equipas?.some((e) => e.logo) && <span className="evcrests">{it.equipas.map((e) => e.logo && <Crest key={e.nome} e={e} theme={theme} size={24} />)}</span>}<Rich text={T(it)} /></p>
+              {B(it).filter((b) => !leagueLabels(it).includes(b)).map((b, i) => <p key={i} className="evb"><Rich text={b} /></p>)}
             </li>
           ))}
         </ul>
@@ -982,7 +1547,7 @@ export default function App() {
             <li key={l.key}>
               <button className="srcrow" aria-pressed={on} onClick={() => toggleLiga(l.key)}>
                 <span className="box">{on && <Check size={12} strokeWidth={3} />}</span>
-                <span className="nm">{lang === "en" ? l.nome_en || l.nome : l.nome}</span>
+                <span className="nm">{lang === "pt" ? l.nome : l.nome_en || l.nome}</span>
               </button>
             </li>
           );
@@ -1108,8 +1673,9 @@ export default function App() {
               <b>VAR</b>
               <span className="tagline">{ui.tagline}</span>
               <div className="status">
-                <span className={`pulse ${live ? "" : "off"}`}><i />{paused ? ui.paused : conn !== "ok" ? ui.offline : xStatus !== "ligado" ? ui.connecting : ui.live}</span>
+                <span className={`pulse ${live ? "" : "off"}`}><i />{paused ? ui.paused : conn !== "ok" ? ui.offline : xStatus !== "ligado" ? ui.connecting : ""}</span>
                 <span className="muted">{ui.nSources(enabled === null ? sourceList.length : enabled.size)}</span>
+                {aTraduzir > 0 && <span className="muted">{ui.processing}</span>}
               </div>
             </div>
             <div className="ctrls">
@@ -1117,9 +1683,10 @@ export default function App() {
                 <Search size={15} aria-hidden="true" />
                 <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={ui.search} aria-label={ui.search} />
               </label>
-              <div className="seg" role="group" aria-label={ui.langLabel}>
-                <button aria-pressed={lang === "pt"} onClick={() => setLang("pt")}>PT</button>
-                <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
+              <div className="seg langs" role="group" aria-label={ui.langLabel}>
+                {LANGS.map((l) => (
+                  <button key={l.id} aria-pressed={lang === l.id} title={l.nome} onClick={() => setLang(l.id)}>{l.sigla}</button>
+                ))}
               </div>
               <button className="icon-btn" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 aria-label={theme === "dark" ? ui.toLight : ui.toDark} title={theme === "dark" ? ui.toLight : ui.toDark}>
@@ -1146,7 +1713,7 @@ export default function App() {
             {CATS.map((c) => (
               <button key={c.id} className={`tab ${c.hl ? `hl hl-${c.hl}` : ""}`} aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
                 style={c.club ? { "--tabc": `var(--${c.id})` } : undefined}>
-                {c[lang]}
+                {emLingua(c, lang)}
                 {unreadBy[c.id] > 0 && <span className="count">{unreadBy[c.id]}</span>}
               </button>
             ))}
@@ -1159,7 +1726,7 @@ export default function App() {
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
           <main>
             <div className="feedhead">
-              <h1 className={section === "historias" ? "hist" : ""}>{CAT[section][lang]}</h1>
+              <h1 className={section === "historias" ? "hist" : ""}>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && leagues.length > 0 && (
                 <button className="textbtn" onClick={() => setShowLeagues((v) => !v)} aria-expanded={showLeagues}><ListFilter size={15} />{ui.pickLeagues}</button>
               )}
@@ -1190,7 +1757,7 @@ export default function App() {
                     <StoryCard key={st.id} s={st} items={items} lang={lang} ui={ui} now={now} theme={theme}
                       leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais}
                       isFav onFav={toggleFavStory}
-                      onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+                      onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
                   ))}
                 </ul>
               </div>
@@ -1218,9 +1785,10 @@ export default function App() {
                               <b>{sc.as}</b>
                             </div>
                             <div className="lfoot">
-                              <span className="lmin">{sc.ft ? ui.ft : sc.min || ui.live}</span>
-                              <Tv tv={it.tv} />
+                              <span className="lmin">{minText(sc, lang, ui)}</span>
+                              {evText(sc.ult, lang) && <span key={evText(sc.ult, lang)} className="lult" title={evText(sc.ult, lang)}>{evText(sc.ult, lang)}</span>}
                             </div>
+                            {(it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)) && <div className="ltv"><Tv tv={it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)} /></div>}
                           </li>
                         );
                       })}
@@ -1238,26 +1806,53 @@ export default function App() {
                     </ul>
                   ) : <p className="cempty">{ui.noLive}</p>}
                 </section>
+                {capasOrd.length > 0 && (
+                  <section className="capasbar">
+                    <div className="livehead">
+                      <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
+                      <button className="textbtn" onClick={() => setSection("capas")}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
+                    </div>
+                    <div className="capasstrip">
+                      {capasOrd.map((c) => <Capa key={c.id} c={c} lang={lang} onOpen={setCapaAberta} pequena />)}
+                    </div>
+                  </section>
+                )}
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
-                <div className="cols" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
+                <div className="cols comvid" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
+                  <section className="col vcol">
+                    <h2 className="colh"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</h2>
+                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
+                      {VFILTROS.map(([k, n]) => (
+                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setVN(20); }}>{n[lang] || n.en}</button>
+                      ))}
+                    </div>
+                    {videosVis.length === 0 ? <p className="cempty">{(VTXT[lang] || VTXT.pt).empty}</p> : (
+                      <ul className="vlist" aria-live="polite">
+                        {videosVis.slice(0, vN).map((v) => (
+                          <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} />
+                        ))}
+                        {videosVis.length > vN && <li><button className="textbtn vmais" onClick={() => setVN((n) => n + 20)}>{(VTXT[lang] || VTXT.pt).more}</button></li>}
+                      </ul>
+                    )}
+                  </section>
                   {COLS.map((c) => (
                     <section key={c.id} className="col">
-                      <h2 className="colh"><Flag code={c.pais} lang={lang} /> {c[lang]}</h2>
+                      <h2 className="colh"><Flag code={c.pais} lang={lang} /> {emLingua(c, lang)}</h2>
                       {colunas[c.id].length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
                         <ul className="clist" aria-live="polite">
                           {colunas[c.id].map((it) => {
                             const s = srcOf(it);
                             return (
-                              <li key={it.id} id={`c-${it.id}`} className={`citem ${it.hot ? "hot" : ""} ${it.unread ? "unread" : ""} ${it.fresh ? "fresh" : ""}`} onClick={() => markRead(it.id)}>
+                              <li key={it.id} id={`c-${it.id}`} className={`citem ${it.hot ? "hot" : ""} ${it.unread ? "unread" : ""} ${it.fresh ? "fresh" : ""}`} onClick={() => { markRead(it.id); traduzAoAbrir(it); }}>
                                 <div className="cmeta">
                                   <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
                                   <span className="src">{srcName(s)}</span>
                                   <span className="muted ctime">{agoText(it.ts, now, ui)}</span>
                                 </div>
-                                <h3 className="ctitle"><Rich text={it.t[lang]} /></h3>
-                                {it.b[lang][0] && <p className="cbul"><Rich text={it.b[lang][0]} /></p>}
+                                <h3 className="ctitle"><Rich text={T(it)} /></h3>
+                                {B(it)[0] && <p className="cbul"><Rich text={B(it)[0]} /></p>}
                                 <div className="cacts">
                                   {it.hot && <span className="chip hot">{ui.hot}</span>}
                                   {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
@@ -1287,8 +1882,22 @@ export default function App() {
                   ))}
                 </div>
               </>
+            ) : section === "capas" ? (
+              capasPorPais.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
+                <div className="capasview">
+                  <p className="xnote">{(CAPTXT[lang] || CAPTXT.pt).from}</p>
+                  {capasPorPais.map(([pais, lista]) => (
+                    <section key={pais} className="capagrupo">
+                      <h2 className="colh"><Flag code={pais} lang={lang} /> {pais === "un" ? (CAPTXT[lang] || CAPTXT.pt).others : countryName(pais, lang)}</h2>
+                      <div className="capasgrid">
+                        {lista.map((c) => <Capa key={c.id} c={c} lang={lang} onOpen={setCapaAberta} />)}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )
             ) : section === "historias" ? (
-              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("live"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" ? (
               <>
               {games.length === 0 ? <p className="empty">{ui.noResults}</p> : (
@@ -1297,12 +1906,12 @@ export default function App() {
                     const sc = it.score, s = srcOf(it);
                     return (
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
-                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}{it.mod && <span className="modtag">{modName(it.mod, lang)}</span>}{it.tv && <span className="comptv"><Tv tv={it.tv} size={18} /></span>}</span>
+                        <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}{it.mod && <span className="modtag">{modName(it.mod, lang)}</span>}{(it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)) && <span className="comptv"><Tv tv={it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)} size={18} /></span>}</span>
                         <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={30} />}</span>
                         <span className="res">{sc.hs}–{sc.as}</span>
                         <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={30} />}{sc.a}</span>
-                        <span className="st">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{sc.min || ui.live}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
-                        <span className="upd">{ui.updated(agoText(it.upd || it.ts, now, ui), srcName(s))}</span>
+                        <span className="st">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{minText(sc, lang, ui)}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
+                        <span className="upd">{isLive(sc, it.upd || it.ts, now) && evText(sc.ult, lang) && <b className="lultb">{evText(sc.ult, lang)} · </b>}{ui.updated(agoText(it.upd || it.ts, now, ui), srcName(s))}</span>
                       </li>
                     );
                   })}
@@ -1329,7 +1938,7 @@ export default function App() {
                         })()}
                       </div>
                       <div className="rail"><span className="dot" /></div>
-                      <article className="body" onClick={() => markRead(it.id)}>
+                      <article className="body" onClick={() => { markRead(it.id); traduzAoAbrir(it); }}>
                         <div className="mrow">
                           <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
                           <span className="src">{srcName(s)}</span>
@@ -1344,14 +1953,14 @@ export default function App() {
                             {it.hot && <span className="chip hot">{ui.hot}</span>}
                             {it.cats.filter((c) => CAT[c]).map((c) => (
                               <span key={c} className={`chip ${CAT[c].club ? "club" : ""}`} style={CAT[c].club ? { "--c": `var(--${c})` } : undefined}>
-                                {CAT[c][lang]}
+                                {emLingua(CAT[c], lang)}
                               </span>
                             ))}
                           </span>
                         </div>
 
                         {!it.score && <Crests eq={it.equipas} theme={theme} lang={lang} />}
-                        <h3 className="title"><Rich text={it.t[lang]} /></h3>
+                        <h3 className="title"><Rich text={T(it)} /></h3>
 
                         {it.score && (
                           <div className="score">
@@ -1367,9 +1976,9 @@ export default function App() {
                           </div>
                         )}
 
-                        {it.b[lang].length > 0 && (
+                        {B(it).length > 0 && (
                           <ul className="bul">
-                            {it.b[lang].map((b, i) => <li key={i}><Rich text={b} /></li>)}
+                            {B(it).map((b, i) => <li key={i}><Rich text={b} /></li>)}
                           </ul>
                         )}
 
@@ -1406,6 +2015,12 @@ export default function App() {
           {section === "resultados" && <aside className="desk">{eventsPanel}</aside>}
         </div>
       </div>
+      {capaAberta && (
+        <div className="lightbox" role="dialog" aria-label={capaAberta.nome} onClick={() => setCapaAberta(null)}>
+          <button className="icon-btn lbclose" aria-label={(VTXT[lang] || VTXT.pt).close} onClick={() => setCapaAberta(null)}><Fechar size={18} /></button>
+          <Capa c={capaAberta} lang={lang} onOpen={() => {}} />
+        </div>
+      )}
     </div>
   );
 }

@@ -40,6 +40,13 @@ export function normalizeEvent(ev) {
   const name = (c) => c.team?.shortDisplayName || c.team?.displayName || c.team?.name || "";
   const goals = (comp.details || []).filter((d) => d.scoringPlay);
   const last = goals[goals.length - 1];
+  // último acontecimento relevante do jogo (golo, expulsão, penálti, VAR, golo anulado), para mostrar ao lado do minuto
+  const relevantes = (comp.details || []).map((d) => {
+    const tipo = tipoLance(`${d.type?.text || ""} ${d.type?.abbreviation || ""}`) || (d.scoringPlay ? "golo" : null);
+    if (!tipo) return null;
+    return { tipo, label: d.clock?.displayValue || "", who: d.athletesInvolved?.[0]?.displayName || "", home: String(d.team?.id) === String(home.team?.id), s: d.clock?.value ?? 0 };
+  }).filter(Boolean).sort((a, b) => a.s - b.s);
+  const ultimo = relevantes[relevantes.length - 1];
   return {
     id: String(ev.id),
     start: Date.parse(ev.date) || null,
@@ -60,6 +67,7 @@ export function normalizeEvent(ev) {
     completed: !!type.completed,
     ht: /HALFTIME/i.test(type.name || "") || /^half/i.test(type.shortDetail || ""),
     clock: type.shortDetail || ev.status?.displayClock || "",
+    ultimo: ultimo ? { tipo: ultimo.tipo, label: ultimo.label, who: ultimo.who, home: ultimo.home } : null,
     lastScorer: last?.athletesInvolved?.[0]?.displayName || "",
     lastScorerMinute: last?.clock?.displayValue || "",
     lastScorerHome: last ? String(last.team?.id) === String(home.team?.id) : null,
@@ -92,8 +100,14 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
     }
     return [...new Set(out)];
   };
-  const minute = (m, lg) => (lg.sport === "soccer" ? (m.clock.match(/^\d+(\+\d+)?'/)?.[0] || null) : m.clock || null);
-  const score = (m, lg, ft = false) => ({ comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: ft ? null : minute(m, lg), ft });
+  // a ESPN escreve o minuto como «67'», «45'+2'» ou «90+4'»; ao intervalo não há minuto
+  const minute = (m, lg) => {
+    if (lg.sport !== "soccer") return m.clock || null;
+    const x = String(m.clock || "").match(/^(\d+)'?\s*(\+\s*\d+)?'?/);
+    return x ? `${x[1]}${(x[2] || "").replace(/\s/g, "")}'` : null;
+  };
+  const score = (m, lg, ft = false) => ({ comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: ft ? null : minute(m, lg), ft, ht: !ft && !!m.ht,
+    ult: m.ultimo ? { ...m.ultimo, equipa: m.ultimo.home ? m.home : m.away } : null });
   const base = (m, lg) => ({ src: "resultados", name: "Resultados em direto", orig: "multi", liga: lg.key, paisTema: lg.bandeira, mod: lg.mod, cats: cats(m, lg),
     equipas: [{ nome: m.home, papel: "envolvido", logo: m.homeLogo }, { nome: m.away, papel: "envolvido", logo: m.awayLogo }] });
   const sc = (m) => `${m.home} ${m.hs}–${m.as} ${m.away}`;
@@ -169,7 +183,8 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
     m.minDiff = Math.min(prev?.minDiff ?? 0, diff); // maior desvantagem da equipa da casa
     m.maxDiff = Math.max(prev?.maxDiff ?? 0, diff); // maior desvantagem da equipa de fora
     if (!prev) {
-      if (m.state === "post") return; // jogos já terminados antes de o servidor arrancar
+      // jogos já terminados antes de o servidor arrancar: sai o cartão em direto que tenha ficado gravado
+      if (m.state === "post") { remove(`r:espn:${m.id}:live`); return; }
       tracked.set(m.id, m);
       if (!first && m.hs + m.as === 0) news("inicio", m, lg);
       liveCard(m, lg);
@@ -195,7 +210,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
     if (lg.sport === "soccer" && scored && !novoLance("penalti_marcado") && !novoLance("autogolo")) news("golo", m, lg);
     if (lg.sport === "soccer" && (m.hs < prev.hs || m.as < prev.as) && !novoLance("anulado")) news("anulado", m, lg);
     if (m.ht && !prev.ht) news("intervalo", m, lg);
-    if (m.hs !== prev.hs || m.as !== prev.as || m.clock !== prev.clock) liveCard(m, lg);
+    if (m.hs !== prev.hs || m.as !== prev.as || m.clock !== prev.clock || m.ht !== prev.ht || JSON.stringify(m.ultimo) !== JSON.stringify(prev.ultimo)) liveCard(m, lg);
     tracked.set(m.id, m);
   };
 

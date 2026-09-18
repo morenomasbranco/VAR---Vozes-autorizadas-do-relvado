@@ -169,10 +169,10 @@
       "pais": "pt",
       "col": "pt",
       "google": "site:jn.pt desporto",
-      "feed": "https://www.jn.pt/rss/ultimas.xml",
+      "feed": "https://www.jn.pt/rss/desporto.xml",
       "feeds": [
-        "https://www.jn.pt/feed",
-        "https://www.jn.pt/rss/desporto.xml"
+        "https://www.jn.pt/rss/ultimas.xml",
+        "https://www.jn.pt/feed"
       ],
       "soDesporto": true
     },
@@ -328,7 +328,7 @@
       "feed": "https://www.reddit.com/r/PrimeiraLiga/new/.rss",
       "pais": "pt",
       "col": "pt",
-      "intervalo": 60,
+      "intervalo": 240,
       "semGoogle": true,
       "lang": "en"
     },
@@ -739,9 +739,9 @@
       "col": "de",
       "lang": "de",
       "google": "site:bild.de fussball",
-      "feed": "https://www.bild.de/feed/alles.xml",
+      "feed": "https://www.bild.de/sport/fussball/feed",
       "feeds": [
-        "https://www.bild.de/sport/fussball/feed"
+        "https://www.bild.de/feed/alles.xml"
       ],
       "soDesporto": true
     },
@@ -1060,7 +1060,7 @@
       "feed": "https://www.reddit.com/r/soccer/new/.rss",
       "pais": "un",
       "col": "mundo",
-      "intervalo": 60,
+      "intervalo": 240,
       "semGoogle": true,
       "lang": "en"
     },
@@ -1071,7 +1071,7 @@
       "feed": "https://www.reddit.com/r/sports/new/.rss",
       "pais": "un",
       "col": "mundo",
-      "intervalo": 60,
+      "intervalo": 240,
       "semGoogle": true,
       "lang": "en"
     },
@@ -1183,5 +1183,31 @@
       "pais": "gb",
       "col": "en"
     }
-  ]
+  ],
+  "videos": {
+    "_nota": "Feed de vídeos da página inicial. reddit: subreddits lidos num só pedido; \"regiao\": \"pt\" dá prioridade à fonte nos jogos portugueses; \"soMedia\": só entram publicações com vídeo alojado. telegram: canais públicos lidos pela página t.me/s/<canal>.",
+    "reddit": [
+      {
+        "sub": "Evangelista_TV",
+        "regiao": "pt"
+      },
+      {
+        "sub": "soccer",
+        "regiao": "mundo",
+        "soMedia": true
+      }
+    ],
+    "telegram": [
+      {
+        "canal": "twclipshdeuropa",
+        "nome": "TW Clips HD",
+        "regiao": "mundo"
+      },
+      {
+        "canal": "footballlivegoals",
+        "nome": "Football Live Goals",
+        "regiao": "mundo"
+      }
+    ]
+  }
 }
