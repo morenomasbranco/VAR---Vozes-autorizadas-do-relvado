@@ -1153,17 +1153,14 @@ const EFTXT = {
   it: { note: "Cosa è successo nello sport in questo giorno, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa. L'elenco cambia da solo a mezzanotte e viene rivisto durante il giorno.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di oggi…", none: "Niente di sportivo registrato per questi anniversari.", pt: "Solo Portogallo", src: "Fonti: Wikipedia, Wikidata ed ESPN", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", today: (d) => `Oggi, ${d}` },
   de: { note: "Was an diesem Tag im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren. Die Liste wechselt um Mitternacht von selbst und wird im Laufe des Tages überprüft.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die heutige Liste wird vorbereitet…", none: "Für diese Jahrestage ist nichts Sportliches verzeichnet.", pt: "Nur Portugal", src: "Quellen: Wikipedia, Wikidata und ESPN", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", today: (d) => `Heute, ${d}` },
 };
-const PT_RE = /portug|benfica|sporting|porto\b|braga|vit[oó]ria|guimar|boavista|belenenses|acad[eé]mica|eus[eé]bio|figo|ronaldo|mourinho|lusitan/i;
 const JOGOS_POR_ANO = 6; // os restantes jogos de cada ano ficam atrás de «mais»
 
 function EfemeridesView({ dados, lang, theme, query }) {
   const tx = EFTXT[lang] || EFTXT.pt;
   const [tipo, setTipo] = useState("todos");
-  const [soPt, setSoPt] = useState(false);
   const [abertos, setAbertos] = useState({});
   const q = query.trim().toLowerCase();
   const itens = (dados?.itens || []).filter((it) => (tipo === "todos" || it.tipo === tipo)
-    && (!soPt || it.portugues || it.bandeira === "pt" || PT_RE.test(`${it.nome || ""} ${it.desc || ""} ${it.texto || ""} ${it.casa || ""} ${it.fora || ""}`))
     && (!q || `${it.nome || ""} ${it.desc || ""} ${it.texto || ""} ${it.casa || ""} ${it.fora || ""} ${it.liga || ""}`.toLowerCase().includes(q)));
   const grupos = [];
   for (const it of itens) {
@@ -1175,12 +1172,10 @@ function EfemeridesView({ dados, lang, theme, query }) {
   return (
     <div className="efem">
       <p className="efdia">{tx.today(hojeTxt)}</p>
-      <p className="xnote">{tx.note}</p>
       <div className="seg lvls eftipos" role="group">
         {Object.entries(tx.tipos).map(([k, n]) => (
           <button key={k} aria-pressed={tipo === k} onClick={() => setTipo(k)}>{n}<span className="ct">{contagem(k)}</span></button>
         ))}
-        <button aria-pressed={soPt} onClick={() => setSoPt((v) => !v)}><Flag code="pt" lang={lang} /> {tx.pt}</button>
       </div>
       {!dados?.pronto ? <p className="empty">{tx.loading}</p> : grupos.length === 0 ? <p className="empty">{tx.none}</p> : grupos.map((g) => {
         const jogos = g.lista.filter((it) => it.tipo === "jogo");
@@ -2006,6 +2001,41 @@ export default function App() {
                     </ul>
                   ) : <p className="cempty">{ui.noLive}</p>}
                 </section>
+                <section className="vbar" aria-label={(VTXT[lang] || VTXT.pt).title}>
+                  <div className="livehead">
+                    <b className="capash"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</b>
+                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
+                      {VFILTROS.map(([k, n]) => (
+                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setVN(20); if (vRef.current) vRef.current.scrollLeft = 0; }}>
+                          {n[lang] || n.en}<span className="ct">{vContagem[k] || 0}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="varrows">
+                      <button className="icon-btn" onClick={() => rolaVideos(-1)} aria-label="←"><ChevronLeft size={16} /></button>
+                      <button className="icon-btn" onClick={() => rolaVideos(1)} aria-label="→"><ChevronRight size={16} /></button>
+                    </div>
+                  </div>
+                  {videosVis.length === 0 ? <p className="cempty">{(VTXT[lang] || VTXT.pt).empty}</p> : (
+                    <ul className="vlist vrow" ref={vRef} aria-live="polite">
+                      {videosVis.slice(0, vN).map((v) => (
+                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} />
+                      ))}
+                      {videosVis.length > vN && <li className="vmaisli"><button className="textbtn vmais" onClick={() => setVN((n) => n + 20)}>{(VTXT[lang] || VTXT.pt).more}</button></li>}
+                    </ul>
+                  )}
+                </section>
+                <section className="capasbar">
+                  <div className="livehead">
+                    <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
+                    <button className="textbtn" onClick={() => { setSection("capas"); setCapasDia(null); }}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
+                  </div>
+                  {capasOrd.length > 0 ? (
+                    <div className="capasstrip">
+                      {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena semDia />)}
+                    </div>
+                  ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
+                </section>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
@@ -2050,41 +2080,6 @@ export default function App() {
                     </section>
                   ))}
                 </div>
-                <section className="vbar" aria-label={(VTXT[lang] || VTXT.pt).title}>
-                  <div className="livehead">
-                    <b className="capash"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</b>
-                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
-                      {VFILTROS.map(([k, n]) => (
-                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setVN(20); if (vRef.current) vRef.current.scrollLeft = 0; }}>
-                          {n[lang] || n.en}<span className="ct">{vContagem[k] || 0}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="varrows">
-                      <button className="icon-btn" onClick={() => rolaVideos(-1)} aria-label="←"><ChevronLeft size={16} /></button>
-                      <button className="icon-btn" onClick={() => rolaVideos(1)} aria-label="→"><ChevronRight size={16} /></button>
-                    </div>
-                  </div>
-                  {videosVis.length === 0 ? <p className="cempty">{(VTXT[lang] || VTXT.pt).empty}</p> : (
-                    <ul className="vlist vrow" ref={vRef} aria-live="polite">
-                      {videosVis.slice(0, vN).map((v) => (
-                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} />
-                      ))}
-                      {videosVis.length > vN && <li className="vmaisli"><button className="textbtn vmais" onClick={() => setVN((n) => n + 20)}>{(VTXT[lang] || VTXT.pt).more}</button></li>}
-                    </ul>
-                  )}
-                </section>
-                <section className="capasbar">
-                  <div className="livehead">
-                    <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
-                    <button className="textbtn" onClick={() => { setSection("capas"); setCapasDia(null); }}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
-                  </div>
-                  {capasOrd.length > 0 ? (
-                    <div className="capasstrip">
-                      {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena semDia />)}
-                    </div>
-                  ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
-                </section>
               </>
             ) : section === "capas" ? (
               diasCapas.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
