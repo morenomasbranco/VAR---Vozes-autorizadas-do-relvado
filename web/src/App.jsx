@@ -13,7 +13,6 @@ const CATS = [
   { id: "destaque", pt: "Live", en: "Live", es: "Live", fr: "Live", it: "Live", de: "Live", hl: "dest" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
   { id: "capas", pt: "Capas", en: "Front pages", es: "Portadas", fr: "Unes", it: "Prime pagine", de: "Titelseiten" },
-  { id: "efemerides", pt: "Neste dia", en: "On this day", es: "Tal día como hoy", fr: "Ce jour-là", it: "Accadde oggi", de: "An diesem Tag", hl: "efem" },
   { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", es: "Benfica", fr: "Benfica", it: "Benfica", de: "Benfica", club: true },
@@ -22,8 +21,8 @@ const CATS = [
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
   { id: "premios", pt: "Prémios", en: "Awards", es: "Premios", fr: "Trophées", it: "Premi", de: "Auszeichnungen" },
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
+  { id: "efemerides", pt: "Neste dia", en: "On this day", es: "Tal día como hoy", fr: "Ce jour-là", it: "Accadde oggi", de: "An diesem Tag", hl: "efem" },
   { id: "historias", pt: "Possíveis histórias", en: "Story leads", es: "Posibles historias", fr: "Pistes d'articles", it: "Possibili storie", de: "Mögliche Geschichten", hl: "hist" },
-  { id: "favoritos", pt: "Favoritos", en: "Saved", es: "Guardadas", fr: "Enregistrées", it: "Salvate", de: "Gespeichert", hl: "fav" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
@@ -535,13 +534,13 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
               : <video className="vplayer" src={v.embed.src} controls autoPlay playsInline />
         ) : (
           <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
-            {v.thumbnail && !semImg ? <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setSemImg(true)} /> : <span className="vph">{c.i}</span>}
+            {v.thumbnail && !semImg ? <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setSemImg(true)} /> : <span className="vph" />}
             <span className="vbtn"><Play size={20} fill="currentColor" /></span>
-            <span className="vcat">{c.i} {c[lang] || c.en}</span>
+            <span className="vcat">{c[lang] || c.en}</span>
           </button>
         )}
       </div>
-      <h3 className="vtitle">{v.teams && <span className="vico">{c.i}</span>}{titulo}</h3>
+      <h3 className="vtitle">{titulo}</h3>
       {(v.player || v.minute) && <p className="vsub">{v.player}{v.player && v.minute ? " " : ""}{v.minute ? `${v.minute}'` : ""}{v.opponent ? <span className="muted"> · vs {v.opponent}</span> : null}</p>}
       {v.teams && v.title && <p className="vorig" title={v.title}>{v.title}</p>}
       <div className="vmeta">
@@ -656,9 +655,6 @@ function StoryCard({ s, items, lang, ui, now, onOpen, leagueName, leaguePais, th
         <Flag code={s.pais || leaguePais(s.liga)} lang={lang} />
         {s.ligaNome && <span className="muted">{leagueName(s.liga) || s.ligaNome}</span>}
         <span className="muted">{agoText(s.ts, now, ui)}</span>
-        <button className={`textbtn savest ${isFav ? "on" : ""}`} aria-pressed={isFav} onClick={() => onFav(s)}>
-          <Star size={14} fill={isFav ? "currentColor" : "none"} />{isFav ? ui.saved : ui.save}
-        </button>
       </div>
       <Crests eq={s.crests} theme={theme} lang={lang} />
       <h3 className="title">{emLingua(s.t, lang)}</h3>
@@ -813,7 +809,7 @@ const CSS = `
 .apito .tab.hl-live{color:var(--live);--tabc:var(--live)}
 .apito .tab.hl-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--live);animation:apl 1.6s ease-out infinite}
 .apito .tab.hl-dest{color:var(--ink);--tabc:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
-.apito .tab.hl-hist{color:var(--hist);--tabc:var(--hist);background:color-mix(in srgb,var(--hist) 14%,transparent);margin-left:auto}
+.apito .tab.hl-hist{color:var(--hist);--tabc:var(--hist);background:color-mix(in srgb,var(--hist) 14%,transparent)}
 .apito .tab.hl[aria-pressed="true"]{color:var(--tabc)}
 .apito .tab.hl-dest[aria-pressed="true"]{color:var(--ink)}
 .apito .tab{white-space:nowrap;padding:9px clamp(5px,0.45vw,8px) 10px;font-size:clamp(13px,0.92vw,15px);font-weight:500;color:var(--muted);border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:6px}
@@ -1041,7 +1037,7 @@ const CSS = `
 .apito .cempty{font-size:13px;color:var(--muted);padding:6px 0}
 @media(max-width:640px){.apito .cols{grid-auto-columns:minmax(84vw,1fr);scroll-snap-type:x mandatory}.apito .col{scroll-snap-align:start}}
 /* faixa horizontal de vídeos, por cima das notícias */
-.apito .vbar{margin:0 0 18px}
+.apito .vbar{margin:22px 0 18px}
 .apito .vbar .livehead{flex-wrap:wrap;gap:8px 12px}
 .apito .vbar .capash{display:inline-flex;align-items:center;gap:6px}
 .apito .vfil{display:flex;flex-wrap:wrap;gap:4px;border:0;padding:0;background:none;margin:0}
@@ -1068,7 +1064,7 @@ const CSS = `
 /* Capas: dias da semana */
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
 /* Neste dia */
-.apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
+.apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent);margin-left:auto}
 .apito .efem{max-width:900px}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
@@ -1966,18 +1962,6 @@ export default function App() {
                 ))}
               </div>
             )}
-            {section === "favoritos" && favStories.length > 0 && (
-              <div className="stories favstories">
-                <ul className="storylist">
-                  {favStories.map((st) => (
-                    <StoryCard key={st.id} s={st} items={items} lang={lang} ui={ui} now={now} theme={theme}
-                      leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais}
-                      isFav onFav={toggleFavStory}
-                      onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
-                  ))}
-                </ul>
-              </div>
-            )}
 
             {section === "destaque" ? (
               <>
@@ -2022,6 +2006,50 @@ export default function App() {
                     </ul>
                   ) : <p className="cempty">{ui.noLive}</p>}
                 </section>
+                <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
+                  <div style={{ width: colsW || 1 }} />
+                </div>
+                <div className="cols" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
+                  {COLS.map((c) => (
+                    <section key={c.id} className="col">
+                      <h2 className="colh"><Flag code={c.pais} lang={lang} /> {emLingua(c, lang)}</h2>
+                      {colunas[c.id].length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
+                        <ul className="clist" aria-live="polite">
+                          {colunas[c.id].map((it) => {
+                            const s = srcOf(it);
+                            return (
+                              <li key={it.id} id={`c-${it.id}`} className={`citem ${it.hot ? "hot" : ""} ${it.unread ? "unread" : ""} ${it.fresh ? "fresh" : ""}`} onClick={() => { markRead(it.id); traduzAoAbrir(it); }}>
+                                <div className="cmeta">
+                                  <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
+                                  <span className="src">{srcName(s)}</span>
+                                  <span className="muted ctime">{agoText(it.ts, now, ui)}</span>
+                                </div>
+                                <h3 className="ctitle"><Rich text={T(it)} /></h3>
+                                {B(it)[0] && <p className="cbul"><Rich text={B(it)[0]} /></p>}
+                                <div className="cacts">
+                                  {it.hot && <span className="chip hot">{ui.hot}</span>}
+                                  {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
+                                  {it.also?.length > 0 && (
+                                    <span className={`chip conf mini ${now - (it.upd || 0) < 10 * 60000 ? "now" : ""}`} title={`${ui.confirms}: ${it.also.map((a) => a.name || a.src).join(", ")}`}>
+                                      {it.also.slice(0, 3).map((a) => <Flag key={a.postId || a.src} code={a.pais || srcPais[a.src]} lang={lang} />)}
+                                      {ui.nConfirms(it.also.length)}
+                                    </span>
+                                  )}
+                                  {postUrl(it) && (
+                                    <a className="textbtn" href={postUrl(it)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                                      title={isXUrl(postUrl(it)) ? ui.viewX : ui.viewSrc} style={{ textDecoration: "none" }}>
+                                      <ExternalLink size={13} />
+                                    </a>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </section>
+                  ))}
+                </div>
                 <section className="vbar" aria-label={(VTXT[lang] || VTXT.pt).title}>
                   <div className="livehead">
                     <b className="capash"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</b>
@@ -2057,54 +2085,6 @@ export default function App() {
                     </div>
                   ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
                 </section>
-                <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
-                  <div style={{ width: colsW || 1 }} />
-                </div>
-                <div className="cols" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
-                  {COLS.map((c) => (
-                    <section key={c.id} className="col">
-                      <h2 className="colh"><Flag code={c.pais} lang={lang} /> {emLingua(c, lang)}</h2>
-                      {colunas[c.id].length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
-                        <ul className="clist" aria-live="polite">
-                          {colunas[c.id].map((it) => {
-                            const s = srcOf(it);
-                            return (
-                              <li key={it.id} id={`c-${it.id}`} className={`citem ${it.hot ? "hot" : ""} ${it.unread ? "unread" : ""} ${it.fresh ? "fresh" : ""}`} onClick={() => { markRead(it.id); traduzAoAbrir(it); }}>
-                                <div className="cmeta">
-                                  <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
-                                  <span className="src">{srcName(s)}</span>
-                                  <span className="muted ctime">{agoText(it.ts, now, ui)}</span>
-                                </div>
-                                <h3 className="ctitle"><Rich text={T(it)} /></h3>
-                                {B(it)[0] && <p className="cbul"><Rich text={B(it)[0]} /></p>}
-                                <div className="cacts">
-                                  {it.hot && <span className="chip hot">{ui.hot}</span>}
-                                  {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
-                                  {it.also?.length > 0 && (
-                                    <span className={`chip conf mini ${now - (it.upd || 0) < 10 * 60000 ? "now" : ""}`} title={`${ui.confirms}: ${it.also.map((a) => a.name || a.src).join(", ")}`}>
-                                      {it.also.slice(0, 3).map((a) => <Flag key={a.postId || a.src} code={a.pais || srcPais[a.src]} lang={lang} />)}
-                                      {ui.nConfirms(it.also.length)}
-                                    </span>
-                                  )}
-                                  <button className={`textbtn ${isFav(it.id) ? "on" : ""}`} aria-pressed={isFav(it.id)} title={isFav(it.id) ? ui.saved : ui.save}
-                                    onClick={(e) => { e.stopPropagation(); toggleFav(it); }}>
-                                    <Star size={13} fill={isFav(it.id) ? "currentColor" : "none"} />
-                                  </button>
-                                  {postUrl(it) && (
-                                    <a className="textbtn" href={postUrl(it)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                                      title={isXUrl(postUrl(it)) ? ui.viewX : ui.viewSrc} style={{ textDecoration: "none" }}>
-                                      <ExternalLink size={13} />
-                                    </a>
-                                  )}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </section>
-                  ))}
-                </div>
               </>
             ) : section === "capas" ? (
               diasCapas.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
@@ -2221,9 +2201,6 @@ export default function App() {
                             {copiedId === it.id ? ui.copied : ui.copy}
                           </button>
                           <button className="textbtn" onClick={() => share(it)}><Share2 size={14} />{ui.share}</button>
-                          <button className={`textbtn ${isFav(it.id) ? "on" : ""}`} aria-pressed={isFav(it.id)} onClick={(e) => { e.stopPropagation(); toggleFav(it); }}>
-                            <Star size={14} fill={isFav(it.id) ? "currentColor" : "none"} />{isFav(it.id) ? ui.saved : ui.save}
-                          </button>
                           {postUrl(it) ? (
                             <a className="textbtn" href={postUrl(it)} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
                               <ExternalLink size={14} />{isXUrl(postUrl(it)) ? ui.viewX : ui.viewSrc}
