@@ -1,0 +1,7 @@
+# O Netlify aloja só o site. O servidor (pasta server/) corre noutro serviço — ver README.
+[build]
+  command = "npm run build"
+  publish = "web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"

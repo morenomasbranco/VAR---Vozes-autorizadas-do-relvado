@@ -1,0 +1,289 @@
+[
+  {
+    "nome": "Liga Portugal",
+    "procurar": [
+      "primeira liga",
+      "liga portugal"
+    ],
+    "pais": "portugal",
+    "evitar": [
+      "2",
+      "3"
+    ],
+    "espn": "soccer/por.1",
+    "nome_en": "Liga Portugal",
+    "bandeira": "pt"
+  },
+  {
+    "nome": "Liga 2",
+    "procurar": [
+      "liga 2",
+      "segunda liga",
+      "liga portugal 2"
+    ],
+    "pais": "portugal",
+    "nome_en": "Liga Portugal 2",
+    "bandeira": "pt"
+  },
+  {
+    "nome": "Taça de Portugal",
+    "procurar": [
+      "taca de portugal"
+    ],
+    "pais": "portugal",
+    "espn": "soccer/por.taca.portugal",
+    "nome_en": "Portuguese Cup",
+    "bandeira": "pt"
+  },
+  {
+    "nome": "Liga dos Campeões",
+    "procurar": [
+      "uefa champions league"
+    ],
+    "espn": "soccer/uefa.champions",
+    "nome_en": "Champions League",
+    "bandeira": "eu"
+  },
+  {
+    "nome": "Liga Europa",
+    "procurar": [
+      "uefa europa league"
+    ],
+    "espn": "soccer/uefa.europa",
+    "nome_en": "Europa League",
+    "bandeira": "eu"
+  },
+  {
+    "nome": "Liga Conferência",
+    "procurar": [
+      "conference league"
+    ],
+    "espn": "soccer/uefa.europa.conf",
+    "nome_en": "Conference League",
+    "bandeira": "eu"
+  },
+  {
+    "nome": "Premier League",
+    "procurar": [
+      "premier league"
+    ],
+    "pais": "england",
+    "seccao": "big5",
+    "espn": "soccer/eng.1",
+    "nome_en": "Premier League",
+    "bandeira": "gb-eng"
+  },
+  {
+    "nome": "LaLiga",
+    "procurar": [
+      "laliga",
+      "la liga",
+      "primera division"
+    ],
+    "pais": "spain",
+    "seccao": "big5",
+    "espn": "soccer/esp.1",
+    "nome_en": "LaLiga",
+    "bandeira": "es"
+  },
+  {
+    "nome": "Serie A",
+    "procurar": [
+      "serie a"
+    ],
+    "pais": "italy",
+    "seccao": "big5",
+    "espn": "soccer/ita.1",
+    "nome_en": "Serie A",
+    "bandeira": "it"
+  },
+  {
+    "nome": "Bundesliga",
+    "procurar": [
+      "bundesliga"
+    ],
+    "pais": "germany",
+    "seccao": "big5",
+    "evitar": [
+      "2."
+    ],
+    "espn": "soccer/ger.1",
+    "nome_en": "Bundesliga",
+    "bandeira": "de"
+  },
+  {
+    "nome": "Ligue 1",
+    "procurar": [
+      "ligue 1"
+    ],
+    "pais": "france",
+    "seccao": "big5",
+    "espn": "soccer/fra.1",
+    "nome_en": "Ligue 1",
+    "bandeira": "fr"
+  },
+  {
+    "nome": "Eredivisie",
+    "procurar": [
+      "eredivisie"
+    ],
+    "pais": "netherlands",
+    "seccao": "perifericos",
+    "espn": "soccer/ned.1",
+    "nome_en": "Eredivisie",
+    "bandeira": "nl"
+  },
+  {
+    "nome": "Süper Lig",
+    "procurar": [
+      "super lig"
+    ],
+    "pais": "turkey",
+    "seccao": "perifericos",
+    "espn": "soccer/tur.1",
+    "nome_en": "Süper Lig",
+    "bandeira": "tr"
+  },
+  {
+    "nome": "Liga Saudita",
+    "procurar": [
+      "pro league",
+      "saudi"
+    ],
+    "pais": "saudi",
+    "seccao": "perifericos",
+    "espn": "soccer/ksa.1",
+    "nome_en": "Saudi Pro League",
+    "bandeira": "sa"
+  },
+  {
+    "nome": "Brasileirão",
+    "procurar": [
+      "serie a",
+      "brasileirao"
+    ],
+    "pais": "brazil",
+    "seccao": "perifericos",
+    "espn": "soccer/bra.1",
+    "nome_en": "Brasileirão",
+    "bandeira": "br"
+  },
+  {
+    "nome": "MLS",
+    "procurar": [
+      "major league soccer",
+      "mls"
+    ],
+    "pais": "usa",
+    "seccao": "perifericos",
+    "espn": "soccer/usa.1",
+    "nome_en": "MLS",
+    "bandeira": "us"
+  },
+  {
+    "nome": "Seleção: qualificação",
+    "espn": "soccer/fifa.worldq.uefa",
+    "so": [
+      "Portugal"
+    ],
+    "importante": true,
+    "procurar": [
+      "world cup qualification"
+    ],
+    "pais": "europe",
+    "nome_en": "Portugal: qualifiers",
+    "bandeira": "pt"
+  },
+  {
+    "nome": "Seleção: Liga das Nações",
+    "espn": "soccer/uefa.nations",
+    "so": [
+      "Portugal"
+    ],
+    "importante": true,
+    "procurar": [
+      "nations league"
+    ],
+    "nome_en": "Portugal: Nations League",
+    "bandeira": "pt"
+  },
+  {
+    "nome": "Seleção: particulares",
+    "espn": "soccer/fifa.friendly",
+    "so": [
+      "Portugal"
+    ],
+    "importante": true,
+    "procurar": [
+      "friendlies"
+    ],
+    "nome_en": "Portugal: friendlies",
+    "bandeira": "pt"
+  },
+  {
+    "nome": "Mundial FIBA",
+    "espn": "basketball/fiba",
+    "seccao": "modalidades",
+    "procurar": [
+      "fiba world cup"
+    ],
+    "nome_en": "FIBA World Cup",
+    "bandeira": "un",
+    "mod": "basquetebol"
+  },
+  {
+    "nome": "NBA",
+    "nome_en": "NBA",
+    "bandeira": "us",
+    "espn": "basketball/nba",
+    "seccao": "modalidades",
+    "mod": "basquetebol",
+    "procurar": [
+      "nba"
+    ]
+  },
+  {
+    "nome": "WNBA",
+    "nome_en": "WNBA",
+    "bandeira": "us",
+    "espn": "basketball/wnba",
+    "seccao": "modalidades",
+    "mod": "basquetebol",
+    "procurar": [
+      "wnba"
+    ]
+  },
+  {
+    "nome": "EuroLeague",
+    "nome_en": "EuroLeague",
+    "bandeira": "eu",
+    "espn": "basketball/euroleague",
+    "seccao": "modalidades",
+    "mod": "basquetebol",
+    "procurar": [
+      "euroleague"
+    ]
+  },
+  {
+    "nome": "NFL",
+    "nome_en": "NFL",
+    "bandeira": "us",
+    "espn": "football/nfl",
+    "seccao": "modalidades",
+    "mod": "futebol_americano",
+    "procurar": [
+      "nfl"
+    ]
+  },
+  {
+    "nome": "NHL",
+    "nome_en": "NHL",
+    "bandeira": "us",
+    "espn": "hockey/nhl",
+    "seccao": "modalidades",
+    "mod": "hoquei_gelo",
+    "procurar": [
+      "nhl"
+    ]
+  }
+]

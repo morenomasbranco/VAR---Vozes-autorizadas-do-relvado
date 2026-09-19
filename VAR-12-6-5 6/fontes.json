@@ -1,0 +1,1432 @@
+{
+  "_colunas": "col = coluna dos Destaques: pt, en, es, it, de, fr, mundo, portugueses. A coluna da fonte só é usada quando a notícia não indica o país de que trata.",
+  "rss": [
+    {
+      "id": "record",
+      "nome": "Record",
+      "site": "https://www.record.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://www.record.pt/rss"
+    },
+    {
+      "id": "abola",
+      "nome": "A Bola",
+      "site": "https://www.abola.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://www.abola.pt/rss",
+      "feeds": [
+        "https://www.abola.pt/rss/index.aspx"
+      ]
+    },
+    {
+      "id": "ojogo",
+      "nome": "O Jogo",
+      "site": "https://www.ojogo.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://www.ojogo.pt/rss",
+      "feeds": [
+        "https://www.ojogo.pt/rss/ultimas.xml",
+        "https://www.ojogo.pt/feed"
+      ]
+    },
+    {
+      "id": "maisfutebol",
+      "nome": "Maisfutebol",
+      "site": "https://maisfutebol.iol.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://maisfutebol.iol.pt/rss",
+      "feeds": [
+        "https://www.maisfutebol.iol.pt/rss"
+      ]
+    },
+    {
+      "id": "zerozero",
+      "nome": "zerozero",
+      "site": "https://www.zerozero.pt/",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://www.zerozero.pt/rss/noticias.php",
+      "google": "site:zerozero.pt",
+      "rapido": true
+    },
+    {
+      "id": "zerozero-transfers",
+      "nome": "zerozero Transferências",
+      "site": "https://www.zerozero.pt/transfers.php",
+      "feed": "https://www.zerozero.pt/rss/transfers.php",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "semGoogle": true,
+      "rapido": true
+    },
+    {
+      "id": "bolanarede",
+      "nome": "Bola na Rede",
+      "site": "https://www.bolanarede.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://www.bolanarede.pt/feed/"
+    },
+    {
+      "id": "flashscore",
+      "nome": "Flashscore",
+      "site": "https://www.flashscore.pt/noticias/",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "canal11",
+      "nome": "Canal 11",
+      "site": "https://canal11.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://canal11.pt/feed/"
+    },
+    {
+      "id": "sapo",
+      "nome": "SAPO Desporto",
+      "site": "https://sapo.pt/",
+      "feed": "https://sapo.pt/rss/destaques",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "soDesporto": true,
+      "rapido": true,
+      "google": "site:sapo.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")"
+    },
+    {
+      "id": "observador",
+      "nome": "Observador",
+      "site": "https://observador.pt/seccao/desporto/",
+      "feed": "https://observador.pt/seccao/desporto/feed/",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:observador.pt (futebol OR Benfica OR Sporting OR \"FC Porto\" OR modalidades)",
+      "lang": "pt",
+      "rapido": true,
+      "soDesporto": true,
+      "categoriasFiaveis": true
+    },
+    {
+      "id": "rtpdesporto",
+      "nome": "RTP Desporto",
+      "site": "https://www.rtp.pt/noticias/desporto",
+      "pais": "pt",
+      "col": "pt",
+      "lang": "pt",
+      "feed": "https://www.rtp.pt/noticias/rss/desporto",
+      "rapido": true,
+      "soDesporto": true
+    },
+    {
+      "id": "renascenca",
+      "nome": "Renascença (Bola Branca)",
+      "site": "https://rr.pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:rr.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "lang": "pt",
+      "feed": "https://rr.pt/rssfeed-ultimas",
+      "soDesporto": true
+    },
+    {
+      "id": "aominuto",
+      "nome": "Notícias ao Minuto",
+      "site": "https://www.noticiasaominuto.com/desporto",
+      "feed": "https://www.noticiasaominuto.com/rss/desporto",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "rapido": true,
+      "google": "site:noticiasaominuto.com desporto",
+      "soDesporto": true
+    },
+    {
+      "id": "publico",
+      "nome": "Público Desporto",
+      "site": "https://www.publico.pt/desporto",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:publico.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "feed": "https://feeds.feedburner.com/PublicoRSS",
+      "soDesporto": true
+    },
+    {
+      "id": "jn",
+      "nome": "Jornal de Notícias",
+      "site": "https://www.jn.pt/desporto/",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:jn.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "feed": "https://www.jn.pt/rss/desporto.xml",
+      "feeds": [
+        "https://www.jn.pt/rss/ultimas.xml",
+        "https://www.jn.pt/feed"
+      ],
+      "soDesporto": true
+    },
+    {
+      "id": "dn",
+      "nome": "Diário de Notícias",
+      "site": "https://www.dn.pt/desporto/",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:dn.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "feed": "https://www.dn.pt/rss/ultimas.xml",
+      "feeds": [
+        "https://www.dn.pt/feed"
+      ],
+      "soDesporto": true
+    },
+    {
+      "id": "tribunaexpresso",
+      "nome": "Tribuna Expresso",
+      "site": "https://tribunaexpresso.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:tribunaexpresso.pt",
+      "feed": "https://rss.impresa.pt/feed/latest/olimpia.rss?type=ARTICLE,VIDEO,GALLERY,STREAM,PLAYLIST,EVENT,NEWSLETTER&limit=20&pubsubhub=true"
+    },
+    {
+      "id": "sicnoticias",
+      "nome": "SIC Notícias",
+      "site": "https://sicnoticias.pt/desporto",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:sicnoticias.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "feed": "https://sicnoticias.pt/rss",
+      "feeds": [
+        "https://sicnoticias.pt/rss/ultimas"
+      ],
+      "soDesporto": true
+    },
+    {
+      "id": "cnnportugal",
+      "nome": "CNN Portugal",
+      "site": "https://cnnportugal.iol.pt/desporto",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:cnnportugal.iol.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "feed": "https://cnnportugal.iol.pt/rss",
+      "soDesporto": true
+    },
+    {
+      "id": "tsf",
+      "nome": "TSF",
+      "site": "https://www.tsf.pt/desporto.html",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:tsf.pt (futebol OR Benfica OR Sporting OR \"FC Porto\")",
+      "feed": "https://www.tsf.pt/rss/ultimas.xml",
+      "feeds": [
+        "https://www.tsf.pt/feed"
+      ],
+      "soDesporto": true
+    },
+    {
+      "id": "lusa",
+      "nome": "Lusa (agência)",
+      "site": "https://www.lusa.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:lusa.pt (desporto OR futebol)"
+    },
+    {
+      "id": "sporttv",
+      "nome": "Sport TV",
+      "site": "https://www.sporttv.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:sporttv.pt"
+    },
+    {
+      "id": "goalpoint",
+      "nome": "GoalPoint",
+      "site": "https://www.goalpoint.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:goalpoint.pt",
+      "feed": "https://www.goalpoint.pt/feed/"
+    },
+    {
+      "id": "ligaportugal",
+      "nome": "Liga Portugal (oficial)",
+      "site": "https://www.ligaportugal.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:ligaportugal.pt"
+    },
+    {
+      "id": "fpf",
+      "nome": "FPF (oficial)",
+      "site": "https://www.fpf.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:fpf.pt"
+    },
+    {
+      "id": "slbenfica",
+      "nome": "SL Benfica (oficial)",
+      "site": "https://www.slbenfica.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:slbenfica.pt",
+      "feed": "https://www.slbenfica.pt/pt-pt/rss/noticias.xml",
+      "feeds": [
+        "https://www.slbenfica.pt/pt-pt/rss"
+      ]
+    },
+    {
+      "id": "sportingcp",
+      "nome": "Sporting CP (oficial)",
+      "site": "https://www.sporting.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:sporting.pt",
+      "feed": "https://www.sporting.pt/pt/rss/noticias.xml"
+    },
+    {
+      "id": "fcporto",
+      "nome": "FC Porto (oficial)",
+      "site": "https://www.fcporto.pt",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "google": "site:fcporto.pt",
+      "feed": "https://www.fcporto.pt/pt/rss/noticias.xml",
+      "feeds": [
+        "https://www.fcporto.pt/pt/rss/noticias"
+      ]
+    },
+    {
+      "id": "reddit-primeiraliga",
+      "nome": "Reddit r/PrimeiraLiga",
+      "site": "https://www.reddit.com/r/PrimeiraLiga/",
+      "feed": "https://www.reddit.com/r/PrimeiraLiga/new/.rss",
+      "pais": "pt",
+      "col": "pt",
+      "intervalo": 240,
+      "semGoogle": true,
+      "lang": "en"
+    },
+    {
+      "id": "pedro-sepulveda",
+      "nome": "Pedro Sepúlveda (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Pedro Sepúlveda\" (Benfica OR Sporting OR Porto OR mercado OR transferência)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "sebastiao-sousa-pinto",
+      "nome": "Sebastião Sousa Pinto (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Sebastião Sousa Pinto\" (Benfica OR Sporting OR Porto OR mercado)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "bbcsport",
+      "nome": "BBC Sport",
+      "site": "https://www.bbc.com/sport/football",
+      "feed": "https://feeds.bbci.co.uk/sport/football/rss.xml",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "rapido": true
+    },
+    {
+      "id": "guardian",
+      "nome": "The Guardian",
+      "site": "https://www.theguardian.com/football",
+      "feed": "https://www.theguardian.com/football/rss",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "rapido": true
+    },
+    {
+      "id": "skysports",
+      "nome": "Sky Sports",
+      "site": "https://www.skysports.com/football",
+      "feed": "https://www.skysports.com/rss/11095",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "rapido": true,
+      "soFutebol": true
+    },
+    {
+      "id": "telegraph",
+      "nome": "The Telegraph",
+      "site": "https://www.telegraph.co.uk/football/",
+      "feed": "https://www.telegraph.co.uk/football/rss.xml",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:telegraph.co.uk football"
+    },
+    {
+      "id": "independent",
+      "nome": "The Independent",
+      "site": "https://www.independent.co.uk/sport/football",
+      "feed": "https://www.independent.co.uk/sport/football/rss",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:independent.co.uk football"
+    },
+    {
+      "id": "mirror",
+      "nome": "Mirror Football",
+      "site": "https://www.mirror.co.uk/sport/football/",
+      "feed": "https://www.mirror.co.uk/sport/football/?service=rss",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:mirror.co.uk football"
+    },
+    {
+      "id": "dailymail",
+      "nome": "Mail Sport",
+      "site": "https://www.dailymail.co.uk/sport/football/",
+      "feed": "https://www.dailymail.co.uk/sport/football/index.rss",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:dailymail.co.uk football"
+    },
+    {
+      "id": "standard",
+      "nome": "Evening Standard",
+      "site": "https://www.standard.co.uk/sport/football",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:standard.co.uk football",
+      "feed": "https://www.standard.co.uk/sport/football/rss"
+    },
+    {
+      "id": "talksport",
+      "nome": "talkSPORT",
+      "site": "https://talksport.com/football/",
+      "feed": "https://talksport.com/football/feed/",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:talksport.com football"
+    },
+    {
+      "id": "athletic",
+      "nome": "The Athletic",
+      "site": "https://www.nytimes.com/athletic/soccer/",
+      "pais": "us",
+      "col": "en",
+      "lang": "en",
+      "google": "site:nytimes.com/athletic football",
+      "soGoogle": true
+    },
+    {
+      "id": "goalcom",
+      "nome": "Goal.com",
+      "site": "https://www.goal.com/en",
+      "pais": "gb",
+      "col": "en",
+      "lang": "en",
+      "google": "site:goal.com"
+    },
+    {
+      "id": "premierleague",
+      "nome": "Premier League (oficial)",
+      "site": "https://www.premierleague.com/news",
+      "pais": "gb-eng",
+      "col": "en",
+      "lang": "en",
+      "google": "site:premierleague.com"
+    },
+    {
+      "id": "james-pearce",
+      "nome": "James Pearce (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"James Pearce\" Liverpool",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "gb",
+      "col": "en"
+    },
+    {
+      "id": "sam-lee",
+      "nome": "Sam Lee (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Sam Lee\" (Manchester City OR transfer)",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "gb",
+      "col": "en"
+    },
+    {
+      "id": "ben-jacobs",
+      "nome": "Ben Jacobs (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Ben Jacobs\" (transfer OR deal OR club)",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "gb",
+      "col": "en"
+    },
+    {
+      "id": "matt-law",
+      "nome": "Matt Law (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Matt Law\" Chelsea",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "gb",
+      "col": "en"
+    },
+    {
+      "id": "marca",
+      "nome": "Marca",
+      "site": "https://www.marca.com/futbol.html",
+      "pais": "es",
+      "col": "es",
+      "google": "site:marca.com futbol",
+      "lang": "es",
+      "feed": "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml"
+    },
+    {
+      "id": "as",
+      "nome": "AS",
+      "site": "https://as.com/futbol/",
+      "pais": "es",
+      "col": "es",
+      "google": "site:as.com futbol",
+      "lang": "es",
+      "feed": "https://feeds.as.com/mrss-s/pages/as/site/as.com/section/futbol/portada/"
+    },
+    {
+      "id": "mundodeportivo",
+      "nome": "Mundo Deportivo",
+      "site": "https://www.mundodeportivo.com/futbol",
+      "feed": "https://www.mundodeportivo.com/feed/rss/futbol/",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:mundodeportivo.com futbol"
+    },
+    {
+      "id": "sportes",
+      "nome": "SPORT",
+      "site": "https://www.sport.es/es/futbol/",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:sport.es futbol",
+      "feed": "https://www.sport.es/es/rss/futbol/rss.xml"
+    },
+    {
+      "id": "relevo",
+      "nome": "Relevo",
+      "site": "https://www.relevo.com/futbol/",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:relevo.com futbol"
+    },
+    {
+      "id": "cadenaser",
+      "nome": "Cadena SER (Deportes)",
+      "site": "https://cadenaser.com/deportes/",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:cadenaser.com deportes"
+    },
+    {
+      "id": "cope",
+      "nome": "COPE (Deportes)",
+      "site": "https://www.cope.es/deportes",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:cope.es deportes",
+      "feed": "https://www.cope.es/rss/home.xml",
+      "soDesporto": true
+    },
+    {
+      "id": "efe",
+      "nome": "EFE (agência)",
+      "site": "https://efe.com/deportes/",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:efe.com deportes",
+      "feed": "https://efe.com/deportes/feed/",
+      "soDesporto": true
+    },
+    {
+      "id": "laliga",
+      "nome": "LaLiga (oficial)",
+      "site": "https://www.laliga.com/noticias",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "google": "site:laliga.com"
+    },
+    {
+      "id": "matteo-moretto",
+      "nome": "Matteo Moretto (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Matteo Moretto\" (fichaje OR transfer OR acuerdo)",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "es",
+      "col": "es"
+    },
+    {
+      "id": "gazzetta",
+      "nome": "La Gazzetta dello Sport",
+      "site": "https://www.gazzetta.it/Calcio/",
+      "pais": "it",
+      "col": "it",
+      "google": "site:gazzetta.it calcio",
+      "lang": "it"
+    },
+    {
+      "id": "corrieresport",
+      "nome": "Corriere dello Sport",
+      "site": "https://www.corrieredellosport.it/calcio",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:corrieredellosport.it calcio",
+      "feed": "https://www.corrieredellosport.it/rss/calcio"
+    },
+    {
+      "id": "tuttosport",
+      "nome": "Tuttosport",
+      "site": "https://www.tuttosport.com/calcio",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:tuttosport.com calcio",
+      "feed": "https://www.tuttosport.com/rss/calcio"
+    },
+    {
+      "id": "skyit",
+      "nome": "Sky Sport Italia",
+      "site": "https://sport.sky.it/calcio",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:sport.sky.it calcio"
+    },
+    {
+      "id": "calciomercato",
+      "nome": "Calciomercato.com",
+      "site": "https://www.calciomercato.com",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:calciomercato.com",
+      "feed": "https://feeds.footballco.com/calcio/feed/g8r5n1czq4mw7v2k"
+    },
+    {
+      "id": "dimarzio",
+      "nome": "Gianluca Di Marzio",
+      "site": "https://www.gianlucadimarzio.com",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:gianlucadimarzio.com",
+      "feed": "https://www.gianlucadimarzio.com/rss"
+    },
+    {
+      "id": "tuttomercatoweb",
+      "nome": "TuttoMercatoWeb",
+      "site": "https://www.tuttomercatoweb.com",
+      "feed": "https://www.tuttomercatoweb.com/rss",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:tuttomercatoweb.com"
+    },
+    {
+      "id": "footballitalia",
+      "nome": "Football Italia",
+      "site": "https://www.football-italia.net",
+      "pais": "it",
+      "col": "it",
+      "lang": "en",
+      "google": "site:football-italia.net",
+      "feed": "https://www.football-italia.net/feed"
+    },
+    {
+      "id": "ansa",
+      "nome": "ANSA (agência)",
+      "site": "https://www.ansa.it/sito/notizie/sport/calcio/",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:ansa.it calcio",
+      "feed": "https://www.ansa.it/sito/notizie/sport/calcio/calcio_rss.xml",
+      "feeds": [
+        "https://www.ansa.it/sito/notizie/sport/sport_rss.xml"
+      ],
+      "soDesporto": true
+    },
+    {
+      "id": "legaseriea",
+      "nome": "Lega Serie A (oficial)",
+      "site": "https://www.legaseriea.it",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "google": "site:legaseriea.it"
+    },
+    {
+      "id": "nicolo-schira",
+      "nome": "Nicolò Schira (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Nicolò Schira\" (calciomercato OR transfer)",
+      "soGoogle": true,
+      "lang": "it",
+      "pais": "it",
+      "col": "it"
+    },
+    {
+      "id": "kicker",
+      "nome": "kicker",
+      "site": "https://www.kicker.de/fussball",
+      "pais": "de",
+      "col": "de",
+      "google": "site:kicker.de",
+      "lang": "de",
+      "feed": "https://newsfeed.kicker.de/news/fussball"
+    },
+    {
+      "id": "bildsport",
+      "nome": "BILD Sport",
+      "site": "https://www.bild.de/sport/fussball",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:bild.de fussball",
+      "feed": "https://www.bild.de/sport/fussball/feed",
+      "feeds": [
+        "https://www.bild.de/feed/alles.xml"
+      ],
+      "soDesporto": true
+    },
+    {
+      "id": "skyde",
+      "nome": "Sky Sport Deutschland",
+      "site": "https://sport.sky.de/fussball",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:sport.sky.de fussball"
+    },
+    {
+      "id": "sport1",
+      "nome": "SPORT1",
+      "site": "https://www.sport1.de/fussball",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:sport1.de fussball",
+      "feed": "https://www.sport1.de/news.rss"
+    },
+    {
+      "id": "sportschau",
+      "nome": "Sportschau (ARD)",
+      "site": "https://www.sportschau.de/fussball/",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:sportschau.de fussball",
+      "feed": "https://www.sportschau.de/index~rss2.xml"
+    },
+    {
+      "id": "sportde",
+      "nome": "sport.de (SID)",
+      "site": "https://www.sport.de/fussball/",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:sport.de fussball",
+      "feed": "https://www.sport.de/rss/fussball/"
+    },
+    {
+      "id": "transfermarkt",
+      "nome": "Transfermarkt",
+      "site": "https://www.transfermarkt.com/aktuell/neuigkeiten/",
+      "feed": "https://www.transfermarkt.com/rss/news",
+      "pais": "de",
+      "col": "de",
+      "lang": "en",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-de",
+      "nome": "Transfermarkt Alemanha",
+      "site": "https://www.transfermarkt.de/",
+      "feed": "https://www.transfermarkt.de/rss/news",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-at",
+      "nome": "Transfermarkt Áustria",
+      "site": "https://www.transfermarkt.at/",
+      "feed": "https://www.transfermarkt.at/rss/news",
+      "pais": "at",
+      "col": "mundo",
+      "lang": "de",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-ch",
+      "nome": "Transfermarkt Suíça",
+      "site": "https://www.transfermarkt.ch/",
+      "feed": "https://www.transfermarkt.ch/rss/news",
+      "pais": "ch",
+      "col": "mundo",
+      "lang": "de",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-tr",
+      "nome": "Transfermarkt Turquia",
+      "site": "https://www.transfermarkt.com.tr/",
+      "feed": "https://www.transfermarkt.com.tr/rss/news",
+      "pais": "tr",
+      "col": "mundo",
+      "lang": "tr",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-it",
+      "nome": "Transfermarkt Itália",
+      "site": "https://www.transfermarkt.it/",
+      "feed": "https://www.transfermarkt.it/rss/news",
+      "pais": "it",
+      "col": "it",
+      "lang": "it",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-pl",
+      "nome": "Transfermarkt Polónia",
+      "site": "https://www.transfermarkt.pl/",
+      "feed": "https://www.transfermarkt.pl/rss/news",
+      "pais": "pl",
+      "col": "mundo",
+      "lang": "pl",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-uk",
+      "nome": "Transfermarkt Reino Unido",
+      "site": "https://www.transfermarkt.co.uk/",
+      "feed": "https://www.transfermarkt.co.uk/rss/news",
+      "pais": "gb-eng",
+      "col": "en",
+      "lang": "en",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-es",
+      "nome": "Transfermarkt Espanha",
+      "site": "https://www.transfermarkt.es/",
+      "feed": "https://www.transfermarkt.es/rss/news",
+      "pais": "es",
+      "col": "es",
+      "lang": "es",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-nl",
+      "nome": "Transfermarkt Países Baixos",
+      "site": "https://www.transfermarkt.nl/",
+      "feed": "https://www.transfermarkt.nl/rss/news",
+      "pais": "nl",
+      "col": "mundo",
+      "lang": "nl",
+      "semGoogle": true
+    },
+    {
+      "id": "transfermarkt-pt",
+      "nome": "Transfermarkt Portugal",
+      "site": "https://www.transfermarkt.pt/",
+      "feed": "https://www.transfermarkt.pt/rss/news",
+      "pais": "pt",
+      "col": "pt",
+      "lang": "pt",
+      "semGoogle": true
+    },
+    {
+      "id": "bundesliga",
+      "nome": "Bundesliga (oficial)",
+      "site": "https://www.bundesliga.com/de/bundesliga/news",
+      "pais": "de",
+      "col": "de",
+      "lang": "de",
+      "google": "site:bundesliga.com",
+      "feed": "https://www.bundesliga.com/de/bundesliga/news/rss"
+    },
+    {
+      "id": "florian-plettenberg",
+      "nome": "Florian Plettenberg (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Florian Plettenberg\" (Transfer OR Wechsel OR deal)",
+      "soGoogle": true,
+      "lang": "de",
+      "pais": "de",
+      "col": "de"
+    },
+    {
+      "id": "christian-falk",
+      "nome": "Christian Falk (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Christian Falk\" (Bayern OR Transfer)",
+      "soGoogle": true,
+      "lang": "de",
+      "pais": "de",
+      "col": "de"
+    },
+    {
+      "id": "lequipe",
+      "nome": "L'Équipe",
+      "site": "https://www.lequipe.fr/Football/",
+      "pais": "fr",
+      "col": "fr",
+      "google": "site:lequipe.fr football",
+      "lang": "fr",
+      "feed": "https://dwh.lequipe.fr/api/edito/rss?path=/Football",
+      "feeds": [
+        "https://dwh.lequipe.fr/api/edito/rss?path=/football"
+      ]
+    },
+    {
+      "id": "footmercato",
+      "nome": "Foot Mercato",
+      "site": "https://www.footmercato.net",
+      "lang": "fr",
+      "pais": "fr",
+      "col": "fr",
+      "rapido": true,
+      "feed": "https://www.footmercato.net/flux-rss"
+    },
+    {
+      "id": "rmcsport",
+      "nome": "RMC Sport",
+      "site": "https://rmcsport.bfmtv.com/football/",
+      "pais": "fr",
+      "col": "fr",
+      "lang": "fr",
+      "google": "site:rmcsport.bfmtv.com football",
+      "feed": "https://rmcsport.bfmtv.com/rss/football/"
+    },
+    {
+      "id": "leparisien",
+      "nome": "Le Parisien (Sport)",
+      "site": "https://www.leparisien.fr/sports/football/",
+      "pais": "fr",
+      "col": "fr",
+      "lang": "fr",
+      "google": "site:leparisien.fr football",
+      "feed": "https://feeds.leparisien.fr/leparisien/rss/sports"
+    },
+    {
+      "id": "ligue1",
+      "nome": "Ligue 1 (oficial)",
+      "site": "https://www.ligue1.com",
+      "pais": "fr",
+      "col": "fr",
+      "lang": "fr",
+      "google": "site:ligue1.com"
+    },
+    {
+      "id": "santi-aouna",
+      "nome": "Santi Aouna (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Santi Aouna\" (mercato OR transfert OR accord)",
+      "soGoogle": true,
+      "lang": "fr",
+      "pais": "fr",
+      "col": "fr"
+    },
+    {
+      "id": "sacha-tavolieri",
+      "nome": "Sacha Tavolieri (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Sacha Tavolieri\" (mercato OR transfer)",
+      "soGoogle": true,
+      "lang": "fr",
+      "pais": "be",
+      "col": "fr"
+    },
+    {
+      "id": "loic-tanzi",
+      "nome": "Loïc Tanzi (jornalista)",
+      "site": "https://news.google.com/",
+      "google": "\"Loïc Tanzi\" (PSG OR mercato)",
+      "soGoogle": true,
+      "lang": "fr",
+      "pais": "fr",
+      "col": "fr"
+    },
+    {
+      "id": "espnfc",
+      "nome": "ESPN",
+      "site": "https://www.espn.com/soccer/",
+      "feed": "https://www.espn.com/espn/rss/soccer/news",
+      "pais": "us",
+      "col": "mundo",
+      "google": "site:espn.com soccer",
+      "lang": "en",
+      "rapido": true,
+      "soFutebol": true
+    },
+    {
+      "id": "brfootball",
+      "nome": "B/R Football",
+      "site": "https://bleacherreport.com",
+      "lang": "en",
+      "pais": "us",
+      "col": "mundo",
+      "rapido": true,
+      "soFutebol": true,
+      "feed": "https://feeds.bleacherreport.com/articles"
+    },
+    {
+      "id": "reuters",
+      "nome": "Reuters (agência)",
+      "site": "https://www.reuters.com/sports/soccer/",
+      "pais": "gb",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:reuters.com (soccer OR football)",
+      "soGoogle": true
+    },
+    {
+      "id": "apnews",
+      "nome": "Associated Press (agência)",
+      "site": "https://apnews.com/hub/soccer",
+      "pais": "us",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:apnews.com soccer",
+      "feed": "https://apnews.com/hub/soccer.rss"
+    },
+    {
+      "id": "afp",
+      "nome": "AFP / France 24 (agência)",
+      "site": "https://www.france24.com/en/sport/",
+      "feed": "https://www.france24.com/en/sport/rss",
+      "pais": "fr",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:france24.com sport"
+    },
+    {
+      "id": "uefa",
+      "nome": "UEFA (oficial)",
+      "site": "https://www.uefa.com/news/",
+      "pais": "eu",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:uefa.com news"
+    },
+    {
+      "id": "fifa",
+      "nome": "FIFA (oficial)",
+      "site": "https://www.fifa.com/en/news",
+      "pais": "un",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:fifa.com news"
+    },
+    {
+      "id": "globoesporte",
+      "nome": "ge (Globo Esporte)",
+      "site": "https://ge.globo.com/futebol/",
+      "pais": "br",
+      "col": "mundo",
+      "lang": "pt",
+      "google": "site:ge.globo.com futebol",
+      "feed": "https://pox.globo.com/rss/ge/futebol"
+    },
+    {
+      "id": "ole",
+      "nome": "Olé",
+      "site": "https://www.ole.com.ar/futbol-primera/",
+      "pais": "ar",
+      "col": "mundo",
+      "lang": "es",
+      "google": "site:ole.com.ar futbol",
+      "feed": "https://www.ole.com.ar/rss/futbol-primera/"
+    },
+    {
+      "id": "mlssoccer",
+      "nome": "MLS (oficial)",
+      "site": "https://www.mlssoccer.com/news/",
+      "pais": "us",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:mlssoccer.com news"
+    },
+    {
+      "id": "afc",
+      "nome": "AFC (Ásia)",
+      "site": "https://www.the-afc.com/en/more/news.html",
+      "pais": "un",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:the-afc.com"
+    },
+    {
+      "id": "caf",
+      "nome": "CAF (África)",
+      "site": "https://www.cafonline.com/news/",
+      "pais": "un",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:cafonline.com news"
+    },
+    {
+      "id": "conmebol",
+      "nome": "CONMEBOL (oficial)",
+      "site": "https://www.conmebol.com/noticias/",
+      "pais": "un",
+      "col": "mundo",
+      "lang": "es",
+      "google": "site:conmebol.com noticias"
+    },
+    {
+      "id": "aljazeera",
+      "nome": "Al Jazeera Sport",
+      "site": "https://www.aljazeera.com/sports/",
+      "pais": "qa",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:aljazeera.com football",
+      "feed": "https://www.aljazeera.com/xml/rss/all.xml",
+      "soDesporto": true
+    },
+    {
+      "id": "arabnews",
+      "nome": "Arab News Sport",
+      "site": "https://www.arabnews.com/sport",
+      "pais": "sa",
+      "col": "mundo",
+      "lang": "en",
+      "google": "site:arabnews.com football"
+    },
+    {
+      "id": "reddit-soccer",
+      "nome": "Reddit r/soccer",
+      "site": "https://www.reddit.com/r/soccer/",
+      "feed": "https://www.reddit.com/r/soccer/new/.rss",
+      "pais": "un",
+      "col": "mundo",
+      "intervalo": 240,
+      "semGoogle": true,
+      "lang": "en"
+    },
+    {
+      "id": "reddit-sports",
+      "nome": "Reddit r/sports",
+      "site": "https://www.reddit.com/r/sports/",
+      "feed": "https://www.reddit.com/r/sports/new/.rss",
+      "pais": "un",
+      "col": "mundo",
+      "intervalo": 240,
+      "semGoogle": true,
+      "lang": "en"
+    },
+    {
+      "id": "portugueses-mundo",
+      "nome": "Portugueses no estrangeiro",
+      "site": "https://news.google.com/",
+      "google": "(\"internacional português\" OR \"jogador português\" OR \"avançado português\" OR \"médio português\" OR \"defesa português\") (Premier League OR LaLiga OR \"Serie A\" OR Bundesliga OR \"Ligue 1\" OR Arábia OR Brasil OR MLS OR Turquia)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "portugueses"
+    },
+    {
+      "id": "treinadores-portugueses",
+      "nome": "Treinadores portugueses no estrangeiro",
+      "site": "https://news.google.com/",
+      "google": "\"treinador português\" (clube OR contratado OR despedido OR estreia OR vitória)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "portugueses"
+    },
+    {
+      "id": "portuguese-abroad-en",
+      "nome": "Portuguese players abroad",
+      "site": "https://news.google.com/",
+      "google": "(\"Portuguese international\" OR \"Portugal international\" OR \"Portuguese forward\" OR \"Portuguese midfielder\" OR \"Portuguese coach\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "pt",
+      "col": "portugueses"
+    },
+    {
+      "id": "futsal-pt",
+      "nome": "Futsal (Google News)",
+      "site": "https://news.google.com/",
+      "google": "futsal Portugal (Sporting OR Benfica OR Braga OR \"Liga Placard\" OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "hoquei-pt",
+      "nome": "Hóquei em patins (Google News)",
+      "site": "https://news.google.com/",
+      "google": "\"hóquei em patins\" (Porto OR Benfica OR Sporting OR Oliveirense OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "andebol-pt",
+      "nome": "Andebol (Google News)",
+      "site": "https://news.google.com/",
+      "google": "andebol Portugal (Sporting OR Benfica OR Porto OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "basquetebol-pt",
+      "nome": "Basquetebol (Google News)",
+      "site": "https://news.google.com/",
+      "google": "basquetebol Portugal (\"Liga Betclic\" OR Benfica OR Sporting OR Porto OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "voleibol-pt",
+      "nome": "Voleibol (Google News)",
+      "site": "https://news.google.com/",
+      "google": "voleibol Portugal (Benfica OR Sporting OR Fonte do Bastardo OR seleção)",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    },
+    {
+      "id": "mundo-brasil",
+      "nome": "Futebol brasileiro (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Brasileirão OR Flamengo OR Palmeiras OR Corinthians OR Botafogo OR Fluminense OR \"São Paulo FC\" OR Grêmio OR \"Atlético Mineiro\" OR Cruzeiro) futebol",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "br",
+      "col": "mundo",
+      "locale": "br"
+    },
+    {
+      "id": "mundo-argentina",
+      "nome": "Futebol argentino (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Boca Juniors\" OR \"River Plate\" OR \"Liga Profesional\" OR Racing OR Independiente OR \"San Lorenzo\") fútbol",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "ar",
+      "col": "mundo",
+      "locale": "ar"
+    },
+    {
+      "id": "mundo-libertadores",
+      "nome": "Libertadores e Sul-Americana (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Libertadores OR Sudamericana OR Conmebol) fútbol",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "un",
+      "col": "mundo",
+      "locale": "ar"
+    },
+    {
+      "id": "mundo-mexico",
+      "nome": "Futebol mexicano (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Liga MX\" OR \"Club América\" OR Chivas OR Tigres OR Monterrey OR \"Cruz Azul\")",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "mx",
+      "col": "mundo",
+      "locale": "mx"
+    },
+    {
+      "id": "mundo-mls",
+      "nome": "MLS (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(MLS OR \"Inter Miami\" OR \"LA Galaxy\" OR \"LAFC\") soccer",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "us",
+      "col": "mundo",
+      "locale": "us"
+    },
+    {
+      "id": "mundo-saudita",
+      "nome": "Liga saudita (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Saudi Pro League\" OR \"Al Nassr\" OR \"Al Hilal\" OR \"Al Ittihad\" OR \"Al Ahli\")",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "sa",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-turquia",
+      "nome": "Futebol turco (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Galatasaray OR Fenerbahce OR Besiktas OR Trabzonspor OR \"Super Lig\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "tr",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-holanda",
+      "nome": "Futebol neerlandês (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Eredivisie OR Ajax OR PSV OR Feyenoord OR \"AZ Alkmaar\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "nl",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-escocia",
+      "nome": "Futebol escocês (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Scottish Premiership\" OR Celtic OR \"Rangers FC\" OR \"Old Firm\")",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "gb-sct",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-belgica-grecia",
+      "nome": "Bélgica, Grécia e Leste (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Club Brugge\" OR Anderlecht OR Olympiacos OR Panathinaikos OR PAOK OR Shakhtar OR \"Red Star Belgrade\" OR \"Dinamo Zagreb\" OR \"Slavia Prague\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "un",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-asia-africa",
+      "nome": "Ásia, África e Oceânia (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"J.League\" OR \"K League\" OR \"A-League\" OR \"AFC Champions League\" OR \"CAF Champions League\" OR \"Qatar Stars League\" OR \"Chinese Super League\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "un",
+      "col": "mundo"
+    }
+  ],
+  "telegram": [
+    {
+      "id": "fabrizioromano",
+      "nome": "Fabrizio Romano",
+      "canal": "FabrizioRomanoTG",
+      "lang": "en",
+      "pais": "it",
+      "col": "mundo"
+    },
+    {
+      "id": "b24",
+      "nome": "B24",
+      "canal": "B24PT",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt"
+    }
+  ],
+  "bluesky": [
+    {
+      "id": "ornstein",
+      "nome": "David Ornstein",
+      "handle": "david-ornstein.bsky.social",
+      "lang": "en",
+      "pais": "gb",
+      "col": "en"
+    }
+  ],
+  "videos": {
+    "_nota": "Feed de vídeos da página inicial. reddit: subreddits lidos num só pedido; \"regiao\": \"pt\" dá prioridade à fonte nos jogos portugueses; \"soMedia\": só entram publicações com vídeo alojado. telegram: canais públicos lidos pela página t.me/s/<canal>.",
+    "reddit": [
+      {
+        "sub": "Evangelista_TV",
+        "regiao": "pt"
+      },
+      {
+        "sub": "soccer",
+        "regiao": "mundo",
+        "soMedia": true
+      }
+    ],
+    "telegram": [
+      {
+        "canal": "twclipshdeuropa",
+        "nome": "TW Clips HD",
+        "regiao": "mundo"
+      },
+      {
+        "canal": "footballlivegoals",
+        "nome": "Football Live Goals",
+        "regiao": "mundo"
+      }
+    ]
+  }
+}
