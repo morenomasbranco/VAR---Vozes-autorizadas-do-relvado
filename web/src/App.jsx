@@ -1219,7 +1219,6 @@ function EfemeridesView({ dados, lang, theme, query }) {
           </section>
         );
       })}
-      <p className="xnote">{tx.src}</p>
     </div>
   );
 }
@@ -1287,6 +1286,12 @@ export default function App() {
   const lerEfem = (l = lang) => fetch(`${API}/api/efemerides?lang=${l}`).then((r) => r.json()).then((d) => d && setEfem(d)).catch(() => {});
   const langRef = useRef(lang);
   useEffect(() => { langRef.current = lang; lerEfem(lang); }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  // enquanto a lista de hoje se compõe, volta a pedir de poucos em poucos segundos (além dos avisos do servidor);
+  // depois de completa, confirma de dez em dez minutos
+  useEffect(() => {
+    const t = setTimeout(() => lerEfem(langRef.current), efem?.completo ? 10 * 60000 : 5000);
+    return () => clearTimeout(t);
+  }, [efem]); // eslint-disable-line react-hooks/exhaustive-deps
   // à meia-noite de Lisboa, as capas de hoje e o «Neste dia» mudam de dia sem ser preciso recarregar a página
   const diaHoje = diaLisboa(now);
   useEffect(() => { lerCapas(); lerEfem(langRef.current); setCapasDia(null); }, [diaHoje]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1389,7 +1394,8 @@ export default function App() {
       .catch(() => setConn("offline"));
 
     const es = new EventSource(`${API}/api/stream`);
-    es.onopen = () => setConn("ok");
+    // ao (re)ligar, relê o que pode ter mudado enquanto a ligação esteve em baixo
+    es.onopen = () => { setConn("ok"); lerCapas(); lerEfem(langRef.current); };
     es.onerror = () => setConn("offline");
     es.addEventListener("status", (e) => setXStatus(JSON.parse(e.data).x));
     es.addEventListener("item", (e) => {
@@ -2033,6 +2039,10 @@ export default function App() {
                   {capasOrd.length > 0 ? (
                     <div className="capasstrip">
                       {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena semDia />)}
+                    </div>
+                  ) : capasPorPais.length > 0 ? (
+                    <div className="capasstrip">
+                      {capasPorPais.flatMap(([, lista]) => lista).map((c) => <Capa key={`${c.id}|${c.dia}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena />)}
                     </div>
                   ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
                 </section>

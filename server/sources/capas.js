@@ -10,6 +10,27 @@ import fs from "node:fs";
 import { sleep, slug, norm } from "../util.js";
 
 const PAGINA = process.env.CAPAS_PAGINA || "https://sapo.pt/noticias/jornais/desporto";
+// se a página principal falhar ou vier sem capas, experimenta a nova página do SAPO
+const PAGINAS = [PAGINA, "https://novo.sapo.pt/jornais/desporto"].filter((u, i, a) => a.indexOf(u) === i);
+// recurso quando o SAPO não dá capas de hoje: as imagens do Kiosko.net, com endereço fixo por dia
+// (img.kiosko.net/AAAA/MM/DD/<país>/<jornal>.750.jpg); cada jornal tem os nomes possíveis no Kiosko
+const KIOSKO = [
+  ["A Bola", "pt", ["a_bola", "abola"], /^a ?bola\b/],
+  ["Record", "pt", ["record"], /^record\b/],
+  ["O Jogo", "pt", ["o_jogo", "ojogo"], /^o ?jogo\b/],
+  ["Marca", "es", ["marca"], /^marca\b/],
+  ["AS", "es", ["as"], /^as$/],
+  ["Mundo Deportivo", "es", ["mundo_deportivo"], /^(el )?mundo deportivo/],
+  ["Sport", "es", ["sport"], /^sport$/],
+  ["L'Équipe", "fr", ["lequipe", "l_equipe"], /equipe/],
+  ["La Gazzetta dello Sport", "it", ["gazzetta_sport", "gazzetta_dello_sport"], /gazzetta/],
+  ["Corriere dello Sport", "it", ["corriere_sport", "corriere_dello_sport"], /corriere dello sport/],
+  ["Tuttosport", "it", ["tuttosport"], /^tuttosport/],
+  ["Kicker", "de", ["kicker"], /^kicker/],
+  ["Olé", "ar", ["ole"], /^ole\b/],
+  ["Lance!", "br", ["lance"], /^lance\b/],
+];
+const KIOSKO_REF = "https://www.kiosko.net/";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const FICHEIRO = new URL("../../data/capas.json", import.meta.url);
 const FICHEIRO_SEMANA = new URL("../../data/capas-semana.json", import.meta.url);
@@ -68,7 +89,8 @@ const melhorSrcset = (ss) => {
   c.sort((a, b) => (parseInt(b[1], 10) || 0) - (parseInt(a[1], 10) || 0));
   return c[0]?.[0] || null;
 };
-const absoluto = (u) => { try { return new URL(decode(u), PAGINA).href; } catch { return null; } };
+let baseLida = PAGINA; // página de onde veio o HTML que está a ser lido
+const absoluto = (u) => { try { return new URL(decode(u), baseLida).href; } catch { return null; } };
 
 // procura na página cada capa: uma imagem dentro de uma ligação para a página desse jornal
 export function lerCapas(html, estrito = true) {
@@ -186,14 +208,22 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
   const diaDe = (c) => semana.find((x) => x.id === c.id && x.img === c.img)?.dia || c.dia || c.data || (c.desde ? diaLisboa(c.desde) : null);
 
   async function ler() {
-    const res = await fetch(PAGINA, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml", "Accept-Language": "pt-PT,pt;q=0.9" } });
-    if (!res.ok) throw new Error(`o SAPO respondeu ${res.status}`);
-    const html = await res.text();
-    const novas = lerCapas(html);
-    if (!novas.length) {
-      estado.amostra = html.replace(/\s+/g, " ").slice(0, 1500); // para ver no /api/capas/estado o que a página trouxe
-      throw new Error("não encontrei capas na página (o SAPO pode ter mudado o formato)");
+    let novas = [];
+    let erro = null;
+    for (const pag of PAGINAS) {
+      try {
+        const res = await fetch(pag, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(20000) });
+        if (!res.ok) throw new Error(`o SAPO respondeu ${res.status} (${pag})`);
+        const html = await res.text();
+        baseLida = res.url || pag;
+        novas = lerCapas(html);
+        baseLida = PAGINA;
+        if (novas.length) break;
+        estado.amostra = html.replace(/\s+/g, " ").slice(0, 1500); // para ver no /api/capas/estado o que a página trouxe
+        erro = new Error(`não encontrei capas em ${pag} (o SAPO pode ter mudado o formato)`);
+      } catch (e) { erro = e; }
     }
+    if (!novas.length) throw erro || new Error("sem capas no SAPO");
     const agora = Date.now();
     const antes = new Map(capas.map((c) => [c.id, c]));
     const hoje = diaLisboa(agora);
@@ -208,7 +238,13 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
       const dia = c.data || arquivada?.dia || diaLisboa(desde);
       return { ...c, desde, visto: agora, dia };
     });
-    for (const c of capas) if (c.dia >= diaMenos(hoje, DIAS - 1) && arquivar(c, c.dia, "lista")) mudou = true;
+    // as capas de hoje que vieram do Kiosko ficam, a não ser que o SAPO já traga o mesmo jornal
+    for (const k of semana) {
+      if (k.via !== "kiosko" || k.dia !== hoje) continue;
+      const re = KIOSKO.find((x) => slug(x[0]) === k.id)?.[3];
+      if (!capas.some((c) => c.id === k.id || (re && re.test(norm(c.nome))))) capas.push({ ...k, data: k.dia, visto: agora });
+    }
+    for (const c of capas) if (c.via !== "kiosko" && c.dia >= diaMenos(hoje, DIAS - 1) && arquivar(c, c.dia, "lista")) mudou = true;
     podar();
     for (const k of cache.keys()) if (!semana.some((x) => `${x.id}|${x.dia}` === k) && !capas.some((x) => x.id === k)) cache.delete(k);
     Object.assign(estado, { at: agora, erro: null, total: capas.length, amostra: null });
@@ -228,6 +264,7 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
         const dia = diaMenos(hoje, n);
         for (const c of capas) {
           if (semana.some((x) => x.id === c.id && x.dia === dia)) continue;
+          if (c.via === "kiosko") continue;
           const base = baseJornal(c.pagina);
           if (!base || base === baseJornal(PAGINA)) continue;
           estado.semana.pedidos++;
@@ -250,10 +287,70 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
     }
   }
 
+  // Kiosko.net: para cada dia da semana, os jornais que ainda não têm capa nesse dia
+  const kiosko = new Map(); // «id|dia» → { id, dia, re, capa }
+  const kioskoFalhas = new Map(); // «id|dia» → quando falhou (volta a tentar passada uma hora)
+  async function existeImagem(url) {
+    const h = { "User-Agent": UA, Referer: KIOSKO_REF, Accept: "image/*" };
+    try {
+      let r = await fetch(url, { method: "HEAD", headers: h, signal: AbortSignal.timeout(10000) });
+      if (r.status === 405 || r.status === 501) r = await fetch(url, { headers: { ...h, Range: "bytes=0-1023" }, signal: AbortSignal.timeout(10000) });
+      const tipo = r.headers.get("content-type") || "";
+      const tam = Number(r.headers.get("content-length") || 0);
+      return r.ok && /image/i.test(tipo) && (!tam || tam > 8000 || r.status === 206);
+    } catch { return false; }
+  }
+  let aKiosko = false;
+  async function completarKiosko() {
+    if (aKiosko) return;
+    aKiosko = true;
+    const hoje = diaLisboa();
+    let novas = 0;
+    try {
+      for (let n = 0; n < DIAS; n++) {
+        const dia = diaMenos(hoje, n);
+        for (const [nome, cc, nomes, re] of KIOSKO) {
+          const id = slug(nome);
+          const chave = `${id}|${dia}`;
+          if (kiosko.has(chave)) continue;
+          // já há capa deste jornal neste dia (vinda do SAPO)?
+          const tem = (l) => l.some((c) => (c.dia || c.data) === dia && (c.id === id || re.test(norm(c.nome))));
+          if (tem(semana) || (dia === hoje && tem(capas))) continue;
+          if (Date.now() - (kioskoFalhas.get(chave) || 0) < 3600e3) continue;
+          let url = null;
+          for (const k of nomes) {
+            const u = `https://img.kiosko.net/${dia.replace(/-/g, "/")}/${cc}/${k}.750.jpg`;
+            if (await existeImagem(u)) { url = u; break; }
+            await sleep(250);
+          }
+          if (!url) { kioskoFalhas.set(chave, Date.now()); continue; }
+          const agora = Date.now();
+          const capa = { id, nome, pais: paisDe(nome), img: url, pagina: `https://www.kiosko.net/${cc}/`, data: dia, dia, desde: agora, visto: agora, via: "kiosko" };
+          kiosko.set(chave, { id, dia, re, capa });
+          if (dia === hoje) { capas = capas.filter((c) => c.id !== id); capas.push(capa); }
+          if (arquivar(capa, dia, "kiosko")) novas++;
+          await sleep(250);
+        }
+      }
+    } finally {
+      aKiosko = false;
+      for (const k of [...kiosko.keys()]) if (k.split("|")[1] < diaMenos(hoje, DIAS - 1)) kiosko.delete(k);
+      estado.kiosko = { at: Date.now(), capas: kiosko.size };
+      if (novas) {
+        podar();
+        gravar();
+        log(`[Capas] Kiosko: mais ${novas} capas`);
+        broadcast("capas", { at: Date.now() });
+      }
+    }
+  }
+
   async function start() {
     let ultimoCompletar = 0;
     for (;;) {
       try { await ler(); } catch (e) { estado.erro = e.message; log(`[Capas] ${e.message}`); }
+      // o que o SAPO não trouxe (ou tudo, se o SAPO falhar) vem do Kiosko
+      completarKiosko().catch((e) => log(`[Capas] Kiosko: ${e.message}`));
       // a semana completa-se no arranque e depois de seis em seis horas (e logo que muda o dia)
       const diaAgora = diaLisboa();
       if (Date.now() - ultimoCompletar > 6 * 3600e3 || diaLisboa(ultimoCompletar) !== diaAgora) {
@@ -273,7 +370,7 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
     const chave = dia ? `${id}|${dia}` : id;
     const em = cache.get(chave);
     if (em && em.url === c.img) return em;
-    const r = await fetch(c.img, { headers: { "User-Agent": UA, Referer: PAGINA, Accept: "image/avif,image/webp,image/*,*/*;q=0.8" } });
+    const r = await fetch(c.img, { headers: { "User-Agent": UA, Referer: /kiosko\.net/i.test(c.img) ? KIOSKO_REF : PAGINA, Accept: "image/avif,image/webp,image/*,*/*;q=0.8" }, signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error(`imagem respondeu ${r.status}`);
     const buf = Buffer.from(await r.arrayBuffer());
     const novo = { url: c.img, tipo: r.headers.get("content-type") || "image/jpeg", buf, at: Date.now() };
