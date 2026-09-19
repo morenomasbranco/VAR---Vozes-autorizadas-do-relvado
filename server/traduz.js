@@ -1,8 +1,9 @@
-// Tradução automática das notícias para as línguas que não vêm do enriquecimento (fr, de, it, es).
-// O Gemini traduz em lote os títulos que os leitores estão a ver nessa língua, e o resultado fica
-// guardado na própria notícia: cada título é traduzido uma vez, sirva para um leitor ou para mil.
-// Sem chave, ou com o limite gratuito esgotado, a notícia fica na língua em que já está.
+// Tradução automática das notícias para as línguas que não vêm do enriquecimento (fr, de, it, es), e para
+// português e inglês nas notícias que o Gemini não chegou a tratar (limite gratuito esgotado).
+// Primeiro o Google Tradutor público (gratuito, sem chave, sem quota); se falhar, o Gemini. O resultado
+// fica guardado na própria notícia: cada título é traduzido uma vez, sirva para um leitor ou para mil.
 import { sleep } from "./util.js";
+import { traduzirGoogle, estadoGoogle } from "./gtradutor.js";
 
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = process.env.GEMINI_TRADUTOR_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
@@ -10,8 +11,8 @@ const API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapi
 const MIN_GAP = Number(process.env.TRADUTOR_INTERVALO_MS) || 4000; // espaço entre pedidos ao Gemini
 const LOTE = Number(process.env.TRADUTOR_LOTE) || 10; // notícias por pedido
 
-export const LINGUAS = { fr: "francês", de: "alemão", it: "italiano", es: "espanhol" };
-export const ativo = !!KEY;
+export const LINGUAS = { fr: "francês", de: "alemão", it: "italiano", es: "espanhol", pt: "português de Portugal", en: "inglês britânico" };
+export const ativo = true; // o Google Tradutor não precisa de chave
 
 const SCHEMA = {
   type: "ARRAY",
@@ -63,24 +64,48 @@ export function createTradutor({ log }) {
   let lastCall = 0; // travão de ritmo: o plano gratuito limita pedidos por minuto
   let pausaGemini = 0;
   let recent429 = [];
-  const contas = { pedidas: 0, feitas: 0, semQuota: 0 };
-  if (!KEY) log("[Tradutor] sem GEMINI_API_KEY; as notícias ficam na língua de origem nas línguas extra");
+  const contas = { pedidas: 0, feitas: 0, semQuota: 0, viaGoogle: 0, viaGemini: 0 };
 
-  // traduz um lote; devolve null quando não há chave ou o limite gratuito está esgotado
+  // pelo Google Tradutor: títulos e pontos numa só lista de linhas, desfeita no fim
+  async function porGoogle(lang, itens) {
+    const linhas = [];
+    const mapa = itens.map((it) => {
+      const t = it.titulo ? linhas.push(it.titulo) - 1 : -1;
+      const p = (it.pontos || []).map((x) => linhas.push(x) - 1);
+      return { t, p };
+    });
+    if (!linhas.length) return [];
+    const r = await traduzirGoogle(linhas, lang);
+    if (!r) return null;
+    return mapa.map((m, i) => ({
+      i,
+      titulo: m.t >= 0 ? r.textos[m.t] : undefined,
+      pontos: m.p.length ? m.p.map((k) => r.textos[k]).filter(Boolean) : undefined,
+    }));
+  }
+
+  // traduz um lote; devolve null quando nem o Google nem o Gemini responderam
   async function traduzir(lang, itens) {
+    const g = await porGoogle(lang, itens);
+    if (g) { contas.viaGoogle += itens.length; return g; }
     if (!KEY || Date.now() < pausaGemini) return null;
     const espera = lastCall + MIN_GAP - Date.now();
     if (espera > 0) await sleep(espera);
     lastCall = Date.now();
     try {
-      return await callGemini(LINGUAS[lang], itens);
+      const out = await callGemini(LINGUAS[lang], itens);
+      contas.viaGemini += itens.length;
+      return out;
     } catch (e) {
       if (e.status === 429) {
         recent429 = [...recent429.filter((t) => Date.now() - t < 600000), Date.now()];
         const tempo = recent429.length >= 3 ? 15 * 60000 : 60000;
         pausaGemini = Date.now() + tempo;
         log(`[Tradutor] limite gratuito atingido; volto a tentar dentro de ${Math.round(tempo / 60000)} min`);
-      } else log(`[Tradutor] ${e.message}`);
+      } else {
+        pausaGemini = Date.now() + 10 * 60000; // modelo errado ou chave inválida: não insiste durante 10 min
+        log(`[Tradutor] ${e.message}`);
+      }
       return null;
     }
   }
@@ -119,7 +144,8 @@ export function createTradutor({ log }) {
       ...contas,
       fila: fila.length,
       pausadoAte: pausaGemini > Date.now() ? pausaGemini : null,
-      ativo: !!KEY,
+      chaveGemini: !!KEY,
+      googleTradutor: estadoGoogle(),
     }),
     // Cada item é { id, titulo?, pontos? }: pede-se só o que falta. O site pede primeiro os títulos
     // de tudo o que mostra e só depois os pontos das notícias da secção que está aberta, o que reduz

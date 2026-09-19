@@ -31,6 +31,33 @@ const KIOSKO = [
   ["Lance!", "br", ["lance"], /^lance\b/],
 ];
 const KIOSKO_REF = "https://www.kiosko.net/";
+// Fonte principal: o VerCapas (vercapas.com), que publica todos os dias as capas dos desportivos com um
+// endereço fixo por jornal (…/capa/a-bola.html) e por dia (…/capa/arquivo/a-bola/2026-09-16.html), e a
+// imagem com a data no nome (imgs.vercapas.com/covers/a-bola/2026/a-bola-2026-09-16-<código>.jpg).
+// O SAPO e o Kiosko ficam como complemento, para os jornais que o VerCapas não tenha.
+const VERCAPAS = [
+  ["a-bola", "A Bola", /^a ?bola\b/],
+  ["record", "Record", /^(jornal )?record\b/],
+  ["o-jogo", "O Jogo", /^o ?jogo\b/],
+  ["jornal-marca", "Marca", /^(jornal )?marca\b/],
+  ["jornal-as", "AS", /^(jornal )?as$/],
+  ["mundo-deportivo", "Mundo Deportivo", /^(el )?mundo deportivo/],
+  ["lequipe", "L'Équipe", /equipe/],
+  ["tuttosport", "Tuttosport", /^tuttosport/],
+];
+const VERCAPAS_BASE = "https://www.vercapas.com";
+const VERCAPAS_REF = "https://www.vercapas.com/";
+// Além da lista fixa, o servidor lê as categorias de desporto do VerCapas e do VerPortadas (o site irmão
+// espanhol: Marca, AS, Sport, Mundo Deportivo, Superdeporte, L'Esportiu) e acrescenta todas as publicações
+// de desporto que tenham capa na última semana — diárias, semanários de clube, revistas.
+const VERCAPAS_DESPORTO = "https://www.vercapas.com/capas-de-jornais-e-revistas/desporto/";
+const VERPORTADAS_BASE = "https://www.verportadas.es";
+const VERPORTADAS_DESPORTO = "https://www.verportadas.es/prensa-deportiva/";
+const NOMES_VC = { "jornal-as": "AS", "jornal-marca": "Marca", as: "AS" }; // nomes limpos para juntar com as outras fontes
+// nome → expressão que reconhece o mesmo jornal noutra fonte (SAPO, Kiosko), pelo id normalizado
+const RE_JORNAL = new Map([...KIOSKO.map(([n, , , re]) => [slug(n), re]), ...VERCAPAS.map(([, n, re]) => [slug(n), re]), ["sport", /^sport$/]]);
+const mesmoJornal = (a, b) => a.id === b.id || !!RE_JORNAL.get(a.id)?.test(norm(b.nome)) || !!RE_JORNAL.get(b.id)?.test(norm(a.nome));
+const PRIO = (c) => (c.via === "vercapas" ? 3 : c.via === "kiosko" ? 1 : 2); // VerCapas > SAPO > Kiosko
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const FICHEIRO = new URL("../../data/capas.json", import.meta.url);
 const FICHEIRO_SEMANA = new URL("../../data/capas-semana.json", import.meta.url);
@@ -197,8 +224,9 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
       if (!(via === "pagina" && outro.via === "lista")) return false;
       semana = semana.filter((x) => x !== outro);
     }
-    const novo = { id: c.id, nome: c.nome, pais: c.pais || paisDe(c.nome), img: c.img, pagina: baseJornal(c.pagina), dia, via, desde: i >= 0 && semana[i].img === c.img ? semana[i].desde : Date.now() };
+    const novo = { id: c.id, nome: c.nome, pais: c.pais || paisDe(c.nome), img: c.img, pagina: via === "vercapas" ? c.pagina : baseJornal(c.pagina), dia, via, desde: i >= 0 && semana[i].img === c.img ? semana[i].desde : Date.now() };
     if (i >= 0) {
+      if (PRIO(semana[i]) > PRIO(novo)) return false; // a capa do VerCapas não é trocada pela de outra fonte
       if (semana[i].img === c.img) return false;
       semana[i] = novo;
     } else semana.push(novo);
@@ -223,12 +251,13 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
         erro = new Error(`não encontrei capas em ${pag} (o SAPO pode ter mudado o formato)`);
       } catch (e) { erro = e; }
     }
-    if (!novas.length) throw erro || new Error("sem capas no SAPO");
+    // sem capas no SAPO: fica o que já havia, e o VerCapas e o Kiosko continuam a completar
+    const erroSapo = novas.length ? null : (erro || new Error("sem capas no SAPO")).message;
     const agora = Date.now();
     const antes = new Map(capas.map((c) => [c.id, c]));
     const hoje = diaLisboa(agora);
     let mudou = false;
-    capas = novas.map((c) => {
+    if (novas.length) capas = novas.map((c) => {
       const a = antes.get(c.id);
       // «desde»: quando esta imagem apareceu; muda quando o jornal publica a capa do dia seguinte
       const desde = a && a.img === c.img ? a.desde : agora;
@@ -238,18 +267,154 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
       const dia = c.data || arquivada?.dia || diaLisboa(desde);
       return { ...c, desde, visto: agora, dia };
     });
-    // as capas de hoje que vieram do Kiosko ficam, a não ser que o SAPO já traga o mesmo jornal
-    for (const k of semana) {
-      if (k.via !== "kiosko" || k.dia !== hoje) continue;
-      const re = KIOSKO.find((x) => slug(x[0]) === k.id)?.[3];
-      if (!capas.some((c) => c.id === k.id || (re && re.test(norm(c.nome))))) capas.push({ ...k, data: k.dia, visto: agora });
-    }
-    for (const c of capas) if (c.via !== "kiosko" && c.dia >= diaMenos(hoje, DIAS - 1) && arquivar(c, c.dia, "lista")) mudou = true;
+    if (sobrepor()) mudou = true;
+    for (const c of capas) if (!c.via && c.dia >= diaMenos(hoje, DIAS - 1) && arquivar(c, c.dia, "lista")) mudou = true;
     podar();
     for (const k of cache.keys()) if (!semana.some((x) => `${x.id}|${x.dia}` === k) && !capas.some((x) => x.id === k)) cache.delete(k);
-    Object.assign(estado, { at: agora, erro: null, total: capas.length, amostra: null });
+    Object.assign(estado, { at: agora, erro: erroSapo, total: capas.length });
+    if (!erroSapo) estado.amostra = null;
     gravar();
     if (mudou) broadcast("capas", { at: agora });
+  }
+
+  // capas de hoje do VerCapas e do Kiosko entram na lista do dia; cada jornal fica com a da fonte mais fiável
+  function sobrepor() {
+    const hoje = diaLisboa();
+    let mudou = false;
+    for (const k of semana) {
+      if (k.dia !== hoje || (k.via !== "vercapas" && k.via !== "kiosko")) continue;
+      const i = capas.findIndex((c) => mesmoJornal(c, k));
+      const nova = { ...k, data: k.dia, visto: Date.now() };
+      if (i < 0) { capas.push(nova); mudou = true; }
+      else if (capas[i].img !== k.img && (capas[i].dia !== hoje || PRIO(k) > PRIO(capas[i]))) { capas[i] = nova; mudou = true; }
+    }
+    return mudou;
+  }
+
+  // VerCapas: a capa de hoje (página do jornal) e a dos dias anteriores (página datada do arquivo)
+  const vercapasFalhas = new Map(); // «site:slug|dia» → quando falhou (volta a ser tentado passada uma hora)
+  const pedir = async (url) => {
+    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html", "Accept-Language": "pt-PT,pt;q=0.9,es;q=0.8" }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`respondeu ${r.status} (${url})`);
+    return r.text();
+  };
+  const ogImage = (html) => html.match(/<meta\b[^>]*property="og:image"[^>]*content="([^"]+)"/i)?.[1] || html.match(/<meta\b[^>]*content="([^"]+)"[^>]*property="og:image"/i)?.[1] || "";
+
+  // VerCapas: imagem da capa de um dia, na página datada do arquivo
+  async function imagemVercapas(vslug, dia) {
+    const url = `${VERCAPAS_BASE}/capa/arquivo/${vslug}/${dia}.html`;
+    const html = await pedir(url);
+    const esc = vslug.replace(/[-]/g, "\\-");
+    const re = new RegExp(`https?://imgs\\.vercapas\\.com/(?:thumbc/\\d+/)?covers/${esc}/\\d{4}/${esc}-(\\d{4}-\\d{2}-\\d{2})-[0-9a-z]+\\.(?:jpe?g|png|webp)`, "i");
+    // a imagem de partilha (og:image) é a capa desta página; se não servir, a imagem com o nome do jornal
+    const m = ogImage(html).match(/https?:\/\/imgs\.vercapas\.com\/(?:thumbc\/\d+\/)?covers\/[^/]+\/\d{4}\/[^/]+-(\d{4}-\d{2}-\d{2})-[0-9a-z]+\.(?:jpe?g|png|webp)/i) || html.match(re);
+    if (!m || m[1] !== dia) return null; // a página datada mostra outro dia
+    return { img: m[0].replace(/\/thumbc\/\d+\//, "/"), dia, pagina: url };
+  }
+  // VerCapas: os dias com capa de um jornal, na página de arquivo (…/arquivo/a-bola.html)
+  async function diasVercapas(vslug) {
+    const html = await pedir(`${VERCAPAS_BASE}/arquivo/${vslug}.html`);
+    const re = new RegExp(`/capa/arquivo/${vslug.replace(/[-]/g, "\\-")}/(\\d{4}-\\d{2}-\\d{2})\\.html`, "gi");
+    return [...new Set([...html.matchAll(re)].map((m) => m[1]))];
+  }
+  // VerPortadas: a capa atual de um jornal (a data vem no nome da imagem, em DDMMAAAA)
+  async function imagemVerportadas(pslug) {
+    const url = `${VERPORTADAS_BASE}/portada/${pslug}.html`;
+    const html = await pedir(url);
+    const src = ogImage(html) || html.match(/https?:\/\/cdn\.verportadas\.es\/covers\/[^"' ]+\.(?:jpe?g|png|webp)/i)?.[0] || "";
+    const m = src.match(/-(\d{2})(\d{2})(20\d{2})-[0-9a-z]+\.(?:jpe?g|png|webp)/i);
+    if (!m) return null;
+    return { img: src.replace("/thumb/covers/", "/covers/"), dia: valida(`${m[3]}-${m[2]}-${m[1]}`), pagina: url };
+  }
+
+  // lista de jornais: a fixa e as categorias de desporto dos dois sites (relida de seis em seis horas)
+  let jornais = VERCAPAS.map(([vslug, nome]) => ({ site: "vc", vslug, nome, ultimo: null }));
+  let jornaisAt = 0;
+  async function descobrir() {
+    if (Date.now() - jornaisAt < 6 * 3600e3) return;
+    jornaisAt = Date.now();
+    const lista = new Map(VERCAPAS.map(([vslug, nome]) => [`vc:${vslug}`, { site: "vc", vslug, nome, ultimo: null }]));
+    try {
+      const html = await pedir(VERCAPAS_DESPORTO);
+      for (const a of html.match(/<a\b[^>]*>/gi) || []) {
+        const href = a.match(/href="([^"]+)"/i)?.[1] || "";
+        const vslug = href.match(/\/capa\/([a-z0-9-]+)\.html$/i)?.[1];
+        if (!vslug) continue;
+        const titulo = decode(a.match(/title="([^"]+)"/i)?.[1] || "");
+        const m = titulo.match(/^(.*?)\s*-\s*(\d{4}-\d{2}-\d{2})$/);
+        const antigo = lista.get(`vc:${vslug}`);
+        lista.set(`vc:${vslug}`, { site: "vc", vslug, nome: antigo?.nome || NOMES_VC[vslug] || (m ? m[1] : titulo) || vslug, ultimo: m ? m[2] : null });
+      }
+    } catch (e) { estado.vercapasErro = `categoria desporto: ${e.message}`; jornaisAt = Date.now() - 5.5 * 3600e3; }
+    try {
+      const html = await pedir(VERPORTADAS_DESPORTO);
+      for (const m of html.matchAll(/href="(?:https?:\/\/www\.verportadas\.es)?\/portada\/([a-z0-9-]+)\.html"[^>]*>([\s\S]*?)<\/a>/gi)) {
+        const pslug = m[1];
+        const nome = decode(m[2].match(/alt="(?:Portada (?:peri[oó]dico|revista) )?([^"]+)"/i)?.[1] || "") || pslug.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+        if (!lista.has(`vp:${pslug}`)) lista.set(`vp:${pslug}`, { site: "vp", vslug: pslug, nome: nome.replace(/^As$/, "AS"), ultimo: null });
+      }
+    } catch (e) { estado.verportadasErro = `prensa deportiva: ${e.message}`; jornaisAt = Date.now() - 5.5 * 3600e3; }
+    // publicações paradas há mais de uma semana (revistas que deixaram de sair) ficam de fora
+    const limite = diaMenos(diaLisboa(), DIAS - 1);
+    jornais = [...lista.values()].filter((j) => !j.ultimo || j.ultimo >= limite);
+    estado.jornais = jornais.map((j) => `${j.nome} (${j.site === "vp" ? "VerPortadas" : "VerCapas"})`);
+  }
+
+  let aVercapas = false;
+  async function completarVercapas() {
+    if (aVercapas) return;
+    aVercapas = true;
+    const hoje = diaLisboa();
+    const limite = diaMenos(hoje, DIAS - 1);
+    let novas = 0;
+    let falhas = 0;
+    const guardar = (j, c) => {
+      const nome = j.nome;
+      const id = slug(nome);
+      // cada jornal e cada dia só uma vez (o mesmo jornal pode estar nos dois sites)
+      if (semana.some((x) => x.dia === c.dia && x.via === "vercapas" && mesmoJornal(x, { id, nome }))) return;
+      const pais = paisDe(nome) !== "un" ? paisDe(nome) : j.site === "vp" ? "es" : "pt";
+      const capa = { id, nome, pais, img: c.img, pagina: c.pagina, data: c.dia, dia: c.dia, desde: Date.now(), visto: Date.now(), via: "vercapas" };
+      if (arquivar(capa, c.dia, "vercapas")) novas++;
+    };
+    try {
+      await descobrir();
+      for (const j of jornais) {
+        const chave = `${j.site}:${j.vslug}`;
+        try {
+          if (j.site === "vp") {
+            // VerPortadas: só a capa atual; os dias anteriores ficam no arquivo à medida que passam
+            if (Date.now() - (vercapasFalhas.get(`${chave}|${hoje}`) || 0) < 20 * 60e3) continue;
+            const c = await imagemVerportadas(j.vslug);
+            if (c?.dia && c.dia >= limite) guardar(j, c); else vercapasFalhas.set(`${chave}|${hoje}`, Date.now());
+          } else {
+            // VerCapas: os dias da semana que o arquivo do jornal tem e que ainda faltam
+            const dias = (await diasVercapas(j.vslug)).filter((d) => d >= limite && d <= hoje);
+            for (const dia of dias) {
+              const id = slug(j.nome);
+              if (semana.some((x) => x.dia === dia && x.via === "vercapas" && mesmoJornal(x, { id, nome: j.nome }))) continue;
+              if (Date.now() - (vercapasFalhas.get(`${chave}|${dia}`) || 0) < 3600e3) continue;
+              const c = await imagemVercapas(j.vslug, dia);
+              if (c) guardar(j, c); else vercapasFalhas.set(`${chave}|${dia}`, Date.now());
+              await sleep(400);
+            }
+          }
+        } catch (e) { falhas++; vercapasFalhas.set(`${chave}|${hoje}`, Date.now()); estado.vercapasErro = e.message; }
+        await sleep(400);
+      }
+    } finally {
+      aVercapas = false;
+      for (const k of [...vercapasFalhas.keys()]) if (k.split("|")[1] < limite) vercapasFalhas.delete(k);
+      estado.vercapas = { at: Date.now(), jornais: jornais.length, capas: semana.filter((x) => x.via === "vercapas").length, hoje: semana.filter((x) => x.via === "vercapas" && x.dia === hoje).length, falhas };
+      if (novas) {
+        sobrepor();
+        podar();
+        gravar();
+        estado.total = capas.length;
+        log(`[Capas] VerCapas/VerPortadas: mais ${novas} capas`);
+        broadcast("capas", { at: Date.now() });
+      }
+    }
   }
 
   // completa a semana: para cada jornal e cada dia em falta, lê a página datada do jornal no SAPO
@@ -264,7 +429,7 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
         const dia = diaMenos(hoje, n);
         for (const c of capas) {
           if (semana.some((x) => x.id === c.id && x.dia === dia)) continue;
-          if (c.via === "kiosko") continue;
+          if (c.via) continue; // só as capas do SAPO têm página datada no SAPO
           const base = baseJornal(c.pagina);
           if (!base || base === baseJornal(PAGINA)) continue;
           estado.semana.pedidos++;
@@ -349,6 +514,8 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
     let ultimoCompletar = 0;
     for (;;) {
       try { await ler(); } catch (e) { estado.erro = e.message; log(`[Capas] ${e.message}`); }
+      // VerCapas primeiro (fonte principal); o Kiosko só procura o que ainda faltar
+      await completarVercapas().catch((e) => log(`[Capas] VerCapas: ${e.message}`));
       // o que o SAPO não trouxe (ou tudo, se o SAPO falhar) vem do Kiosko
       completarKiosko().catch((e) => log(`[Capas] Kiosko: ${e.message}`));
       // a semana completa-se no arranque e depois de seis em seis horas (e logo que muda o dia)
@@ -370,7 +537,7 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
     const chave = dia ? `${id}|${dia}` : id;
     const em = cache.get(chave);
     if (em && em.url === c.img) return em;
-    const r = await fetch(c.img, { headers: { "User-Agent": UA, Referer: /kiosko\.net/i.test(c.img) ? KIOSKO_REF : PAGINA, Accept: "image/avif,image/webp,image/*,*/*;q=0.8" }, signal: AbortSignal.timeout(20000) });
+    const r = await fetch(c.img, { headers: { "User-Agent": UA, Referer: /kiosko\.net/i.test(c.img) ? KIOSKO_REF : /vercapas\.com/i.test(c.img) ? VERCAPAS_REF : /verportadas\.es/i.test(c.img) ? `${VERPORTADAS_BASE}/` : PAGINA, Accept: "image/avif,image/webp,image/*,*/*;q=0.8" }, signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error(`imagem respondeu ${r.status}`);
     const buf = Buffer.from(await r.arrayBuffer());
     const novo = { url: c.img, tipo: r.headers.get("content-type") || "image/jpeg", buf, at: Date.now() };
@@ -388,7 +555,10 @@ export function createCapas({ log = () => {}, broadcast = () => {} } = {}) {
       if (d && !porChave.has(`${c.id}|${d}`) && ![...porChave.values()].some((x) => x.id === c.id && x.img === c.img)) porChave.set(`${c.id}|${d}`, { ...c, dia: d });
     }
     const limite = diaMenos(diaLisboa(), DIAS - 1);
-    return [...porChave.values()].filter((c) => c.dia >= limite).sort((a, b) => b.dia.localeCompare(a.dia));
+    const lista = [...porChave.values()].filter((c) => c.dia >= limite).sort((a, b) => PRIO(b) - PRIO(a));
+    const fica = [];
+    for (const c of lista) if (!fica.some((x) => x.dia === c.dia && mesmoJornal(x, c))) fica.push(c);
+    return fica.sort((a, b) => b.dia.localeCompare(a.dia));
   };
 
   return { start, all: () => capas, hoje, semana: daSemana, imagem, estado: () => ({ ...estado, arquivo: semana.length }) };

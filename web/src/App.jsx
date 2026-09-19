@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, X as Fechar } from "lucide-react";
+import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
 const SOURCES = []; // a lista de fontes vem do servidor (/api/sources)
@@ -21,7 +21,7 @@ const CATS = [
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
   { id: "premios", pt: "Prémios", en: "Awards", es: "Premios", fr: "Trophées", it: "Premi", de: "Auszeichnungen" },
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
-  { id: "efemerides", pt: "Neste dia", en: "On this day", es: "Tal día como hoy", fr: "Ce jour-là", it: "Accadde oggi", de: "An diesem Tag", hl: "efem" },
+  { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
   { id: "historias", pt: "Possíveis histórias", en: "Story leads", es: "Posibles historias", fr: "Pistes d'articles", it: "Possibili storie", de: "Mögliche Geschichten", hl: "hist" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
@@ -358,7 +358,10 @@ const LANGS = [
   { id: "it", sigla: "IT", nome: "Italiano" },
   { id: "de", sigla: "DE", nome: "Deutsch" },
 ];
-const TRADUZIDAS = { es: true, fr: true, it: true, de: true };
+const TRADUZIDAS = { es: true, fr: true, it: true, de: true, pt: true, en: true };
+// o título precisa de tradução: não existe nesta língua, ou a notícia não passou pelo Gemini e o título
+// em português/inglês ainda é o original da fonte («tr» diz as línguas em que já foi traduzido)
+const precisaTrad = (it, lang) => !it.t?.[lang] || (it.raw && (lang === "pt" || lang === "en") && !it.tr?.[lang]);
 // campo de texto na língua escolhida; enquanto a tradução não chega, mostra-se o que já existe
 const emLingua = (o, lang) => o?.[lang] ?? o?.pt ?? o?.en;
 const ARROW = { pt: "para", en: "to", es: "a", fr: "vers", it: "a", de: "zu" };
@@ -560,12 +563,12 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
 
 /* ───────── Capas ───────── */
 const CAPTXT = {
-  pt: { today: "Capas de hoje", all: "Ver a semana", empty: "As capas aparecem aqui assim que o SAPO as publicar.", from: "Capas dos últimos sete dias, via SAPO", hoje: "Hoje", others: "Outros", noDay: "Ainda não há capas deste dia.", nToday: "As capas de hoje aparecem aqui assim que os jornais as publicarem." },
-  en: { today: "Today's front pages", all: "See the week", empty: "Front pages appear here as soon as SAPO publishes them.", from: "Front pages from the last seven days, via SAPO", hoje: "Today", others: "Others", noDay: "No front pages for this day yet.", nToday: "Today's front pages appear here as soon as the papers publish them." },
-  es: { today: "Portadas de hoy", all: "Ver la semana", empty: "Las portadas aparecen aquí en cuanto SAPO las publica.", from: "Portadas de los últimos siete días, vía SAPO", hoje: "Hoy", others: "Otros", noDay: "Todavía no hay portadas de este día.", nToday: "Las portadas de hoy aparecen aquí en cuanto los periódicos las publican." },
-  fr: { today: "Unes du jour", all: "Voir la semaine", empty: "Les unes apparaissent ici dès que SAPO les publie.", from: "Unes des sept derniers jours, via SAPO", hoje: "Aujourd'hui", others: "Autres", noDay: "Pas encore de unes pour ce jour.", nToday: "Les unes du jour apparaissent ici dès que les journaux les publient." },
-  it: { today: "Prime pagine di oggi", all: "Vedi la settimana", empty: "Le prime pagine compaiono qui appena SAPO le pubblica.", from: "Prime pagine degli ultimi sette giorni, via SAPO", hoje: "Oggi", others: "Altri", noDay: "Ancora nessuna prima pagina per questo giorno.", nToday: "Le prime pagine di oggi compaiono qui appena i giornali le pubblicano." },
-  de: { today: "Titelseiten von heute", all: "Die Woche ansehen", empty: "Die Titelseiten erscheinen hier, sobald SAPO sie veröffentlicht.", from: "Titelseiten der letzten sieben Tage, über SAPO", hoje: "Heute", others: "Andere", noDay: "Für diesen Tag gibt es noch keine Titelseiten.", nToday: "Die heutigen Titelseiten erscheinen hier, sobald die Zeitungen sie veröffentlichen." },
+  pt: { expand: "Expandir", collapse: "Reduzir", today: "Capas de hoje", all: "Ver a semana", empty: "As capas aparecem aqui assim que forem publicadas.", from: "Capas dos últimos sete dias, via VerCapas e SAPO", hoje: "Hoje", others: "Outros", noDay: "Ainda não há capas deste dia.", nToday: "As capas de hoje aparecem aqui assim que os jornais as publicarem." },
+  en: { expand: "Expand", collapse: "Collapse", today: "Today's front pages", all: "See the week", empty: "Front pages appear here as soon as they are published.", from: "Front pages from the last seven days, via VerCapas and SAPO", hoje: "Today", others: "Others", noDay: "No front pages for this day yet.", nToday: "Today's front pages appear here as soon as the papers publish them." },
+  es: { expand: "Ampliar", collapse: "Reducir", today: "Portadas de hoy", all: "Ver la semana", empty: "Las portadas aparecen aquí en cuanto se publiquen.", from: "Portadas de los últimos siete días, vía VerCapas y SAPO", hoje: "Hoy", others: "Otros", noDay: "Todavía no hay portadas de este día.", nToday: "Las portadas de hoy aparecen aquí en cuanto los periódicos las publican." },
+  fr: { expand: "Agrandir", collapse: "Réduire", today: "Unes du jour", all: "Voir la semaine", empty: "Les unes apparaissent ici dès leur publication.", from: "Unes des sept derniers jours, via VerCapas et SAPO", hoje: "Aujourd'hui", others: "Autres", noDay: "Pas encore de unes pour ce jour.", nToday: "Les unes du jour apparaissent ici dès que les journaux les publient." },
+  it: { expand: "Espandi", collapse: "Riduci", today: "Prime pagine di oggi", all: "Vedi la settimana", empty: "Le prime pagine compaiono qui appena vengono pubblicate.", from: "Prime pagine degli ultimi sette giorni, via VerCapas e SAPO", hoje: "Oggi", others: "Altri", noDay: "Ancora nessuna prima pagina per questo giorno.", nToday: "Le prime pagine di oggi compaiono qui appena i giornali le pubblicano." },
+  de: { expand: "Vergrößern", collapse: "Verkleinern", today: "Titelseiten von heute", all: "Die Woche ansehen", empty: "Die Titelseiten erscheinen hier, sobald sie erscheinen.", from: "Titelseiten der letzten sieben Tage, über VerCapas und SAPO", hoje: "Heute", others: "Andere", noDay: "Für diesen Tag gibt es noch keine Titelseiten.", nToday: "Die heutigen Titelseiten erscheinen hier, sobald die Zeitungen sie veröffentlichen." },
 };
 const ORDEM_CAPAS = ["pt", "es", "fr", "it", "de", "gb-eng", "br", "ar"];
 const diaLisboa = (ts) => new Date(ts).toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" });
@@ -1063,12 +1066,14 @@ const CSS = `
 .apito .brandbtn:hover .tagline{text-decoration:underline;text-underline-offset:3px}
 /* Capas: dias da semana */
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
-/* Neste dia */
+/* Nesta semana */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent);margin-left:auto}
 .apito .efem{max-width:900px}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
 .apito .eftipos .flag{vertical-align:-2px}
+.apito .efdias{margin-top:-8px}
+.apito .efdata{display:inline-block;margin:0 8px 2px 0;padding:1px 7px;border-radius:999px;background:var(--line);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
 .apito .efgrupo{margin:0 0 22px}
 .apito .efh{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:10px;margin:0 0 6px;padding:6px 0 8px;background:var(--bg);border-bottom:2px solid var(--accent);font-family:var(--display);font-size:19px;letter-spacing:-.015em}
 .apito .efh .muted{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
@@ -1126,8 +1131,16 @@ const CSS = `
 .apito .capasview{max-width:1400px}
 .apito .capagrupo{margin:0 0 26px}
 .apito .capasgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:18px}
+.apito .capasgrid.grande{grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr));gap:24px}
+.apito .capasgrid.grande .capa figcaption{font-size:14px}
+.apito .capasbar .capasgrid.grande{padding:4px 0 8px}
+.apito .capexp{display:inline-flex;align-items:center;gap:5px}
+.apito .capasbar .livehead .capexp{margin-left:auto}
+.apito .capasbar .livehead .capexp + .textbtn{margin-left:12px}
+.apito .capastopo{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.apito .capastopo .capexp{margin-left:auto}
 .apito .lightbox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.82);display:grid;place-items:center;padding:24px;overflow:auto}
-.apito .lightbox .capa{width:min(760px,92vw)}
+.apito .lightbox .capa{width:min(1000px,94vw)}
 .apito .lightbox .capa figcaption{color:#fff;font-size:14px}
 .apito .lightbox .capa figcaption .muted{color:#ccc}
 .apito .lbclose{position:fixed;top:16px;right:16px;z-index:61}
@@ -1144,34 +1157,47 @@ const CSS = `
 }
 `;
 
-/* ───────── Neste dia ───────── */
+/* ───────── Nesta semana ───────── */
 const EFTXT = {
-  pt: { note: "O que aconteceu no desporto neste dia, há 1, 2, 3, 4, 5, 10, 15, 20… 100 anos. A lista muda sozinha à meia-noite e é revista ao longo do dia.", ago: (n) => (n === 1 ? "Há 1 ano" : `Há ${n} anos`), tipos: { todos: "Tudo", jogo: "Jogos", acontecimento: "Acontecimentos", nascimento: "Nascimentos", morte: "Mortes" }, born: "Nasceu", died: "Morreu", loading: "A preparar a lista de hoje…", none: "Nada de desporto registado para estes aniversários.", pt: "Só Portugal", src: "Fontes: Wikipédia, Wikidata e ESPN", pens: "g.p.", more: (n) => `Mais ${n} jogos`, less: "Mostrar menos", today: (d) => `Hoje, ${d}` },
-  en: { note: "What happened in sport on this day, 1, 2, 3, 4, 5, 10, 15, 20… 100 years ago. The list changes by itself at midnight and is refreshed during the day.", ago: (n) => (n === 1 ? "1 year ago" : `${n} years ago`), tipos: { todos: "All", jogo: "Matches", acontecimento: "Events", nascimento: "Births", morte: "Deaths" }, born: "Born", died: "Died", loading: "Preparing today's list…", none: "Nothing sporting on record for these anniversaries.", pt: "Portugal only", src: "Sources: Wikipedia, Wikidata and ESPN", pens: "pens", more: (n) => `${n} more matches`, less: "Show less", today: (d) => `Today, ${d}` },
-  es: { note: "Lo que pasó en el deporte tal día como hoy, hace 1, 2, 3, 4, 5, 10, 15, 20… 100 años. La lista cambia sola a medianoche y se revisa durante el día.", ago: (n) => (n === 1 ? "Hace 1 año" : `Hace ${n} años`), tipos: { todos: "Todo", jogo: "Partidos", acontecimento: "Acontecimientos", nascimento: "Nacimientos", morte: "Fallecimientos" }, born: "Nació", died: "Murió", loading: "Preparando la lista de hoy…", none: "No hay nada de deporte registrado para estos aniversarios.", pt: "Solo Portugal", src: "Fuentes: Wikipedia, Wikidata y ESPN", pens: "pen.", more: (n) => `${n} partidos más`, less: "Mostrar menos", today: (d) => `Hoy, ${d}` },
-  fr: { note: "Ce qui s'est passé dans le sport ce jour-là, il y a 1, 2, 3, 4, 5, 10, 15, 20… 100 ans. La liste change toute seule à minuit et est revue pendant la journée.", ago: (n) => (n === 1 ? "Il y a 1 an" : `Il y a ${n} ans`), tipos: { todos: "Tout", jogo: "Matchs", acontecimento: "Événements", nascimento: "Naissances", morte: "Décès" }, born: "Naissance", died: "Décès", loading: "Préparation de la liste du jour…", none: "Rien de sportif enregistré pour ces anniversaires.", pt: "Portugal seulement", src: "Sources : Wikipédia, Wikidata et ESPN", pens: "t.a.b.", more: (n) => `${n} matchs de plus`, less: "Afficher moins", today: (d) => `Aujourd'hui, ${d}` },
-  it: { note: "Cosa è successo nello sport in questo giorno, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa. L'elenco cambia da solo a mezzanotte e viene rivisto durante il giorno.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di oggi…", none: "Niente di sportivo registrato per questi anniversari.", pt: "Solo Portogallo", src: "Fonti: Wikipedia, Wikidata ed ESPN", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", today: (d) => `Oggi, ${d}` },
-  de: { note: "Was an diesem Tag im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren. Die Liste wechselt um Mitternacht von selbst und wird im Laufe des Tages überprüft.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die heutige Liste wird vorbereitet…", none: "Für diese Jahrestage ist nichts Sportliches verzeichnet.", pt: "Nur Portugal", src: "Quellen: Wikipedia, Wikidata und ESPN", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", today: (d) => `Heute, ${d}` },
+  pt: { note: "O que aconteceu no desporto nos dias desta semana, há 1, 2, 3, 4, 5, 10, 15, 20… 100 anos. A lista muda sozinha quando a semana muda e é revista ao longo do dia.", ago: (n) => (n === 1 ? "Há 1 ano" : `Há ${n} anos`), tipos: { todos: "Tudo", jogo: "Jogos", acontecimento: "Acontecimentos", nascimento: "Nascimentos", morte: "Mortes" }, born: "Nasceu", died: "Morreu", loading: "A preparar a lista desta semana…", none: "Nada de desporto registado para estes aniversários.", pt: "Só Portugal", src: "Fontes: Wikipédia, Wikidata e ESPN", pens: "g.p.", more: (n) => `Mais ${n} jogos`, less: "Mostrar menos", week: (d) => `Semana de ${d}`, allDays: "Semana toda" },
+  en: { note: "What happened in sport on the days of this week, 1, 2, 3, 4, 5, 10, 15, 20… 100 years ago. The list changes by itself when the week changes and is refreshed during the day.", ago: (n) => (n === 1 ? "1 year ago" : `${n} years ago`), tipos: { todos: "All", jogo: "Matches", acontecimento: "Events", nascimento: "Births", morte: "Deaths" }, born: "Born", died: "Died", loading: "Preparing this week's list…", none: "Nothing sporting on record for these anniversaries.", pt: "Portugal only", src: "Sources: Wikipedia, Wikidata and ESPN", pens: "pens", more: (n) => `${n} more matches`, less: "Show less", week: (d) => `Week of ${d}`, allDays: "Whole week" },
+  es: { note: "Lo que pasó en el deporte en los días de esta semana, hace 1, 2, 3, 4, 5, 10, 15, 20… 100 años. La lista cambia sola cuando cambia la semana y se revisa durante el día.", ago: (n) => (n === 1 ? "Hace 1 año" : `Hace ${n} años`), tipos: { todos: "Todo", jogo: "Partidos", acontecimento: "Acontecimientos", nascimento: "Nacimientos", morte: "Fallecimientos" }, born: "Nació", died: "Murió", loading: "Preparando la lista de esta semana…", none: "No hay nada de deporte registrado para estos aniversarios.", pt: "Solo Portugal", src: "Fuentes: Wikipedia, Wikidata y ESPN", pens: "pen.", more: (n) => `${n} partidos más`, less: "Mostrar menos", week: (d) => `Semana del ${d}`, allDays: "Toda la semana" },
+  fr: { note: "Ce qui s'est passé dans le sport les jours de cette semaine, il y a 1, 2, 3, 4, 5, 10, 15, 20… 100 ans. La liste change toute seule quand la semaine change et est revue pendant la journée.", ago: (n) => (n === 1 ? "Il y a 1 an" : `Il y a ${n} ans`), tipos: { todos: "Tout", jogo: "Matchs", acontecimento: "Événements", nascimento: "Naissances", morte: "Décès" }, born: "Naissance", died: "Décès", loading: "Préparation de la liste de la semaine…", none: "Rien de sportif enregistré pour ces anniversaires.", pt: "Portugal seulement", src: "Sources : Wikipédia, Wikidata et ESPN", pens: "t.a.b.", more: (n) => `${n} matchs de plus`, less: "Afficher moins", week: (d) => `Semaine du ${d}`, allDays: "Toute la semaine" },
+  it: { note: "Cosa è successo nello sport nei giorni di questa settimana, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa. L'elenco cambia da solo quando cambia la settimana e viene rivisto durante il giorno.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di questa settimana…", none: "Niente di sportivo registrato per questi anniversari.", pt: "Solo Portogallo", src: "Fonti: Wikipedia, Wikidata ed ESPN", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", week: (d) => `Settimana del ${d}`, allDays: "Tutta la settimana" },
+  de: { note: "Was an den Tagen dieser Woche im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren. Die Liste wechselt von selbst, wenn die Woche wechselt, und wird im Laufe des Tages überprüft.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die Liste dieser Woche wird vorbereitet…", none: "Für diese Jahrestage ist nichts Sportliches verzeichnet.", pt: "Nur Portugal", src: "Quellen: Wikipedia, Wikidata und ESPN", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", week: (d) => `Woche vom ${d}`, allDays: "Ganze Woche" },
 };
 const JOGOS_POR_ANO = 6; // os restantes jogos de cada ano ficam atrás de «mais»
 
 function EfemeridesView({ dados, lang, theme, query }) {
   const tx = EFTXT[lang] || EFTXT.pt;
   const [tipo, setTipo] = useState("todos");
+  const [diaSel, setDiaSel] = useState(null); // null = a semana toda
   const [abertos, setAbertos] = useState({});
   const q = query.trim().toLowerCase();
-  const itens = (dados?.itens || []).filter((it) => (tipo === "todos" || it.tipo === tipo)
+  const locale = UI[lang]?.locale || "pt-PT";
+  const dias = dados?.dias || [];
+  const fmtDia = (d, opt) => new Date(`${d}T12:00:00Z`).toLocaleDateString(locale, { ...opt, timeZone: "UTC" });
+  const nomeDoDia = (d) => (d === dados?.hoje ? (CAPTXT[lang] || CAPTXT.pt).hoje : fmtDia(d, { weekday: "short", day: "numeric" }));
+  const itens = (dados?.itens || []).filter((it) => (tipo === "todos" || it.tipo === tipo) && (!diaSel || it.dia === diaSel)
     && (!q || `${it.nome || ""} ${it.desc || ""} ${it.texto || ""} ${it.casa || ""} ${it.fora || ""} ${it.liga || ""}`.toLowerCase().includes(q)));
   const grupos = [];
   for (const it of itens) {
     const g = grupos[grupos.length - 1];
     if (g && g.anos === it.anos) g.lista.push(it); else grupos.push({ anos: it.anos, ano: it.ano, lista: [it] });
   }
-  const contagem = (t) => (dados?.itens || []).filter((it) => t === "todos" || it.tipo === t).length;
-  const hojeTxt = dados?.dia ? new Date(`${dados.dia}T12:00:00Z`).toLocaleDateString(UI[lang]?.locale || "pt-PT", { day: "numeric", month: "long", timeZone: "UTC" }) : "";
+  const contagem = (t) => (dados?.itens || []).filter((it) => (t === "todos" || it.tipo === t) && (!diaSel || it.dia === diaSel)).length;
+  const semanaTxt = dias.length ? `${fmtDia(dias[0], { day: "numeric", month: "short" })} – ${fmtDia(dias[dias.length - 1], { day: "numeric", month: "short" })}` : "";
   return (
     <div className="efem">
-      <p className="efdia">{tx.today(hojeTxt)}</p>
+      <p className="efdia">{tx.week(semanaTxt)}</p>
+      {dias.length > 0 && (
+        <div className="seg lvls eftipos efdias" role="group">
+          <button aria-pressed={!diaSel} onClick={() => setDiaSel(null)}>{tx.allDays}</button>
+          {dias.map((d) => (
+            <button key={d} aria-pressed={diaSel === d} onClick={() => setDiaSel(d)}>{nomeDoDia(d)}<span className="ct">{(dados?.itens || []).filter((it) => it.dia === d && (tipo === "todos" || it.tipo === tipo)).length}</span></button>
+          ))}
+        </div>
+      )}
       <div className="seg lvls eftipos" role="group">
         {Object.entries(tx.tipos).map(([k, n]) => (
           <button key={k} aria-pressed={tipo === k} onClick={() => setTipo(k)}>{n}<span className="ct">{contagem(k)}</span></button>
@@ -1190,6 +1216,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
                 <li key={it.id} className={`efitem ef-${it.tipo}`}>
                   {it.img ? <img className="efimg" src={it.img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : <span className="efico" aria-hidden="true">{it.tipo === "nascimento" ? "🎂" : it.tipo === "morte" ? "🕊" : "🏆"}</span>}
                   <div className="eftxt">
+                    {it.dia && !diaSel && <span className="efdata">{nomeDoDia(it.dia)}</span>}
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
@@ -1201,7 +1228,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
               ))}
               {jogosVis.map((j) => (
                 <li key={j.id} className="efitem ef-jogo">
-                  <span className="efliga"><Flag code={j.bandeira} lang={lang} /> {lang === "pt" ? j.liga : j.liga_en || j.liga}{j.fase && !/^\d{4}/.test(j.fase) ? ` · ${j.fase}` : ""}</span>
+                  <span className="efliga">{j.dia && !diaSel && <span className="efdata">{nomeDoDia(j.dia)}</span>}<Flag code={j.bandeira} lang={lang} /> {lang === "pt" ? j.liga : j.liga_en || j.liga}{j.fase && !/^\d{4}/.test(j.fase) ? ` · ${j.fase}` : ""}</span>
                   <div className="efres">
                     <span className="efteam h">{j.casa}{j.logoCasa && <Crest e={{ nome: j.casa, logo: j.logoCasa }} theme={theme} size={22} />}</span>
                     <b>{j.hs}–{j.as}</b>
@@ -1256,7 +1283,24 @@ export default function App() {
   const [capasSemana, setCapasSemana] = useState([]); // capas dos últimos sete dias, com o dia de cada uma
   const [capasDia, setCapasDia] = useState(null); // dia escolhido na secção Capas (null = o mais recente)
   const [capaAberta, setCapaAberta] = useState(null);
-  const [efem, setEfem] = useState(null); // «Neste dia»: o que aconteceu no desporto neste dia, há 1, 2… 100 anos
+  // capas em tamanho grande, na página inicial e na secção Capas (fica guardado neste browser)
+  const [capasExp, setCapasExp] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem("var-capas-exp")); return v && typeof v === "object" ? v : {}; } catch { return {}; }
+  });
+  const alternaCapas = (onde) => setCapasExp((v) => {
+    const n = { ...v, [onde]: !v[onde] };
+    try { localStorage.setItem("var-capas-exp", JSON.stringify(n)); } catch { /* sem armazenamento */ }
+    return n;
+  });
+  const BotaoExpandir = ({ onde }) => {
+    const tx = CAPTXT[lang] || CAPTXT.pt;
+    return (
+      <button className="textbtn capexp" aria-pressed={!!capasExp[onde]} onClick={() => alternaCapas(onde)}>
+        {capasExp[onde] ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{capasExp[onde] ? tx.collapse : tx.expand}
+      </button>
+    );
+  };
+  const [efem, setEfem] = useState(null); // «Nesta semana»: o que aconteceu no desporto neste dia, há 1, 2… 100 anos
   const vRef = useRef(null); // faixa horizontal dos vídeos
   const [modFilter, setModFilter] = useState("todas");
   const [favs, setFavs] = useState(() => {
@@ -1282,7 +1326,7 @@ export default function App() {
     const t = setInterval(lerCapas, 5 * 60000); // a primeira leitura é feita pelo efeito do dia, mais abaixo
     return () => clearInterval(t);
   }, []);
-  // «Neste dia»: lido no arranque, quando muda a língua e quando o servidor avisa que a lista mudou
+  // «Nesta semana»: lido no arranque, quando muda a língua e quando o servidor avisa que a lista mudou
   const lerEfem = (l = lang) => fetch(`${API}/api/efemerides?lang=${l}`).then((r) => r.json()).then((d) => d && setEfem(d)).catch(() => {});
   const langRef = useRef(lang);
   useEffect(() => { langRef.current = lang; lerEfem(lang); }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1292,7 +1336,7 @@ export default function App() {
     const t = setTimeout(() => lerEfem(langRef.current), efem?.completo ? 10 * 60000 : 5000);
     return () => clearTimeout(t);
   }, [efem]); // eslint-disable-line react-hooks/exhaustive-deps
-  // à meia-noite de Lisboa, as capas de hoje e o «Neste dia» mudam de dia sem ser preciso recarregar a página
+  // à meia-noite de Lisboa, as capas de hoje e o «Nesta semana» mudam de dia sem ser preciso recarregar a página
   const diaHoje = diaLisboa(now);
   useEffect(() => { lerCapas(); lerEfem(langRef.current); setCapasDia(null); }, [diaHoje]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -1422,7 +1466,7 @@ export default function App() {
     es.addEventListener("video-update", vidEntra);
     // capas novas (o jornal publicou a de amanhã, ou chegou uma capa de outro dia da semana)
     es.addEventListener("capas", () => lerCapas());
-    // a lista do «Neste dia» foi refeita (mudou o dia ou foi revista)
+    // a lista do «Nesta semana» foi refeita (mudou o dia ou foi revista)
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
@@ -1466,6 +1510,7 @@ export default function App() {
             ? {
               ...x,
               t: feitas[x.id].t ? { ...x.t, [lang]: feitas[x.id].t } : x.t,
+              tr: feitas[x.id].t && x.raw ? { ...x.tr, [lang]: true } : x.tr,
               b: feitas[x.id].b?.length ? { ...x.b, [lang]: feitas[x.id].b } : x.b,
             }
             : x)));
@@ -1481,7 +1526,7 @@ export default function App() {
   useEffect(() => {
     if (!TRADUZIDAS[lang]) return;
     const sinal = { parado: false };
-    const t = setTimeout(() => traduz("titulo", items.filter((it) => !it.score && !it.pending && !it.t?.[lang]), sinal), 400);
+    const t = setTimeout(() => traduz("titulo", items.filter((it) => !it.score && !it.pending && precisaTrad(it, lang)), sinal), 400);
     return () => { sinal.parado = true; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, items]);
@@ -2034,15 +2079,16 @@ export default function App() {
                 <section className="capasbar">
                   <div className="livehead">
                     <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
+                    <BotaoExpandir onde="inicio" />
                     <button className="textbtn" onClick={() => { setSection("capas"); setCapasDia(null); }}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
                   </div>
                   {capasOrd.length > 0 ? (
-                    <div className="capasstrip">
-                      {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena semDia />)}
+                    <div className={capasExp.inicio ? "capasgrid grande" : "capasstrip"}>
+                      {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena={!capasExp.inicio} semDia />)}
                     </div>
                   ) : capasPorPais.length > 0 ? (
-                    <div className="capasstrip">
-                      {capasPorPais.flatMap(([, lista]) => lista).map((c) => <Capa key={`${c.id}|${c.dia}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena />)}
+                    <div className={capasExp.inicio ? "capasgrid grande" : "capasstrip"}>
+                      {capasPorPais.flatMap(([, lista]) => lista).map((c) => <Capa key={`${c.id}|${c.dia}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena={!capasExp.inicio} />)}
                     </div>
                   ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
                 </section>
@@ -2094,7 +2140,10 @@ export default function App() {
             ) : section === "capas" ? (
               diasCapas.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
                 <div className="capasview">
-                  <p className="xnote">{(CAPTXT[lang] || CAPTXT.pt).from}</p>
+                  <div className="capastopo">
+                    <p className="xnote">{(CAPTXT[lang] || CAPTXT.pt).from}</p>
+                    <BotaoExpandir onde="seccao" />
+                  </div>
                   <div className="seg lvls capdias" role="group">
                     {diasCapas.map((d) => (
                       <button key={d} aria-pressed={diaCapasSel === d} onClick={() => setCapasDia(d)}>{nomeDia(d, lang)}</button>
@@ -2103,7 +2152,7 @@ export default function App() {
                   {capasPorPais.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).noDay}</p> : capasPorPais.map(([pais, lista]) => (
                     <section key={pais} className="capagrupo">
                       <h2 className="colh"><Flag code={pais} lang={lang} /> {pais === "un" ? (CAPTXT[lang] || CAPTXT.pt).others : countryName(pais, lang)}</h2>
-                      <div className="capasgrid">
+                      <div className={`capasgrid${capasExp.seccao ? " grande" : ""}`}>
                         {lista.map((c) => <Capa key={`${c.id}|${c.dia || ""}`} c={c} lang={lang} onOpen={setCapaAberta} semDia />)}
                       </div>
                     </section>
@@ -2215,7 +2264,7 @@ export default function App() {
                               <ExternalLink size={14} />{ui.viewSrc}
                             </span>
                           )}
-                          {it.pending ? <span className="tr">{ui.processing}</span> : it.orig && it.orig !== "multi" && it.orig !== lang && !it.raw && <span className="tr">{ui.trFrom[it.orig] || ui.trOther}</span>}
+                          {it.pending ? <span className="tr">{ui.processing}</span> : it.orig && it.orig !== "multi" && it.orig !== lang && (!it.raw || it.tr?.[lang]) && <span className="tr">{ui.trFrom[it.orig] || ui.trOther}</span>}
                         </div>
                       </article>
                     </li>

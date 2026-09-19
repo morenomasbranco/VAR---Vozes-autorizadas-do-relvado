@@ -56,6 +56,11 @@ for (const it of store.all(100000)) {
   if (it.equipas?.length || it.cats?.length || it.mod) continue;
   if (!eDesporto(`${it.text || ""} ${it.t?.pt || ""} ${(it.b?.pt || []).join(" ")} ${it.url || ""}`)) store.remove(it.id);
 }
+// lotarias e jogos de sorte (Euromilhões, Totoloto…): não são desporto, mesmo quando vêm de jornais desportivos
+// e falam em «prémio» — era por isso que o Euromilhões aparecia em Prémios
+const LOTARIA = /euromilh[õo]es|euromillions|totoloto|totobola|lotaria|eurodreams|\bm1lh[aã]o\b|raspadinha|jogos santa casa|jackpot|chave (do sorteio|vencedora|do euromilh)|n[uú]meros (da chave|sorteados)/i;
+const eLotaria = (it) => LOTARIA.test(`${it.text || ""} ${it.t?.pt || ""} ${it.url || ""}`);
+for (const it of store.all(100000)) if (!it.score && eLotaria(it)) store.remove(it.id);
 const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
 const clients = new Set();
 const status = { x: "ligado", fila: 0, publicadas: 0, juntas: 0, ignoradas: 0, semTraducao: 0 };
@@ -114,6 +119,7 @@ function secoes(post, ai) {
   const texto = `${post.text} ${ai.titulo_pt || ""} ${(ai.pontos_pt || []).join(" ")}`;
   const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
   if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
+  if (LOTARIA.test(texto)) cats.delete("premios");
   // «Portugueses pelo mundo» é só para quem está fora de Portugal
   if (cats.has("portugueses") && (ai.pais_tema === "pt" || !ai.pais_tema)) cats.delete("portugueses");
   return [...cats];
@@ -161,6 +167,27 @@ function refine(post, ai) {
   store.touch();
   broadcast("update", it);
   pista(it); // notícias de grande importância também dão pistas
+  if (ai.bruto) traduzirBruta(it); // sem Gemini: o título segue para o Google Tradutor, em português e inglês
+}
+
+// notícia que o Gemini não tratou: o título ficou na língua original; «tr» marca as línguas já traduzidas
+const precisaTraducao = (it, lang) => !it.t?.[lang] || (it.raw && (lang === "pt" || lang === "en") && !it.tr?.[lang]);
+function guardarTraducao(lang, r) {
+  const it = r && store.get(r.id);
+  if (!it) return null;
+  if (r.t) it.t = { ...it.t, [lang]: r.t };
+  if (r.b?.length) it.b = { ...it.b, [lang]: r.b };
+  if (r.t && it.raw) it.tr = { ...it.tr, [lang]: true };
+  store.touch();
+  broadcast("update", it); // quem já está a ler nesta língua recebe a tradução sem pedir nada
+  return it;
+}
+function traduzirBruta(it) {
+  const titulo = String(it.text || "").split("\n").map((l) => l.trim()).find(Boolean) || it.t?.pt;
+  if (!titulo) return;
+  for (const lang of ["pt", "en"]) {
+    tradutor.pedir(lang, [{ id: it.id, titulo }]).then((out) => out.forEach((r) => guardarTraducao(lang, r))).catch(() => {});
+  }
 }
 
 // Desdobramento: as notícias mais fortes viram pista de trabalho — o fio da história, o que pode
@@ -188,6 +215,7 @@ function onPost(post) {
   if (seen.has(post.postId) || store.has(post.postId)) return;
   if (seen.size > 20000) seen.clear();
   seen.add(post.postId);
+  if (LOTARIA.test(`${post.text} ${post.url || ""}`)) { status.ignoradas++; return; } // lotarias não entram
   // a mesma notícia já publicada por outra fonte: junta-se em vez de aparecer de novo
   const igual = store.findSimilar({ titulo: post.text.split("\n")[0], url: post.url, ts: post.ts, src: post.src });
   if (igual) {
@@ -217,7 +245,7 @@ const videos = createVideos({
 // Capas dos jornais desportivos do dia e da última semana (página de jornais de desporto do SAPO)
 const capas = createCapas({ log, broadcast: (e, d) => broadcast(e, d) });
 
-// «Neste dia»: o que aconteceu no desporto no dia de hoje, há 1, 2, 3, 4, 5, 10, 15… 100 anos
+// «Nesta semana»: o que aconteceu no desporto no dia de hoje, há 1, 2, 3, 4, 5, 10, 15… 100 anos
 const efemerides = createEfemerides({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS });
 
 const app = express();
@@ -271,23 +299,18 @@ app.post("/api/traduzir", express.json({ limit: "64kb" }), async (req, res) => {
   for (const id of ids) {
     const it = store.get(id);
     if (!it) continue;
-    const temTitulo = !!it.t?.[lang];
+    const temTitulo = !precisaTraducao(it, lang);
     const temPontos = !!it.b?.[lang];
     if (temTitulo && (soTitulo || temPontos)) { itens[id] = { t: it.t[lang], b: it.b?.[lang] }; continue; }
     const pedido = { id: it.id };
-    if (!temTitulo) pedido.titulo = it.t?.pt || it.t?.en || it.text?.split("\n")[0] || "";
+    if (!temTitulo) pedido.titulo = (it.raw ? it.text?.split("\n")[0] : null) || it.t?.pt || it.t?.en || it.text?.split("\n")[0] || "";
     if (!soTitulo && !temPontos) pedido.pontos = it.b?.pt?.length ? it.b.pt : it.b?.en || [];
     if (pedido.titulo || pedido.pontos?.length) faltam.push(pedido);
   }
   const feitas = faltam.length ? await tradutor.pedir(lang, faltam) : [];
   for (const r of feitas) {
-    const it = r && store.get(r.id);
-    if (!it) continue;
-    if (r.t) it.t = { ...it.t, [lang]: r.t };
-    if (r.b?.length) it.b = { ...it.b, [lang]: r.b };
-    store.touch();
-    itens[r.id] = { t: it.t?.[lang], b: it.b?.[lang] };
-    broadcast("update", it); // quem já está a ler nesta língua recebe a tradução sem pedir nada
+    const it = guardarTraducao(lang, r);
+    if (it) itens[r.id] = { t: it.t?.[lang], b: it.b?.[lang] };
   }
   res.json({ lang, campos: soTitulo ? "titulo" : "tudo", itens, faltam: ids.length - Object.keys(itens).length });
 });

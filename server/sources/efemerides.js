@@ -1,12 +1,14 @@
-// «Neste dia»: o que aconteceu no desporto no dia de hoje, há 1, 2, 3, 4, 5, 10, 15… 100 anos.
-// Três fontes gratuitas, sem chave:
-// - Wikipédia «Neste dia» (pt, en, es, fr, it, de): acontecimentos, nascimentos e mortes, filtrados pelo desporto.
-//   Cada língua do site mostra o que a Wikipédia dessa língua regista, com o texto da própria Wikipédia.
-// - Wikidata: desportistas nascidos e mortos neste dia (futebolistas, treinadores, tenistas, pilotos…), com os
+// «Nesta semana»: o que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo),
+// há 1, 2, 3, 4, 5, 10, 15… 100 anos. Três fontes gratuitas, sem chave:
+// - Wikipédia «Neste dia» (pt, en, es, fr, it, de), para cada dia da semana: acontecimentos, nascimentos e mortes,
+//   filtrados pelo desporto. Se a API da Wikipédia não responder, lê-se a própria página do dia
+//   («19 de setembro», «September 19») e tiram-se de lá as linhas de desporto.
+// - Wikidata: desportistas nascidos e mortos nesses dias (futebolistas, treinadores, tenistas, pilotos…), com os
 //   portugueses sempre incluídos e os estrangeiros só quando são conhecidos (páginas em várias Wikipédias).
-// - ESPN: os jogos disputados neste dia, nas ligas do ligas.json e nas grandes competições de seleções.
-// A lista é refeita à meia-noite de Lisboa (muda o dia) e revista de meia em meia hora. Cada fonte é publicada
-// assim que chega, e o site recebe o aviso na hora, sem esperar pelas outras.
+// - ESPN: os jogos disputados nesses dias, nas ligas do ligas.json e nas grandes competições de seleções
+//   (um pedido por liga e por ano, com a semana inteira).
+// A lista é refeita quando a semana muda (segunda-feira, meia-noite de Lisboa) e revista de meia em meia hora.
+// Cada fonte é publicada assim que chega, e o site recebe o aviso na hora, sem esperar pelas outras.
 import fs from "node:fs";
 import { sleep, norm } from "../util.js";
 
@@ -34,6 +36,17 @@ export function hojeLisboa(ts = Date.now()) {
   return { ano, mes, dia, iso };
 }
 const dd = (n) => String(n).padStart(2, "0");
+// semana de Lisboa que contém o instante: de segunda a domingo, cada dia com { ano, mes, dia, iso }
+export function semanaLisboa(ts = Date.now()) {
+  const h = hojeLisboa(ts);
+  const base = new Date(Date.UTC(h.ano, h.mes - 1, h.dia, 12));
+  const recuo = (base.getUTCDay() + 6) % 7; // 0 = segunda
+  const dias = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(base.getTime() + (i - recuo) * 86400e3);
+    return { ano: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate(), iso: d.toISOString().slice(0, 10) };
+  });
+  return { id: dias[0].iso, dias, hoje: h.iso };
+}
 // 29 de fevereiro só existe nos anos bissextos
 const existe = (ano, mes, dia) => { const d = new Date(Date.UTC(ano, mes - 1, dia)); return d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia; };
 
@@ -49,6 +62,9 @@ const DESPORTO = new RegExp(`(?<![\\p{L}\\p{N}])(?:${[
   "taça dos campeões", "liga dos campeões", "champions league", "coupe d'europe", "coppa dei campioni", "europapokal", "copa de europa",
   "campeonato do mundo de futebol", "copa do mundo fifa", "fifa world cup", "coupe du monde de football", "coppa del mondo fifa", "fu(ß|ss)ball-weltmeisterschaft", "copa mundial",
   "uefa", "fifa", "euro \\d{4}", "eurocopa", "bola de ouro", "ballon d'or", "pallone d'oro", "balón de oro",
+  "european cup", "cup winners' cup", "uefa cup", "fa cup", "copa del rey", "coppa italia", "dfb-pokal", "coupe de france", "ta[cç]a de portugal", "ta[cç]a da liga",
+  "premier league", "primeira liga", "la liga", "serie a", "bundesliga", "ligue 1", "copa libertadores", "copa am[eé]rica",
+  "real madrid", "fc barcelona", "manchester united", "manchester city", "liverpool f\\.?c", "juventus", "ac milan", "inter(nazionale)? mil", "bayern", "ajax\\b", "boca juniors", "river plate",
   "benfica", "sporting clube", "sporting cp", "fc porto", "futebol clube do porto", "seleção portuguesa de futebol",
   // outras modalidades
   "t[eé]nis\\b", "tenista", "tennis\\w*", "wimbledon", "roland[- ]garros", "us open", "australian open", "grand slam",
@@ -84,7 +100,7 @@ async function json(url, { tentativas = 2, timeout = 20000, headers = {} } = {})
       if (r.status === 404) return null;
       if (!r.ok) throw Object.assign(new Error(`${new URL(url).hostname} respondeu ${r.status}`), { status: r.status });
       return await r.json();
-    } catch (e) { erro = e; await sleep(1500 * (i + 1)); }
+    } catch (e) { erro = e; if (i < tentativas - 1) await sleep(1500 * (i + 1)); }
   }
   throw erro;
 }
@@ -95,8 +111,8 @@ async function wikipedia(lang, mes, dia) {
   const caminho = `feed/onthisday/all/${dd(mes)}/${dd(dia)}`;
   // a REST de cada Wikipédia; se falhar, o agregador da Wikimedia
   let d = null;
-  try { d = await json(`https://${lang}.wikipedia.org/api/rest_v1/${caminho}`); }
-  catch { d = await json(`https://api.wikimedia.org/feed/v1/wikipedia/${lang}/onthisday/all/${dd(mes)}/${dd(dia)}`); }
+  try { d = await json(`https://${lang}.wikipedia.org/api/rest_v1/${caminho}`, { tentativas: 1 }); }
+  catch { d = await json(`https://api.wikimedia.org/feed/v1/wikipedia/${lang}/onthisday/all/${dd(mes)}/${dd(dia)}`, { tentativas: 1 }); }
   if (!d) return [];
   const out = [];
   for (const [campo, tipo] of Object.entries(TIPOS_WIKI)) {
@@ -117,6 +133,58 @@ async function wikipedia(lang, mes, dia) {
         titulo: principal?.titles?.normalized || principal?.title || null,
       });
     }
+  }
+  return out;
+}
+
+/* ───────── Wikipédia: página do dia (recurso quando a API «Neste dia» falha) ───────── */
+const MESES_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const MESES_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const PAGINA_DIA = { pt: (m, d) => `${d} de ${MESES_PT[m - 1]}`, en: (m, d) => `${MESES_EN[m - 1]} ${d}` };
+const SECCAO_DIA = [
+  [/^(eventos|acontecimentos|events)\b/i, "acontecimento"],
+  [/^(nascimentos|births)\b/i, "nascimento"],
+  [/^(falecimentos|mortes|[oó]bitos|deaths)\b/i, "morte"],
+];
+// wikitexto → texto simples
+function limparWiki(t) {
+  let s = String(t || "").replace(/<ref[^>]*\/>/gi, "").replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+  for (let i = 0; i < 5 && /\{\{[^{}]*\}\}/.test(s); i++) {
+    s = s.replace(/\{\{(?:flagicon|bandeira|band|flag)[^{}]*\}\}/gi, "").replace(/\{\{[^{}|]*\|([^{}|]*)\}\}/g, "$1").replace(/\{\{[^{}]*\}\}/g, "");
+  }
+  return s.replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, "$1").replace(/\[https?:\/\/\S+\s([^\]]*)\]/g, "$1").replace(/'{2,}/g, "")
+    .replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+async function wikipediaPagina(lang, mes, dia) {
+  const titulo = PAGINA_DIA[lang]?.(mes, dia);
+  if (!titulo) return [];
+  const d = await json(`https://${lang}.wikipedia.org/w/api.php?action=parse&format=json&formatversion=2&redirects=1&prop=wikitext&page=${encodeURIComponent(titulo)}`);
+  const texto = d?.parse?.wikitext;
+  if (!texto) return [];
+  const out = [];
+  let tipo = null;
+  let anoPai = null; // «* [[1990]]» sozinho: as linhas «**» seguintes são desse ano
+  for (const linha of texto.split("\n")) {
+    const h = linha.match(/^==+\s*(.+?)\s*==+\s*$/);
+    if (h) {
+      const nome = limparWiki(h[1]);
+      const sec = SECCAO_DIA.find(([re]) => re.test(nome));
+      if (/^==[^=]/.test(linha)) tipo = sec ? sec[1] : null;
+      else if (sec) tipo = sec[1];
+      anoPai = null;
+      continue;
+    }
+    if (!tipo || !/^\*/.test(linha)) continue;
+    const nivel = linha.match(/^\*+/)[0].length;
+    const limpa = limparWiki(linha.replace(/^\*+\s*/, ""));
+    const m = limpa.match(/^(\d{3,4})(?:\s*(?:[—–-]|:)\s*(.*))?$/);
+    if (m && !m[2]) { anoPai = Number(m[1]); continue; }
+    let ano = m ? Number(m[1]) : null;
+    let resto = m ? m[2] : limpa;
+    if (!ano && nivel > 1 && anoPai) ano = anoPai;
+    if (!ano || !resto || !eDesporto(resto)) continue;
+    const link = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(titulo.replace(/ /g, "_"))}`;
+    out.push({ tipo, ano, lang, texto: resto, qids: [], link, img: null, titulo: null });
   }
   return out;
 }
@@ -172,18 +240,25 @@ async function wikidata(propriedade, datas) {
 }
 
 /* ───────── ESPN: jogos disputados neste dia ───────── */
-async function jogosEspn(ligas, anosAlvo, mes, dia, log, aoChegar = () => {}) {
+async function jogosEspn(ligas, semana, log, aoChegar = () => {}) {
   const out = [];
   const fut = ligas.filter((l) => l.espn && l.espn.startsWith("soccer/"));
+  // para cada aniversário (há n anos), os dias da semana nesse ano: «MM-DD» → ano esperado
+  const periodos = ANOS.map((n) => {
+    const dias = semana.dias.filter((d) => existe(d.ano - n, d.mes, d.dia)).map((d) => ({ ...d, alvo: d.ano - n }));
+    if (!dias.length) return null;
+    const ymd = (d) => `${d.alvo}${dd(d.mes)}${dd(d.dia)}`;
+    return { n, dias, intervalo: `${ymd(dias[0])}-${ymd(dias[dias.length - 1])}` };
+  }).filter((p) => p && p.dias[0].alvo >= ESPN_DESDE);
   // a ESPN não tem resultados de futebol anteriores a meados dos anos 90: não vale a pena pedir
   const pedidos = [];
-  for (const lg of [...fut, ...ESPN_EXTRA]) for (const ano of anosAlvo.filter((a) => a >= ESPN_DESDE)) pedidos.push([lg, ano]);
+  for (const lg of [...fut, ...ESPN_EXTRA]) for (const per of periodos) pedidos.push([lg, per]);
   let parar = false;
   const trabalhador = async () => {
     while (pedidos.length && !parar) {
-      const [lg, ano] = pedidos.shift();
+      const [lg, per] = pedidos.shift();
       let d = null;
-      try { d = await json(`${ESPN}/${lg.espn}/scoreboard?dates=${ano}${dd(mes)}${dd(dia)}`, { tentativas: 1, timeout: 12000 }); }
+      try { d = await json(`${ESPN}/${lg.espn}/scoreboard?dates=${per.intervalo}&limit=400`, { tentativas: 1, timeout: 15000 }); }
       catch (e) { if (e.status === 403 || e.status === 429) { log(`[Neste dia] ESPN: ${e.message}`); parar = true; return; } }
       const evs = (d?.events || []).filter((ev) => ev.status?.type?.completed || ev.status?.type?.state === "post");
       if (!evs.length) continue;
@@ -193,15 +268,20 @@ async function jogosEspn(ligas, anosAlvo, mes, dia, log, aoChegar = () => {}) {
         const lado = (h) => comp.competitors?.find((c) => c.homeAway === h) || {};
         const casa = lado("home"), fora = lado("away");
         const nome = (c) => c.team?.displayName || c.team?.shortDisplayName || c.team?.name || "";
-        // o dia do jogo em Lisboa tem de ser mesmo este (a ESPN agrupa pela data americana)
+        // o dia do jogo em Lisboa tem de ser um dos dias da semana, no ano certo (a ESPN agrupa pela data americana)
         const quando = Date.parse(ev.date);
-        if (quando) { const h = hojeLisboa(quando); if (h.mes !== mes || h.dia !== dia) continue; }
+        if (!quando) continue;
+        const h = hojeLisboa(quando);
+        const dSem = per.dias.find((x) => x.mes === h.mes && x.dia === h.dia && x.alvo === h.ano);
+        if (!dSem) continue;
+        const ano = h.ano;
         const golos = (comp.details || []).filter((x) => x.scoringPlay).map((x) => ({
           min: x.clock?.displayValue || "", quem: x.athletesInvolved?.[0]?.displayName || "", casa: String(x.team?.id) === String(casa.team?.id),
         }));
         out.push({
           tipo: "jogo",
           ano,
+          dia: dSem.iso, // o dia desta semana em que o jogo faz anos
           id: `espn:${ev.id}`,
           liga: lg.nome, liga_en: lg.nome_en || lg.nome, bandeira: lg.bandeira || null,
           casa: nome(casa), fora: nome(fora),
@@ -230,8 +310,9 @@ const pesoJogo = (j) => (PT.test(`${j.casa} ${j.fora}`) ? 3 : 0) + (/final/i.tes
 export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas = [] } = {}) {
   let dados = null;
   try { dados = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { dados = null; }
-  const estado = { at: null, dia: dados?.dia || null, erros: {}, contagem: {} };
-  const cacheJogos = { dia: dados?.dia || null, lista: dados?.jogos || [] };
+  if (dados && !dados.semana) dados = null; // ficheiro antigo, do «Neste dia»
+  const estado = { at: null, semana: dados?.semana || null, erros: {}, contagem: {} };
+  const cacheJogos = { semana: dados?.semana || null, lista: dados?.jogos || [] };
   let aCorrer = false;
 
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* só em memória */ } };
@@ -239,54 +320,71 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
   async function montar() {
     if (aCorrer) return;
     aCorrer = true;
-    const h = hojeLisboa();
-    const alvo = ANOS.map((n) => h.ano - n).filter((a) => existe(a, h.mes, h.dia));
-    const anosSet = new Set(alvo);
+    const sem = semanaLisboa();
+    // para cada dia da semana, os anos que fazem aniversário redondo (há 1, 2… 100 anos)
+    const alvoDia = new Map(sem.dias.map((d) => [d.iso, ANOS.map((n) => d.ano - n).filter((a) => existe(a, d.mes, d.dia))]));
     const erros = {};
-    // numa revisão do mesmo dia, a lista anterior fica visível enquanto a nova se compõe
-    const mesmoDia = dados?.dia === h.iso;
+    // numa revisão da mesma semana, a lista anterior fica visível enquanto a nova se compõe
+    const mesma = dados?.semana === sem.id;
     const novo = {
-      dia: h.iso, at: Date.now(), anos: alvo, completo: mesmoDia && !!dados.completo,
-      wiki: mesmoDia ? { ...(dados.wiki || {}) } : {},
-      pessoas: mesmoDia ? dados.pessoas || [] : [],
-      jogos: cacheJogos.dia === h.iso ? cacheJogos.lista : [],
+      semana: sem.id, dias: sem.dias.map((d) => d.iso), at: Date.now(), anos: ANOS, completo: mesma && !!dados.completo,
+      wiki: mesma ? { ...(dados.wiki || {}) } : {},
+      pessoas: mesma ? dados.pessoas || [] : [],
+      jogos: cacheJogos.semana === sem.id ? cacheJogos.lista : [],
     };
     // publica o que já há e avisa o site (os avisos seguidos juntam-se num só)
     let aviso = null;
     const publicar = () => {
-      if (hojeLisboa().iso !== h.iso) return;
+      if (semanaLisboa().id !== sem.id) return;
       novo.at = Date.now();
       dados = novo;
-      if (!aviso) aviso = setTimeout(() => { aviso = null; broadcast("efemerides", { dia: h.iso, at: novo.at }); }, 1200);
+      if (!aviso) aviso = setTimeout(() => { aviso = null; broadcast("efemerides", { semana: sem.id, at: novo.at }); }, 1200);
     };
-    if (!mesmoDia) publicar(); // o site passa logo para o dia novo, a mostrar «a preparar»
+    if (!mesma) publicar(); // o site passa logo para a semana nova, a mostrar «a preparar»
     try {
       await Promise.all([
-        // 1) Wikipédia, nas seis línguas (a portuguesa primeiro)
+        // 1) Wikipédia, nas seis línguas (a portuguesa primeiro), para cada dia da semana
         (async () => {
           for (const l of LINGUAS) {
-            try { novo.wiki[l] = (await wikipedia(l, h.mes, h.dia)).filter((x) => anosSet.has(x.ano)); }
-            catch (e) { erros[`wikipedia-${l}`] = e.message; novo.wiki[l] = novo.wiki[l] || []; }
+            const lista = [];
+            let falhou = 0;
+            for (const d of sem.dias) {
+              const anos = new Set(alvoDia.get(d.iso));
+              let doDia = [];
+              try { doDia = await wikipedia(l, d.mes, d.dia); } catch (e) { erros[`wikipedia-${l}`] = e.message; falhou++; }
+              // a API não deu nada de desporto (ou falhou): a página do dia, em português e inglês
+              if (!doDia.length && PAGINA_DIA[l]) {
+                try { doDia = await wikipediaPagina(l, d.mes, d.dia); } catch (e) { erros[`wikipedia-pagina-${l}`] = e.message; }
+              }
+              lista.push(...doDia.filter((x) => anos.has(x.ano)).map((x) => ({ ...x, dia: d.iso })));
+              await sleep(250);
+            }
+            if (lista.length || falhou < sem.dias.length || !novo.wiki[l]) novo.wiki[l] = lista;
             publicar();
-            await sleep(300);
           }
         })(),
-        // 2) Wikidata: nascimentos e mortes (as datas guardadas como dia exato)
+        // 2) Wikidata: nascimentos e mortes, dia a dia (as datas guardadas como dia exato)
         (async () => {
-          const datas = alvo.map((a) => `${a}-${dd(h.mes)}-${dd(h.dia)}`);
-          const [n, m] = await Promise.allSettled([wikidata("P569", datas), wikidata("P570", datas)]);
-          if (n.status === "rejected") erros.wikidata = n.reason?.message;
-          if (m.status === "rejected") erros.wikidata = m.reason?.message;
-          const pessoas = [...(n.value || []), ...(m.value || [])];
-          if (pessoas.length || !novo.pessoas.length) novo.pessoas = pessoas;
+          const pessoas = [];
+          let falhas = 0;
+          for (const d of sem.dias) {
+            const datas = alvoDia.get(d.iso).map((a) => `${a}-${dd(d.mes)}-${dd(d.dia)}`);
+            const [n, m] = await Promise.allSettled([wikidata("P569", datas), wikidata("P570", datas)]);
+            if (n.status === "rejected") { erros.wikidata = n.reason?.message; falhas++; }
+            if (m.status === "rejected") { erros.wikidata = m.reason?.message; falhas++; }
+            pessoas.push(...[...(n.value || []), ...(m.value || [])].map((p) => ({ ...p, dia: d.iso })));
+            if (pessoas.length > novo.pessoas.length || !mesma) { novo.pessoas = [...pessoas]; publicar(); }
+            await sleep(500);
+          }
+          if (pessoas.length || falhas < sem.dias.length * 2) novo.pessoas = pessoas;
           publicar();
         })(),
-        // 3) jogos da ESPN: só uma vez por dia (o passado não muda)
+        // 3) jogos da ESPN: uma vez por semana (o passado não muda)
         (async () => {
-          if (cacheJogos.dia === h.iso && cacheJogos.lista.length) return;
+          if (cacheJogos.semana === sem.id && cacheJogos.lista.length) return;
           try {
-            const lista = await jogosEspn(ligas, alvo, h.mes, h.dia, log, (parcial) => { novo.jogos = [...parcial]; publicar(); });
-            cacheJogos.lista = lista; cacheJogos.dia = h.iso;
+            const lista = await jogosEspn(ligas, sem, log, (parcial) => { novo.jogos = [...parcial]; publicar(); });
+            cacheJogos.lista = lista; cacheJogos.semana = sem.id;
             novo.jogos = lista;
           } catch (e) { erros.espn = e.message; }
           publicar();
@@ -295,23 +393,25 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       novo.completo = true;
       publicar();
       Object.assign(estado, {
-        at: Date.now(), dia: h.iso, erros,
+        at: Date.now(), semana: sem.id, erros,
         contagem: { ...Object.fromEntries(LINGUAS.map((l) => [`wikipedia-${l}`, (novo.wiki[l] || []).length])), pessoas: novo.pessoas.length, jogos: novo.jogos.length },
       });
       gravar();
-      log(`[Neste dia] ${h.iso}: ${novo.pessoas.length} desportistas, ${novo.jogos.length} jogos, ${LINGUAS.map((l) => `${l} ${(novo.wiki[l] || []).length}`).join(" · ")}`);
+      log(`[Nesta semana] ${sem.id}: ${novo.pessoas.length} desportistas, ${novo.jogos.length} jogos, ${LINGUAS.map((l) => `${l} ${(novo.wiki[l] || []).length}`).join(" · ")}`);
     } finally { aCorrer = false; }
   }
 
   // o que o site mostra numa língua: acontecimentos da Wikipédia dessa língua (ou, se ela não tiver
-  // nada de desporto, da inglesa), desportistas do Wikidata e jogos da ESPN, sem repetidos
+  // nada de desporto, da inglesa, e depois da portuguesa), desportistas do Wikidata e jogos da ESPN, sem repetidos
   function para(lang) {
     const L = LINGUAS.includes(lang) ? lang : "pt";
-    const h = hojeLisboa();
-    if (!dados || dados.dia !== h.iso) return { dia: h.iso, anos: ANOS, pronto: false, itens: [] };
+    const sem = semanaLisboa();
+    const anoDe = new Map(sem.dias.map((d) => [d.iso, d.ano]));
+    if (!dados || dados.semana !== sem.id) return { semana: sem.id, dias: sem.dias.map((d) => d.iso), hoje: sem.hoje, anos: ANOS, pronto: false, itens: [] };
     const itens = [];
-    const wiki = dados.wiki?.[L]?.length ? dados.wiki[L] : dados.wiki?.en || [];
-    const langWiki = dados.wiki?.[L]?.length ? L : "en";
+    const langWiki = [L, "en", "pt", ...LINGUAS].find((l) => dados.wiki?.[l]?.length) || L;
+    const wiki = dados.wiki?.[langWiki] || [];
+    const anosDe = (x) => (anoDe.get(x.dia) || sem.dias[0].ano) - x.ano;
     const qidsPessoas = new Set();
     // desportistas do Wikidata, com o nome e a descrição na língua escolhida
     for (const p of dados.pessoas || []) {
@@ -319,31 +419,39 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       const nome = p.nome[L] || p.nome.en || p.nome.pt;
       const desc = p.desc[L] || p.desc.en || p.desc.pt || "";
       itens.push({
-        id: `wd:${p.tipo}:${p.qid}`, tipo: p.tipo, ano: p.ano, anos: h.ano - p.ano, nome, desc,
+        id: `wd:${p.tipo}:${p.qid}`, tipo: p.tipo, ano: p.ano, dia: p.dia, anos: anosDe(p), nome, desc,
         portugues: p.portugues, peso: (p.portugues ? 100 : 0) + p.ligacoes, img: p.img,
         link: (L === "pt" ? p.link.pt : null) || p.link.en || p.link.pt || `https://www.wikidata.org/wiki/${p.qid}`,
       });
     }
+    const vistos = new Set();
     for (const w of wiki) {
       // nascimentos e mortes que o Wikidata já trouxe não se repetem
       if ((w.tipo === "nascimento" || w.tipo === "morte") && w.qids.some((q) => qidsPessoas.has(q))) continue;
+      const id = `wp:${w.tipo}:${w.dia}:${w.ano}:${norm(w.texto).slice(0, 60)}`;
+      if (vistos.has(id)) continue;
+      vistos.add(id);
       itens.push({
-        id: `wp:${w.tipo}:${w.ano}:${norm(w.texto).slice(0, 60)}`, tipo: w.tipo, ano: w.ano, anos: h.ano - w.ano,
+        id, tipo: w.tipo, ano: w.ano, dia: w.dia, anos: anosDe(w),
         texto: w.texto, img: w.img, link: w.link, lang: langWiki, peso: 60 + (PT.test(w.texto) ? 40 : 0),
       });
     }
-    for (const j of dados.jogos || []) itens.push({ ...j, anos: h.ano - j.ano, peso: pesoJogo(j) });
-    itens.sort((a, b) => a.anos - b.anos || (b.peso || 0) - (a.peso || 0));
-    return { dia: h.iso, anos: dados.anos, pronto: dados.completo !== false || itens.length > 0, completo: dados.completo !== false, at: dados.at, itens };
+    for (const j of dados.jogos || []) itens.push({ ...j, anos: anosDe(j), peso: pesoJogo(j) });
+    // por aniversário (há 1 ano, há 2…), depois pelo dia da semana, depois pelo peso
+    itens.sort((a, b) => a.anos - b.anos || String(a.dia).localeCompare(String(b.dia)) || (b.peso || 0) - (a.peso || 0));
+    return {
+      semana: sem.id, dias: dados.dias || sem.dias.map((d) => d.iso), hoje: sem.hoje, anos: dados.anos,
+      pronto: dados.completo !== false || itens.length > 0, completo: dados.completo !== false, at: dados.at, itens,
+    };
   }
 
   async function start() {
     for (;;) {
-      try { await montar(); } catch (e) { log(`[Neste dia] ${e.message}`); }
-      // espera até à próxima revisão ou até à meia-noite de Lisboa, o que vier primeiro
-      const dia = hojeLisboa().iso;
+      try { await montar(); } catch (e) { log(`[Nesta semana] ${e.message}`); }
+      // espera até à próxima revisão ou até a semana mudar (segunda-feira à meia-noite de Lisboa), o que vier primeiro
+      const semana = semanaLisboa().id;
       const ate = Date.now() + REVER_MS;
-      while (Date.now() < ate && hojeLisboa().iso === dia) await sleep(30000);
+      while (Date.now() < ate && semanaLisboa().id === semana) await sleep(30000);
     }
   }
 

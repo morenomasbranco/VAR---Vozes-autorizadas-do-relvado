@@ -10,6 +10,8 @@ Feed de notícias de desporto em tempo real, feito só com serviços gratuitos.
 - **Zapping do zerozero** (`https://www.zerozero.pt/rss/zapping`), lido a cada minuto: diz que canal português transmite cada jogo. O canal aparece ao lado do resultado, com o logótipo, na página inicial, no quadro de resultados e nos cartões com marcador. Os canais estão no `canais.json`: `re` reconhece o nome como vem no feed, `dominio` vai buscar o logótipo e `cor` é a cor de recurso quando o logótipo não carrega. Para usar uma imagem própria, junta `"logo": "https://…"` ao canal. As transmissões de andebol, futsal, femininos e escalões só entram nos cartões da mesma modalidade. O emparelhamento entre o nome que a ESPN usa e o que o zerozero usa é tolerante (Sheffield Utd e Sheffield United, Athletic Club e Athletic Bilbao, Man United e Manchester United, Vitória SC e Vitória de Guimarães, Köln e Cologne), mas exige as duas equipas, o que evita enganos como confundir o Sporting com o Sp. Braga. Os jogos para os quais não se encontrou transmissão ficam listados em `/api/zapping/estado`, no campo `semCanal` — é por aí que se vê que nome está a falhar e se acrescenta ao `NOMES` ou ao `PALAVRAS` do `server/sources/zapping.js`. A grelha é guardada em `data/zapping.json`, para um reinício a meio da tarde não perder as transmissões dos jogos que já saíram do feed.
 - **Resultados em direto** (GOAL API): início, golos, intervalo e final dos jogos das ligas do `ligas.json`, publicados como notícias. No site, a secção Resultados tem um botão para cada visitante escolher as ligas que quer ver.
 
+A tradução para as seis línguas é feita pelo Google Tradutor público (gratuito, sem chave e sem quota); o Gemini só é usado se o Google falhar. As notícias que o Gemini não chegou a tratar, por ter esgotado o limite gratuito, também têm o título traduzido para português e inglês. O estado está em `/api/tradutor/estado`. As notícias de lotarias (Euromilhões, Totoloto…) são ignoradas.
+
 Cada notícia (exceto os resultados) passa pelo Gemini, que decide se é notícia, escolhe as secções, escreve título e pontos em português e inglês, dá a nota de importância e junta as notícias repetidas de várias fontes.
 
 ## O que é preciso (tudo gratuito)
@@ -92,7 +94,7 @@ Os vídeos do YouTube, Streamable, Reddit e Telegram tocam dentro do cartão; os
 
 ## Capas
 
-O separador Capas, e a faixa «Capas de hoje» na página inicial, mostram as capas dos jornais desportivos do dia, agrupadas por país, a partir da página de jornais de desporto do SAPO. A página é relida de 20 em 20 minutos (de 5 em 5 entre a meia-noite e as 9h de Lisboa). As imagens passam pelo servidor (`/api/capas/img/<id>`), para aparecerem mesmo que o SAPO recuse imagens pedidas de outros sites. Se a secção ficar vazia, o `/api/capas/estado` mostra o erro e um excerto da página que o SAPO devolveu.
+O separador Capas, e a faixa «Capas de hoje» na página inicial, mostram as capas dos jornais desportivos do dia, agrupadas por país. As fontes principais são o VerCapas (vercapas.com) e o site irmão espanhol VerPortadas (verportadas.es). Além de A Bola, Record e O Jogo, o servidor lê as categorias de desporto dos dois sites de seis em seis horas e junta todas as publicações que tenham capa na última semana (Marca, AS, Sport, Mundo Deportivo, Superdeporte, L'Esportiu, L'Équipe, Tuttosport, os jornais dos clubes e as revistas). As que estão paradas há mais de uma semana ficam de fora. A lista em uso aparece em `/api/capas/estado`, no campo `jornais`. O SAPO e o Kiosko completam com os jornais que o VerCapas não tem; quando há capa do mesmo jornal em mais de uma fonte, fica a do VerCapas. A página é relida de 20 em 20 minutos (de 5 em 5 entre a meia-noite e as 9h de Lisboa). As imagens passam pelo servidor (`/api/capas/img/<id>`), para aparecerem mesmo que o SAPO recuse imagens pedidas de outros sites. Se a secção ficar vazia, o `/api/capas/estado` mostra o erro e um excerto da página que o SAPO devolveu.
 
 ## Página inicial
 
@@ -137,3 +139,7 @@ npm start
 ```
 
 O servidor entrega o site e a API na porta 3001. Tem de estar sempre ligado, por isso serve um computador teu, um Raspberry Pi ou uma máquina virtual gratuita, como a Always Free da Oracle Cloud. Se quiseres o site no Netlify (plano gratuito), o `netlify.toml` já está preparado: cria no Netlify a variável `VITE_API_URL` com o endereço do servidor e põe o endereço do site em `ALLOWED_ORIGIN` no `.env` do servidor.
+
+## Nesta semana
+
+O que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo), há 1, 2, 3, 4, 5, 10, 15… 100 anos: acontecimentos, nascimentos e mortes da Wikipédia (pela API «Neste dia» e, se ela falhar, pela página de cada dia), desportistas do Wikidata e jogos da ESPN. A lista é refeita quando a semana muda e revista de meia em meia hora. O estado está em `/api/efemerides/estado`.
