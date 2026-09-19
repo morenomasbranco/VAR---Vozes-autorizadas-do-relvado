@@ -5,8 +5,10 @@
 //   («19 de setembro», «September 19») e tiram-se de lá as linhas de desporto.
 // - Wikidata: desportistas nascidos e mortos nesses dias (futebolistas, treinadores, tenistas, pilotos…), com os
 //   portugueses sempre incluídos e os estrangeiros só quando são conhecidos (páginas em várias Wikipédias).
-// - ESPN: os jogos disputados nesses dias, nas ligas do ligas.json e nas grandes competições de seleções
-//   (um pedido por liga e por ano, com a semana inteira).
+// - ESPN: os jogos disputados nesses dias, nas ligas do ligas.json (futebol e basquetebol) e nas grandes
+//   competições de clubes e de seleções (um pedido por liga e por ano, com a semana inteira).
+// - Wikidata: acontecimentos de futebol, futsal, basquetebol e hóquei em patins com data exata nesses dias
+//   (finais, jogos marcantes, início e fim de competições), portugueses e internacionais.
 // A lista é refeita quando a semana muda (segunda-feira, meia-noite de Lisboa) e revista de meia em meia hora.
 // Cada fonte é publicada assim que chega, e o site recebe o aviso na hora, sem esperar pelas outras.
 import fs from "node:fs";
@@ -20,6 +22,8 @@ const ESPN = process.env.ESPN_BASE || "https://site.api.espn.com/apis/site/v2/sp
 const ESPN_DESDE = Number(process.env.EFEMERIDES_ESPN_DESDE) || 1994;
 const REVER_MS = (Number(process.env.EFEMERIDES_HORAS) || 0.5) * 3600e3;
 const ESPN_PARALELO = Math.max(1, Number(process.env.EFEMERIDES_ESPN_PARALELO) || 6); // pedidos à ESPN ao mesmo tempo
+// sobe quando as fontes mudam: a lista gravada da semana é refeita em vez de ficar a de antes
+const VERSAO = 2;
 // competições de seleções e taças que não estão no ligas.json mas contam para a história
 const ESPN_EXTRA = [
   { nome: "Campeonato do Mundo", nome_en: "World Cup", espn: "soccer/fifa.world", bandeira: "un" },
@@ -27,7 +31,25 @@ const ESPN_EXTRA = [
   { nome: "Supertaça Europeia", nome_en: "UEFA Super Cup", espn: "soccer/uefa.super_cup", bandeira: "eu" },
   { nome: "Mundial de Clubes", nome_en: "Club World Cup", espn: "soccer/fifa.cwc", bandeira: "un" },
   { nome: "Copa América", nome_en: "Copa América", espn: "soccer/conmebol.america", bandeira: "un" },
+  { nome: "Qualificação para o Europeu", nome_en: "Euro qualifying", espn: "soccer/uefa.euroq", bandeira: "eu" },
+  { nome: "Mundial feminino", nome_en: "Women's World Cup", espn: "soccer/fifa.wwc", bandeira: "un" },
+  { nome: "Europeu feminino", nome_en: "Women's Euro", espn: "soccer/uefa.weuro", bandeira: "eu" },
+  { nome: "Jogos Olímpicos (futebol)", nome_en: "Olympic football", espn: "soccer/fifa.olympics", bandeira: "un" },
+  { nome: "Libertadores", nome_en: "Copa Libertadores", espn: "soccer/conmebol.libertadores", bandeira: "un" },
+  { nome: "Sul-Americana", nome_en: "Copa Sudamericana", espn: "soccer/conmebol.sudamericana", bandeira: "un" },
+  { nome: "Taça de Inglaterra", nome_en: "FA Cup", espn: "soccer/eng.fa", bandeira: "gb-eng" },
+  { nome: "Taça da Liga inglesa", nome_en: "EFL Cup", espn: "soccer/eng.league_cup", bandeira: "gb-eng" },
+  { nome: "Taça do Rei", nome_en: "Copa del Rey", espn: "soccer/esp.copa_del_rey", bandeira: "es" },
+  { nome: "Taça de Itália", nome_en: "Coppa Italia", espn: "soccer/ita.coppa_italia", bandeira: "it" },
+  { nome: "Taça da Alemanha", nome_en: "DFB-Pokal", espn: "soccer/ger.dfb_pokal", bandeira: "de" },
+  { nome: "Taça de França", nome_en: "Coupe de France", espn: "soccer/fra.coupe_de_france", bandeira: "fr" },
+  { nome: "Liga escocesa", nome_en: "Scottish Premiership", espn: "soccer/sco.1", bandeira: "gb-sct" },
+  { nome: "Liga argentina", nome_en: "Argentine league", espn: "soccer/arg.1", bandeira: "ar" },
+  { nome: "Liga mexicana", nome_en: "Liga MX", espn: "soccer/mex.1", bandeira: "mx" },
+  { nome: "Liga belga", nome_en: "Belgian Pro League", espn: "soccer/bel.1", bandeira: "be" },
 ];
+// NBA e WNBA têm jogos todos os dias: só entram os do playoff (as finais incluídas)
+const SO_PLAYOFF = /^basketball\/(nba|wnba)$/;
 
 // dia de Lisboa: { ano, mes, dia, iso }
 export function hojeLisboa(ts = Date.now()) {
@@ -196,7 +218,7 @@ async function wikipediaPagina(lang, mes, dia) {
 const PROFISSOES = ["Q937857", "Q628099", "Q10833314", "Q3665646", "Q378622", "Q10841764", "Q2309784", "Q11513337", "Q10843402",
   "Q13365117", "Q15117302", "Q11338576", "Q13156709", "Q3014296", "Q6665249", "Q14089670", "Q19204627", "Q11774891",
   "Q10871364", "Q12299841", "Q2066131"];
-const MIN_LIGACOES = Number(process.env.EFEMERIDES_MIN_WIKIS) || 25; // estrangeiros: só os que têm páginas em muitas Wikipédias
+const MIN_LIGACOES = Number(process.env.EFEMERIDES_MIN_WIKIS) || 15; // estrangeiros: só os que têm páginas em muitas Wikipédias
 async function wikidata(propriedade, datas) {
   if (!datas.length) return [];
   const valores = datas.map((d) => `"${d}T00:00:00Z"^^xsd:dateTime`).join(" ");
@@ -239,10 +261,78 @@ async function wikidata(propriedade, datas) {
   return [...vistos.values()];
 }
 
+/* ───────── Wikidata: acontecimentos de futebol, futsal, basquetebol e hóquei em patins ───────── */
+// Tudo o que no Wikidata tem data exata num destes dias e é de uma das quatro modalidades: finais, jogos
+// marcantes, e o início ou o fim de campeonatos, taças e torneios (portugueses e internacionais).
+const MODALIDADES_EV = /football|soccer|futsal|basketball|roller hockey|rink hockey|quad hockey/i;
+const NAO_MODALIDADES = /american|australian|gaelic|canadian|arena|rugby|wheelchair|3x3|table football|fantasy/i;
+const MOD_EV = (l) => (/futsal/i.test(l) ? "futsal" : /basketball/i.test(l) ? "basquetebol" : /hockey/i.test(l) ? "hoquei_patins" : "futebol");
+const MIN_LIGACOES_EV = Number(process.env.EFEMERIDES_MIN_WIKIS_EV) || 2; // estrangeiros: páginas em pelo menos duas Wikipédias
+async function acontecimentos(datas) {
+  if (!datas.length) return [];
+  const valores = datas.map((d) => `"${d}T00:00:00Z"^^xsd:dateTime`).join(" ");
+  const etiquetas = LINGUAS.map((l) => `OPTIONAL { ?e rdfs:label ?l_${l} FILTER(LANG(?l_${l}) = "${l}") } OPTIONAL { ?e schema:description ?d_${l} FILTER(LANG(?d_${l}) = "${l}") }`).join("\n  ");
+  const vencedor = LINGUAS.map((l) => `OPTIONAL { ?w rdfs:label ?w_${l} FILTER(LANG(?w_${l}) = "${l}") }`).join(" ");
+  // mesma ideia da consulta das pessoas: primeiro as datas, depois a modalidade
+  const ramo = (prop, k) => `{ ?e wdt:${prop} ?data . ?e p:${prop}/psv:${prop} [ wikibase:timeValue ?data ; wikibase:timePrecision 11 ] . BIND("${k}" AS ?k) }`;
+  const q = `SELECT DISTINCT ?e ?data ?k ?links ?pt ?img ?spl ?wpt ?wen ${LINGUAS.map((l) => `?l_${l} ?d_${l} ?w_${l}`).join(" ")} WHERE {
+  hint:Query hint:optimizer "None" .
+  VALUES ?data { ${valores} }
+  { ${ramo("P585", "dia")} UNION ${ramo("P580", "inicio")} UNION ${ramo("P582", "fim")} }
+  ?e wdt:P641 ?sport .
+  ?sport rdfs:label ?spl . FILTER(LANG(?spl) = "en")
+  ?e wikibase:sitelinks ?links .
+  OPTIONAL { ?e wdt:P17 wd:Q45 . BIND(true AS ?pt) }
+  FILTER(?links >= ${MIN_LIGACOES_EV} || BOUND(?pt))
+  OPTIONAL { ?e wdt:P18 ?img }
+  OPTIONAL { ?e wdt:P1346 ?w . ${vencedor} }
+  OPTIONAL { ?wpt schema:about ?e ; schema:isPartOf <https://pt.wikipedia.org/> }
+  OPTIONAL { ?wen schema:about ?e ; schema:isPartOf <https://en.wikipedia.org/> }
+  ${etiquetas}
+} LIMIT 800`;
+  const d = await json(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(q)}`, { timeout: 55000, headers: { Accept: "application/sparql-results+json" } });
+  const vistos = new Map();
+  for (const b of d?.results?.bindings || []) {
+    const spl = b.spl?.value || "";
+    if (!MODALIDADES_EV.test(spl) || NAO_MODALIDADES.test(spl)) continue;
+    const qid = b.e.value.split("/").pop();
+    const chave = `${qid}:${b.k.value}`;
+    if (vistos.has(chave)) continue;
+    const nome = Object.fromEntries(LINGUAS.map((l) => [l, b[`l_${l}`]?.value]).filter(([, v]) => v));
+    if (!nome.pt && !nome.en) continue;
+    vistos.set(chave, {
+      tipo: "acontecimento", fonte: "wikidata", k: b.k.value,
+      ano: Number(b.data.value.slice(0, 4)), qid, nome,
+      desc: Object.fromEntries(LINGUAS.map((l) => [l, b[`d_${l}`]?.value]).filter(([, v]) => v)),
+      vencedor: Object.fromEntries(LINGUAS.map((l) => [l, b[`w_${l}`]?.value]).filter(([, v]) => v)),
+      mod: MOD_EV(spl),
+      portugues: !!b.pt,
+      ligacoes: Number(b.links.value) || 0,
+      img: b.img ? `${b.img.value.replace(/^http:/, "https:")}?width=160` : null,
+      link: { pt: b.wpt?.value || null, en: b.wen?.value || null },
+    });
+  }
+  return [...vistos.values()];
+}
+// o texto de cada acontecimento na língua escolhida
+const EV_TXT = {
+  pt: { inicio: "Começou", fim: "Terminou", venceu: "vencedor" }, en: { inicio: "Started", fim: "Ended", venceu: "winner" },
+  es: { inicio: "Comenzó", fim: "Terminó", venceu: "ganador" }, fr: { inicio: "Début", fim: "Fin", venceu: "vainqueur" },
+  it: { inicio: "Inizio", fim: "Fine", venceu: "vincitore" }, de: { inicio: "Beginn", fim: "Ende", venceu: "Sieger" },
+};
+function textoEvento(e, L) {
+  const tx = EV_TXT[L] || EV_TXT.pt;
+  const nome = e.nome[L] || e.nome.en || e.nome.pt;
+  const desc = e.desc?.[L] || e.desc?.en || "";
+  const venc = e.vencedor?.[L] || e.vencedor?.en || e.vencedor?.pt;
+  const base = e.k === "inicio" ? `${tx.inicio}: ${nome}` : e.k === "fim" ? `${tx.fim}: ${nome}` : nome;
+  return `${base}${desc ? ` (${desc})` : ""}${venc ? ` — ${tx.venceu}: ${venc}` : ""}`;
+}
+
 /* ───────── ESPN: jogos disputados neste dia ───────── */
 async function jogosEspn(ligas, semana, log, aoChegar = () => {}) {
   const out = [];
-  const fut = ligas.filter((l) => l.espn && l.espn.startsWith("soccer/"));
+  const fut = ligas.filter((l) => l.espn && (l.espn.startsWith("soccer/") || l.espn.startsWith("basketball/")));
   // para cada aniversário (há n anos), os dias da semana nesse ano: «MM-DD» → ano esperado
   const periodos = ANOS.map((n) => {
     const dias = semana.dias.filter((d) => existe(d.ano - n, d.mes, d.dia)).map((d) => ({ ...d, alvo: d.ano - n }));
@@ -260,7 +350,8 @@ async function jogosEspn(ligas, semana, log, aoChegar = () => {}) {
       let d = null;
       try { d = await json(`${ESPN}/${lg.espn}/scoreboard?dates=${per.intervalo}&limit=400`, { tentativas: 1, timeout: 15000 }); }
       catch (e) { if (e.status === 403 || e.status === 429) { log(`[Neste dia] ESPN: ${e.message}`); parar = true; return; } }
-      const evs = (d?.events || []).filter((ev) => ev.status?.type?.completed || ev.status?.type?.state === "post");
+      const evs = (d?.events || []).filter((ev) => (ev.status?.type?.completed || ev.status?.type?.state === "post")
+        && (!SO_PLAYOFF.test(lg.espn) || ev.season?.type === 3));
       if (!evs.length) continue;
       const antes = out.length;
       for (const ev of evs) {
@@ -291,7 +382,9 @@ async function jogosEspn(ligas, semana, log, aoChegar = () => {}) {
           penaltis: casa.shootoutScore != null ? `${casa.shootoutScore}-${fora.shootoutScore}` : null,
           golos: golos.slice(0, 12),
           fase: comp.notes?.[0]?.headline || ev.season?.slug || null,
-          link: `https://www.espn.com/soccer/match/_/gameId/${ev.id}`,
+          mod: lg.espn.startsWith("basketball/") ? "basquetebol" : null,
+          link: ev.links?.find((x) => x.href)?.href
+            || (lg.espn.startsWith("soccer/") ? `https://www.espn.com/soccer/match/_/gameId/${ev.id}` : `https://www.espn.com/${lg.espn.split("/")[1]}/game/_/gameId/${ev.id}`),
         });
       }
       if (out.length > antes) aoChegar(out);
@@ -311,6 +404,7 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
   let dados = null;
   try { dados = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { dados = null; }
   if (dados && !dados.semana) dados = null; // ficheiro antigo, do «Neste dia»
+  if (dados && dados.versao !== VERSAO) dados = { ...dados, completo: false, jogos: [], semana: `${dados.semana}:v${dados.versao || 1}` }; // fontes novas: refaz-se tudo
   const estado = { at: null, semana: dados?.semana || null, erros: {}, contagem: {} };
   const cacheJogos = { semana: dados?.semana || null, lista: dados?.jogos || [] };
   let aCorrer = false;
@@ -327,9 +421,10 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     // numa revisão da mesma semana, a lista anterior fica visível enquanto a nova se compõe
     const mesma = dados?.semana === sem.id;
     const novo = {
-      semana: sem.id, dias: sem.dias.map((d) => d.iso), at: Date.now(), anos: ANOS, completo: mesma && !!dados.completo,
+      semana: sem.id, versao: VERSAO, dias: sem.dias.map((d) => d.iso), at: Date.now(), anos: ANOS, completo: mesma && !!dados.completo,
       wiki: mesma ? { ...(dados.wiki || {}) } : {},
       pessoas: mesma ? dados.pessoas || [] : [],
+      eventos: mesma ? dados.eventos || [] : [],
       jogos: cacheJogos.semana === sem.id ? cacheJogos.lista : [],
     };
     // publica o que já há e avisa o site (os avisos seguidos juntam-se num só)
@@ -379,7 +474,21 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
           if (pessoas.length || falhas < sem.dias.length * 2) novo.pessoas = pessoas;
           publicar();
         })(),
-        // 3) jogos da ESPN: uma vez por semana (o passado não muda)
+        // 3) Wikidata: acontecimentos de futebol, futsal, basquetebol e hóquei em patins, dia a dia
+        (async () => {
+          const eventos = [];
+          let falhas = 0;
+          for (const d of sem.dias) {
+            const datas = alvoDia.get(d.iso).map((a) => `${a}-${dd(d.mes)}-${dd(d.dia)}`);
+            try { eventos.push(...(await acontecimentos(datas)).map((e) => ({ ...e, dia: d.iso }))); }
+            catch (e) { erros["wikidata-acontecimentos"] = e.message; falhas++; }
+            if (eventos.length > novo.eventos.length || !mesma) { novo.eventos = [...eventos]; publicar(); }
+            await sleep(500);
+          }
+          if (eventos.length || falhas < sem.dias.length) novo.eventos = eventos;
+          publicar();
+        })(),
+        // 4) jogos da ESPN: uma vez por semana (o passado não muda)
         (async () => {
           if (cacheJogos.semana === sem.id && cacheJogos.lista.length) return;
           try {
@@ -394,10 +503,10 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       publicar();
       Object.assign(estado, {
         at: Date.now(), semana: sem.id, erros,
-        contagem: { ...Object.fromEntries(LINGUAS.map((l) => [`wikipedia-${l}`, (novo.wiki[l] || []).length])), pessoas: novo.pessoas.length, jogos: novo.jogos.length },
+        contagem: { ...Object.fromEntries(LINGUAS.map((l) => [`wikipedia-${l}`, (novo.wiki[l] || []).length])), pessoas: novo.pessoas.length, acontecimentos: novo.eventos.length, jogos: novo.jogos.length },
       });
       gravar();
-      log(`[Nesta semana] ${sem.id}: ${novo.pessoas.length} desportistas, ${novo.jogos.length} jogos, ${LINGUAS.map((l) => `${l} ${(novo.wiki[l] || []).length}`).join(" · ")}`);
+      log(`[Nesta semana] ${sem.id}: ${novo.pessoas.length} desportistas, ${novo.eventos.length} acontecimentos, ${novo.jogos.length} jogos, ${LINGUAS.map((l) => `${l} ${(novo.wiki[l] || []).length}`).join(" · ")}`);
     } finally { aCorrer = false; }
   }
 
@@ -434,6 +543,19 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       itens.push({
         id, tipo: w.tipo, ano: w.ano, dia: w.dia, anos: anosDe(w),
         texto: w.texto, img: w.img, link: w.link, lang: langWiki, peso: 60 + (PT.test(w.texto) ? 40 : 0),
+      });
+    }
+    // acontecimentos do Wikidata que a Wikipédia «Neste dia» ainda não trouxe
+    const qidsWiki = new Set(wiki.flatMap((w) => w.qids || []));
+    for (const e of dados.eventos || []) {
+      if (qidsWiki.has(e.qid)) continue;
+      const id = `wde:${e.k}:${e.qid}:${e.dia}`;
+      if (vistos.has(id)) continue;
+      vistos.add(id);
+      itens.push({
+        id, tipo: "acontecimento", ano: e.ano, dia: e.dia, anos: anosDe(e), texto: textoEvento(e, L), mod: e.mod,
+        portugues: e.portugues, img: e.img, peso: 50 + (e.portugues || PT.test(textoEvento(e, "pt")) ? 40 : 0) + Math.min(e.ligacoes, 40),
+        link: (L === "pt" ? e.link.pt : null) || e.link.en || e.link.pt || `https://www.wikidata.org/wiki/${e.qid}`,
       });
     }
     for (const j of dados.jogos || []) itens.push({ ...j, anos: anosDe(j), peso: pesoJogo(j) });

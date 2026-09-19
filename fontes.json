@@ -796,7 +796,7 @@
       "pais": "de",
       "col": "de",
       "lang": "en",
-      "google": "site:transfermarkt.com news"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-de",
@@ -806,7 +806,7 @@
       "pais": "de",
       "col": "de",
       "lang": "de",
-      "google": "site:transfermarkt.de"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-at",
@@ -816,7 +816,7 @@
       "pais": "at",
       "col": "mundo",
       "lang": "de",
-      "google": "site:transfermarkt.at"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-ch",
@@ -826,7 +826,7 @@
       "pais": "ch",
       "col": "mundo",
       "lang": "de",
-      "google": "site:transfermarkt.ch"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-tr",
@@ -836,7 +836,7 @@
       "pais": "tr",
       "col": "mundo",
       "lang": "tr",
-      "google": "site:transfermarkt.com.tr"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-it",
@@ -846,7 +846,7 @@
       "pais": "it",
       "col": "it",
       "lang": "it",
-      "google": "site:transfermarkt.it"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-pl",
@@ -856,7 +856,7 @@
       "pais": "pl",
       "col": "mundo",
       "lang": "pl",
-      "google": "site:transfermarkt.pl"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-uk",
@@ -866,7 +866,7 @@
       "pais": "gb-eng",
       "col": "en",
       "lang": "en",
-      "google": "site:transfermarkt.co.uk"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-es",
@@ -876,7 +876,7 @@
       "pais": "es",
       "col": "es",
       "lang": "es",
-      "google": "site:transfermarkt.es"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-nl",
@@ -886,7 +886,7 @@
       "pais": "nl",
       "col": "mundo",
       "lang": "nl",
-      "google": "site:transfermarkt.nl"
+      "semGoogle": true
     },
     {
       "id": "transfermarkt-pt",
@@ -896,7 +896,7 @@
       "pais": "pt",
       "col": "pt",
       "lang": "pt",
-      "google": "site:transfermarkt.pt"
+      "semGoogle": true
     },
     {
       "id": "bundesliga",
@@ -1258,6 +1258,121 @@
       "lang": "pt",
       "pais": "pt",
       "col": "pt"
+    },
+    {
+      "id": "mundo-brasil",
+      "nome": "Futebol brasileiro (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Brasileirão OR Flamengo OR Palmeiras OR Corinthians OR Botafogo OR Fluminense OR \"São Paulo FC\" OR Grêmio OR \"Atlético Mineiro\" OR Cruzeiro) futebol",
+      "soGoogle": true,
+      "lang": "pt",
+      "pais": "br",
+      "col": "mundo",
+      "locale": "br"
+    },
+    {
+      "id": "mundo-argentina",
+      "nome": "Futebol argentino (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Boca Juniors\" OR \"River Plate\" OR \"Liga Profesional\" OR Racing OR Independiente OR \"San Lorenzo\") fútbol",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "ar",
+      "col": "mundo",
+      "locale": "ar"
+    },
+    {
+      "id": "mundo-libertadores",
+      "nome": "Libertadores e Sul-Americana (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Libertadores OR Sudamericana OR Conmebol) fútbol",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "un",
+      "col": "mundo",
+      "locale": "ar"
+    },
+    {
+      "id": "mundo-mexico",
+      "nome": "Futebol mexicano (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Liga MX\" OR \"Club América\" OR Chivas OR Tigres OR Monterrey OR \"Cruz Azul\")",
+      "soGoogle": true,
+      "lang": "es",
+      "pais": "mx",
+      "col": "mundo",
+      "locale": "mx"
+    },
+    {
+      "id": "mundo-mls",
+      "nome": "MLS (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(MLS OR \"Inter Miami\" OR \"LA Galaxy\" OR \"LAFC\") soccer",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "us",
+      "col": "mundo",
+      "locale": "us"
+    },
+    {
+      "id": "mundo-saudita",
+      "nome": "Liga saudita (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Saudi Pro League\" OR \"Al Nassr\" OR \"Al Hilal\" OR \"Al Ittihad\" OR \"Al Ahli\")",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "sa",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-turquia",
+      "nome": "Futebol turco (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Galatasaray OR Fenerbahce OR Besiktas OR Trabzonspor OR \"Super Lig\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "tr",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-holanda",
+      "nome": "Futebol neerlandês (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(Eredivisie OR Ajax OR PSV OR Feyenoord OR \"AZ Alkmaar\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "nl",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-escocia",
+      "nome": "Futebol escocês (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Scottish Premiership\" OR Celtic OR \"Rangers FC\" OR \"Old Firm\")",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "gb-sct",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-belgica-grecia",
+      "nome": "Bélgica, Grécia e Leste (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"Club Brugge\" OR Anderlecht OR Olympiacos OR Panathinaikos OR PAOK OR Shakhtar OR \"Red Star Belgrade\" OR \"Dinamo Zagreb\" OR \"Slavia Prague\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "un",
+      "col": "mundo"
+    },
+    {
+      "id": "mundo-asia-africa",
+      "nome": "Ásia, África e Oceânia (Google News)",
+      "site": "https://news.google.com/",
+      "google": "(\"J.League\" OR \"K League\" OR \"A-League\" OR \"AFC Champions League\" OR \"CAF Champions League\" OR \"Qatar Stars League\" OR \"Chinese Super League\") football",
+      "soGoogle": true,
+      "lang": "en",
+      "pais": "un",
+      "col": "mundo"
     }
   ],
   "telegram": [

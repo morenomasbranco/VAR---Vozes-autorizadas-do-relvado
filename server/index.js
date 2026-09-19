@@ -390,7 +390,7 @@ zapping.start();
 startReddit(VIDEOS_CFG.reddit || [], (p) => videos.add(p), log, ESTADO_VIDEOS.reddit, { relayAtivo: () => Date.now() - (ESTADO_VIDEOS.relay?.ultimo || 0) < 3 * 60e3 });
 startTgVideos(VIDEOS_CFG.telegram || [], (p) => videos.add(p), log, ESTADO_VIDEOS.telegram);
 startVsports((p) => videos.add(p), log, ESTADO_VIDEOS.vsports);
-capas.start();
+// capas.start(); — as capas saíram do site, o servidor já não as vai buscar
 efemerides.start();
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));

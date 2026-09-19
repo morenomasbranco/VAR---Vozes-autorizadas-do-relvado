@@ -30,7 +30,9 @@ const FAST = Math.max(1, Number(process.env.RSS_RAPIDO_SEGUNDOS) || 1) * 1000;
 const FAST_STEPS = [[10 * 60e3, FAST], [60 * 60e3, 5000], [Infinity, 15000]]; // parado há X → ler a cada Y
 const GOOGLE_INTERVAL = Math.max(10, Number(process.env.GOOGLE_NEWS_SEGUNDOS) || 30) * 1000; // o Google News indexa com alguns minutos de atraso; ler mais vezes encurta só a última espera
 const GOOGLE_BASE = process.env.GOOGLE_NEWS_BASE || "https://news.google.com/rss/search";
-const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it", de: "hl=de&gl=DE&ceid=DE:de", tr: "hl=tr&gl=TR&ceid=TR:tr", nl: "hl=nl&gl=NL&ceid=NL:nl", pl: "hl=pl&gl=PL&ceid=PL:pl" };
+const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=GB:en", fr: "hl=fr&gl=FR&ceid=FR:fr", es: "hl=es&gl=ES&ceid=ES:es", it: "hl=it&gl=IT&ceid=IT:it", de: "hl=de&gl=DE&ceid=DE:de", tr: "hl=tr&gl=TR&ceid=TR:tr", nl: "hl=nl&gl=NL&ceid=NL:nl", pl: "hl=pl&gl=PL&ceid=PL:pl",
+  // edições regionais do Google News, para as fontes do Resto do Mundo (campo "locale" no fontes.json)
+  br: "hl=pt-BR&gl=BR&ceid=BR:pt-419", ar: "hl=es-419&gl=AR&ceid=AR:es-419", mx: "hl=es-419&gl=MX&ceid=MX:es-419", us: "hl=en-US&gl=US&ceid=US:en" };
 const STALE_MS = 7 * 86400e3;
 const ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", hellip: "…", mdash: "—", ndash: "–", laquo: "«", raquo: "»", eacute: "é", egrave: "è", ecirc: "ê", aacute: "á", agrave: "à", acirc: "â", atilde: "ã", iacute: "í", icirc: "î", oacute: "ó", ocirc: "ô", otilde: "õ", uacute: "ú", ccedil: "ç", ntilde: "ñ", uuml: "ü", Eacute: "É", Aacute: "Á", Atilde: "Ã", Iacute: "Í", Oacute: "Ó", Uacute: "Ú", Ccedil: "Ç", Eacute2: "É" };
 const decode = (t) => t
@@ -75,7 +77,7 @@ const fail = (message, extra) => Object.assign(new Error(message), extra);
 // feed do Google News com as notícias do último dia de um site (ou de uma pesquisa indicada em "google")
 export function googleNewsFeed(s) {
   const q = s.google || `site:${new URL(s.site).hostname.replace(/^www\./, "")}`;
-  return `${GOOGLE_BASE}?q=${encodeURIComponent(`${q} when:1d`)}&${LOCALES[s.lang] || LOCALES.pt}`;
+  return `${GOOGLE_BASE}?q=${encodeURIComponent(`${q} when:1d`)}&${LOCALES[s.locale] || LOCALES[s.lang] || LOCALES.pt}`;
 }
 
 // procura o feed na página indicada: primeiro nas marcas <link rel="alternate">,
@@ -242,7 +244,7 @@ export function startRss(sources, onPost, log, estado = new Map()) {
           feed = null;
           wait = 1000;
         } else if (s.semGoogle && (blocked || ++fails >= 3)) {
-          // fontes que o Google News não cobre (Reddit): se recusarem, tenta de novo daqui a 15 minutos
+          // fontes lidas só pelo próprio feed (Reddit, Transfermarkt): se recusarem, tenta de novo daqui a 15 minutos
           log(`[RSS] ${s.nome}: ${e.message}; nova tentativa daqui a 15 min`);
           fails = 0;
           wait = 15 * 60e3;

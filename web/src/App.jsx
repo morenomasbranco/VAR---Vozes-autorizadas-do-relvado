@@ -12,7 +12,6 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 const CATS = [
   { id: "destaque", pt: "Live", en: "Live", es: "Live", fr: "Live", it: "Live", de: "Live", hl: "dest" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
-  { id: "capas", pt: "Capas", en: "Front pages", es: "Portadas", fr: "Unes", it: "Prime pagine", de: "Titelseiten" },
   { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", es: "Benfica", fr: "Benfica", it: "Benfica", de: "Benfica", club: true },
@@ -49,6 +48,8 @@ const PAIS_TEXTO = [
   ["fr", /ligue 1|coupe de france|\bpsg\b|paris saint[- ]germain|olympique (de )?marseille|\bmarseille\b|olympique lyonnais|\blyon\b|\bas monaco\b|\bmonaco\b|\blosc\b|\blille\b|stade rennais|ogc nice/i],
 ];
 const paisPeloTexto = (t) => PAIS_TEXTO.find(([, re]) => re.test(t))?.[0] || null;
+// ligas, competições e clubes de fora de Portugal e das Big 5: a notícia vai para o Resto do Mundo
+const MUNDO_TEXTO = /brasileir[aã]o|libertadores|sudamericana|sul-americana|conmebol|concacaf|\bafc\b|\bcaf\b|flamengo|palmeiras|corinthians|s[aã]o paulo fc|fluminense|botafogo|gr[eê]mio|atl[eé]tico mineiro|\bcruzeiro\b|vasco da gama|santos fc|boca juniors|river plate|liga profesional|liga mx|club am[eé]rica|\bchivas\b|cruz azul|\bmls\b|inter miami|la galaxy|\blafc\b|saudi pro league|liga saudita|liga [aá]rabe|al[- ]nassr|al[- ]hilal|al[- ]ittihad|al[- ]ahli|al[- ]qadsiah|s[uü]per lig|galatasaray|fenerbah[cç]e|be[sş]ikta[sş]|trabzonspor|eredivisie|\bajax\b|\bpsv\b|feyenoord|az alkmaar|scottish premiership|\bceltic\b|rangers fc|glasgow rangers|old firm|club brugge|anderlecht|olympiacos|olympiakos|panathinaikos|\bpaok\b|shakhtar|d[yi]namo (kyiv|kiev|zagreb)|red bull salzburg|sturm graz|young boys|estrela vermelha|red star belgrade|slavia (praha|prague|praga)|sparta (praha|prague|praga)|copenhaga|fc copenhagen|j[.-]?league|k league|a-league|qatar stars|chinese super league|superliga chinesa/i;
 const COL_N = 14; // notícias por coluna
 const MIN_IMP_COL = 2; // importância mínima para entrar nos Destaques
 
@@ -1220,7 +1221,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
-                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}</p>
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}</p>
                     )}
                   </div>
                   {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}
@@ -1316,16 +1317,8 @@ export default function App() {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, []);
-  // capas dos jornais: lidas no arranque, sempre que o servidor avisa que mudaram (evento «capas»),
-  // de cinco em cinco minutos por segurança e quando muda o dia
-  const lerCapas = () => {
-    fetch(`${API}/api/capas`).then((r) => r.json()).then((l) => Array.isArray(l) && setCapas(l)).catch(() => {});
-    fetch(`${API}/api/capas/semana`).then((r) => r.json()).then((l) => Array.isArray(l) && setCapasSemana(l)).catch(() => {});
-  };
-  useEffect(() => {
-    const t = setInterval(lerCapas, 5 * 60000); // a primeira leitura é feita pelo efeito do dia, mais abaixo
-    return () => clearInterval(t);
-  }, []);
+  // as capas dos jornais saíram do site: já não se pedem ao servidor
+  const lerCapas = () => {};
   // «Nesta semana»: lido no arranque, quando muda a língua e quando o servidor avisa que a lista mudou
   const lerEfem = (l = lang) => fetch(`${API}/api/efemerides?lang=${l}`).then((r) => r.json()).then((d) => d && setEfem(d)).catch(() => {});
   const langRef = useRef(lang);
@@ -1574,11 +1567,16 @@ export default function App() {
     const grande = doClube.find((p) => PAIS_COL[p]);
     if (grande) return PAIS_COL[grande];
     if (it.cats?.some((c) => c === "porto" || c === "sporting" || c === "benfica")) return "pt";
-    const peloTexto = paisPeloTexto(`${T(it)} ${B(it).join(" ")} ${it.text || ""}`);
+    const texto = `${T(it)} ${B(it).join(" ")} ${it.text || ""}`;
+    const peloTexto = paisPeloTexto(texto);
     if (peloTexto) return peloTexto;
     if (doClube.length) return "mundo"; // só clubes de outros países
+    if (MUNDO_TEXTO.test(texto)) return "mundo"; // ligas e clubes de outros países no texto
     const daFonte = srcCol[it.src] || PAIS_COL[srcPais[it.src]];
     if (daFonte && daFonte !== "mundo") return daFonte;
+    // fonte do Resto do Mundo com país próprio (Brasil, Argentina, Turquia, Países Baixos…): a notícia é desse país
+    const pf = srcPais[it.src];
+    if (daFonte === "mundo" && pf && !PAIS_COL[pf] && pf !== "un" && pf !== "eu") return "mundo";
     return null;
   };
   const flagOf = (it) => (it.src === "resultados" ? null : it.pais || srcPais[it.src]); // país da fonte
@@ -1928,7 +1926,6 @@ export default function App() {
               <div className="status">
                 <span className={`pulse ${live ? "" : "off"}`}><i />{paused ? ui.paused : conn !== "ok" ? ui.offline : xStatus !== "ligado" ? ui.connecting : ""}</span>
                 <span className="muted">{ui.nSources(enabled === null ? sourceList.length : enabled.size)}</span>
-                {aTraduzir > 0 && <span className="muted">{ui.processing}</span>}
               </div>
             </div>
             <div className="ctrls">
@@ -2076,22 +2073,6 @@ export default function App() {
                     </ul>
                   )}
                 </section>
-                <section className="capasbar">
-                  <div className="livehead">
-                    <b className="capash">{(CAPTXT[lang] || CAPTXT.pt).today}</b>
-                    <BotaoExpandir onde="inicio" />
-                    <button className="textbtn" onClick={() => { setSection("capas"); setCapasDia(null); }}>{(CAPTXT[lang] || CAPTXT.pt).all}<ArrowRight size={14} /></button>
-                  </div>
-                  {capasOrd.length > 0 ? (
-                    <div className={capasExp.inicio ? "capasgrid grande" : "capasstrip"}>
-                      {capasOrd.map((c) => <Capa key={`${c.id}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena={!capasExp.inicio} semDia />)}
-                    </div>
-                  ) : capasPorPais.length > 0 ? (
-                    <div className={capasExp.inicio ? "capasgrid grande" : "capasstrip"}>
-                      {capasPorPais.flatMap(([, lista]) => lista).map((c) => <Capa key={`${c.id}|${c.dia}|${c.img}`} c={c} lang={lang} onOpen={setCapaAberta} pequena={!capasExp.inicio} />)}
-                    </div>
-                  ) : <p className="cempty">{(CAPTXT[lang] || CAPTXT.pt).nToday}</p>}
-                </section>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
@@ -2137,28 +2118,6 @@ export default function App() {
                   ))}
                 </div>
               </>
-            ) : section === "capas" ? (
-              diasCapas.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).empty}</p> : (
-                <div className="capasview">
-                  <div className="capastopo">
-                    <p className="xnote">{(CAPTXT[lang] || CAPTXT.pt).from}</p>
-                    <BotaoExpandir onde="seccao" />
-                  </div>
-                  <div className="seg lvls capdias" role="group">
-                    {diasCapas.map((d) => (
-                      <button key={d} aria-pressed={diaCapasSel === d} onClick={() => setCapasDia(d)}>{nomeDia(d, lang)}</button>
-                    ))}
-                  </div>
-                  {capasPorPais.length === 0 ? <p className="empty">{(CAPTXT[lang] || CAPTXT.pt).noDay}</p> : capasPorPais.map(([pais, lista]) => (
-                    <section key={pais} className="capagrupo">
-                      <h2 className="colh"><Flag code={pais} lang={lang} /> {pais === "un" ? (CAPTXT[lang] || CAPTXT.pt).others : countryName(pais, lang)}</h2>
-                      <div className={`capasgrid${capasExp.seccao ? " grande" : ""}`}>
-                        {lista.map((c) => <Capa key={`${c.id}|${c.dia || ""}`} c={c} lang={lang} onOpen={setCapaAberta} semDia />)}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              )
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "historias" ? (
