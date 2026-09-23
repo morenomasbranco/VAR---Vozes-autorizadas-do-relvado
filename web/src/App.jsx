@@ -67,7 +67,7 @@ const inSection = (it, s) => {
 const UI = {
   pt: {
     autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
-    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos",
+    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos", pickGame: "Carrega num jogo para ver os vídeos dele.",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -1192,7 +1192,8 @@ const CSS = `
 .apito .jvstrip .lcard[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
 .apito .jvstrip .lcard:disabled{cursor:default;opacity:.85}
 .apito .jvstrip .lcard.next{cursor:default}
-.apito .jvall{width:112px!important;display:flex!important;flex-direction:column;justify-content:center;border-top-color:var(--accent)!important}
+.apito .jvall{width:130px!important;display:flex!important;flex-direction:column;justify-content:space-between}
+.apito .jvhint{padding:2px 0 6px}
 .apito .jvall .lcomp{white-space:normal}
 .apito .jvgrid .vcard.mini .vorig{display:none}
 .apito .jvall b{font-family:var(--display);font-size:26px;line-height:1.1}
@@ -2212,21 +2213,15 @@ export default function App() {
                   </div>
                   {/* 1) faixa de jogos: a decorrer primeiro, depois os que já acabaram e têm vídeos; cada um serve de filtro */}
                   {(() => {
-                    const sel = jogoSel && blocos.lista.find((b) => b.key === jogoSel) ? jogoSel : null;
-                    const doSel = sel ? blocos.lista.find((b) => b.key === sel) : null;
-                    const grelha = doSel ? doSel.vids : videosVis;
+                    // os vídeos só aparecem depois de escolher um jogo (ou «Outros vídeos», os que não se ligam a nenhum jogo)
+                    const OUTROS = "__outros";
+                    const doSel = jogoSel === OUTROS ? (blocos.semJogo.length ? { key: OUTROS, vids: blocos.semJogo } : null)
+                      : jogoSel ? blocos.lista.find((b) => b.key === jogoSel) || null : null;
+                    const sel = doSel?.vids.length ? doSel.key : null;
+                    const grelha = sel ? doSel.vids : [];
                     return (
                       <>
                         <ul className="livelist jvstrip">
-                          {blocos.lista.length + blocos.semJogo.length > 0 && (
-                            <li>
-                              <button className="lcard jvall" aria-pressed={!sel} onClick={() => { setJogoSel(null); setNGrelha(12); }}>
-                                <span className="lcomp">{ui.allGames}</span>
-                                <b translate="no">{videosVis.length}</b>
-                                <span className="muted">{(VTXT[lang] || VTXT.pt).title.toLowerCase()}</span>
-                              </button>
-                            </li>
-                          )}
                           {blocos.lista.map((b) => {
                             const it = b.jogo;
                             const sc = it?.score;
@@ -2254,6 +2249,14 @@ export default function App() {
                               </li>
                             );
                           })}
+                          {blocos.semJogo.length > 0 && (
+                            <li>
+                              <button className="lcard done jvall" aria-pressed={sel === OUTROS} onClick={() => { setJogoSel(sel === OUTROS ? null : OUTROS); setNGrelha(12); }}>
+                                <span className="lcomp">{ui.otherVideos}</span>
+                                <span className="lfoot"><span className="jvn" translate="no"><Play size={11} fill="currentColor" />{blocos.semJogo.length}</span></span>
+                              </button>
+                            </li>
+                          )}
                           {aoVivo.length === 0 && proximasTv.map((z) => (
                             <li key={`${z.casa}|${z.fora}|${z.inicio}`}>
                               <div className="lcard next">
@@ -2266,8 +2269,8 @@ export default function App() {
                           ))}
                         </ul>
                         {/* 2) uma só grelha de vídeos, do mais recente para o mais antigo, que se ajusta à largura do ecrã */}
-                        {grelha.length === 0 ? (
-                          <p className="cempty">{aoVivo.length || proximasTv.length ? (VTXT[lang] || VTXT.pt).empty : ui.noLive}</p>
+                        {!sel ? (
+                          <p className="cempty jvhint">{blocos.lista.some((b) => b.vids.length) || blocos.semJogo.length ? ui.pickGame : blocos.lista.length || proximasTv.length ? (VTXT[lang] || VTXT.pt).empty : ui.noLive}</p>
                         ) : (
                           <>
                             <ul className="vlist jvgrid" aria-live="polite">
