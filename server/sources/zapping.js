@@ -5,7 +5,7 @@
 // deixa de as listar quando o jogo acaba e o cartão do jogo ainda está no site.
 import fs from "node:fs";
 import Parser from "rss-parser";
-import { norm, sleep } from "../util.js";
+import { norm, sleep, lerTexto } from "../util.js";
 
 const FEED = process.env.ZAPPING_FEED || "https://www.zerozero.pt/rss/zapping";
 const INTERVALO = Math.max(10, Number(process.env.ZAPPING_SEGUNDOS) || 60) * 1000;
@@ -133,7 +133,7 @@ export function createZapping({ log = () => {} } = {}) {
       res = await fetch(FEED, { headers: { "User-Agent": UA_BROWSER, Accept: accept, "Accept-Language": "pt-PT,pt;q=0.9", Referer: "https://www.zerozero.pt/" } });
     }
     if (!res.ok) throw new Error(`o feed respondeu ${res.status}`);
-    const parsed = await parser.parseString(await res.text());
+    const parsed = await parser.parseString(await lerTexto(res));
     for (const it of parsed.items || []) guardar(parseLinha(it.title));
     limpar();
     estado.at = Date.now();

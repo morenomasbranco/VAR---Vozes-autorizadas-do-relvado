@@ -1,7 +1,7 @@
 // Vídeos de canais públicos do Telegram (ex.: t.me/twclipshdeuropa), lidos pela página pública do canal
 // (https://t.me/s/<canal>). Não precisa de conta nem de sessão: é a mesma página que qualquer browser abre.
 // Os vídeos pequenos vêm com o endereço do ficheiro e tocam no próprio site; os grandes abrem no Telegram.
-import { sleep } from "../util.js";
+import { sleep, lerTexto } from "../util.js";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39": "'" };
@@ -49,7 +49,7 @@ export function lerPagina(html, canal) {
 
 export function startTgVideos(canais, add, log, estado = {}) {
   if (!canais.length) return;
-  const ritmo = Math.max(5, Number(process.env.TELEGRAM_VIDEOS_SEGUNDOS) || 10) * 1000;
+  const ritmo = Math.max(3, Number(process.env.TELEGRAM_VIDEOS_SEGUNDOS) || 5) * 1000;
   for (const c of canais) {
     const est = (estado[c.canal] = { ok: null, erro: null, ultimo: null });
     (async () => {
@@ -58,7 +58,7 @@ export function startTgVideos(canais, add, log, estado = {}) {
         try {
           const res = await fetch(`https://t.me/s/${c.canal}`, { headers: { "User-Agent": UA, "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8" } });
           if (!res.ok) throw new Error(`a página do canal respondeu ${res.status}`);
-          const lidos = lerPagina(await res.text(), c.canal).map((v) => ({ ...v, regiao: c.regiao || "mundo" }));
+          const lidos = lerPagina(await lerTexto(res), c.canal).map((v) => ({ ...v, regiao: c.regiao || "mundo" }));
           for (const v of lidos) add(v);
           Object.assign(est, { ok: true, erro: null, ultimo: Date.now(), comVideo: lidos.length });
           espera = ritmo;

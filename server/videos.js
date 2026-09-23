@@ -5,6 +5,7 @@
 // uma fonte nova (X, outro canal, outra API) entra pelo mesmo add() sem mexer no resto.
 import fs from "node:fs";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import { norm } from "./util.js";
 import { simil } from "./sources/zapping.js";
 
@@ -130,6 +131,7 @@ export function chaveVideo(url) {
   if (host === "streamable.com") return `st:${path.replace(/^\/(e|o|s)\//, "/").split("/")[1]}`;
   if (/(^|\.)(x|twitter)\.com$/.test(host)) { const id = path.match(/status\/(\d+)/)?.[1]; return id ? `x:${id}` : null; }
   if (host === "t.me") return `tg:${path.slice(1).toLowerCase()}`;
+  if (/(^|\.)instagram\.com$/.test(host)) { const id = path.match(/\/(p|reels?|tv)\/([\w-]+)/)?.[2]; return id ? `ig:${id}` : null; }
   return `${host}${path}`.toLowerCase();
 }
 // como o site pode reproduzir o vídeo sem sair da página
@@ -138,8 +140,17 @@ export function embedDe(v) {
   if (k.startsWith("yt:")) return { tipo: "iframe", src: `https://www.youtube-nocookie.com/embed/${k.slice(3)}?autoplay=1` };
   if (k.startsWith("st:")) return { tipo: "iframe", src: `https://streamable.com/e/${k.slice(3)}?autoplay=1` };
   if (v.hls) return { tipo: "hls", src: v.hls, mp4: v.mp4 || null };
-  if (v.mp4) return { tipo: "mp4", src: v.mp4 };
+  if (v.mp4) return { tipo: /\.m3u8(\?|$)/i.test(v.mp4) ? "hls" : "mp4", src: v.mp4 };
+  // Instagram sem ficheiro direto (conteúdo com direitos): o leitor oficial do Instagram, dentro do cartão
+  if (k.startsWith("ig:")) return { tipo: "iframe", src: `https://www.instagram.com/p/${k.slice(3)}/embed/` };
   return null; // os restantes (streamin, dubz, X…) abrem no site de origem
+}
+
+// miniatura que se sabe tirar do próprio endereço, para quando a fonte não a trouxe
+export function miniaturaDe(v) {
+  const k = chaveVideo(v.video_url) || "";
+  if (k.startsWith("yt:")) return `https://i.ytimg.com/vi/${k.slice(3)}/hqdefault.jpg`;
+  return null;
 }
 
 /* ───────── Arquivo e deduplicação ───────── */
@@ -207,30 +218,164 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     const p = principal(v);
     Object.assign(v, {
       source: p.fonte, subreddit: p.subreddit || null, canal: p.canal || null, author: p.author,
-      title: p.title, reddit_url: p.reddit_url, video_url: p.video_url, thumbnail: p.thumbnail || v.thumbnail,
+      title: p.title, reddit_url: p.reddit_url, video_url: p.video_url,
+      thumbnail: p.thumbnail || v.sources.find((x) => x.thumbnail)?.thumbnail || v.thumbnail || miniaturaDe(p) || null,
       hls: p.hls || null, mp4: p.mp4 || null, height: p.height || null, created_time: p.created_time,
     });
     v.embed = embedDe(v);
   }
 
-  async function hashMiniatura(url) {
+  // Miniaturas guardadas em memória: os endereços das imagens do Reddit e do Telegram expiram ou recusam ser
+  // abertos a partir de outro site, e era por isso que muitos cartões ficavam sem imagem. A imagem é descarregada
+  // logo que o vídeo chega e o site passa a pedi-la ao servidor (/api/videos/thumb/:id).
+  const imagens = new Map(); // endereço da miniatura → { buf, tipo }
+  const IMG_MAX = Number(process.env.MINIATURAS_MAX) || 600;
+  const UA_IMG = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+  async function descarregaImagem(url) {
     if (!url) return null;
+    if (imagens.has(url)) return imagens.get(url);
+    if (/^frame:/.test(url)) return null; // fotograma que saiu da memória: volta a ser tirado
     try {
-      const ctl = AbortSignal.timeout(4000);
-      const r = await fetch(url, { signal: ctl, headers: { "User-Agent": "VAR-feed/1.0" } });
-      if (!r.ok) return null;
+      const r = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { "User-Agent": UA_IMG, Accept: "image/*,*/*;q=0.5" } });
+      const tipo = r.headers.get("content-type") || "";
+      if (!r.ok || !/^image\//i.test(tipo)) return null;
       const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length > 3e6) return null;
-      return crypto.createHash("sha1").update(buf).digest("hex");
+      if (!buf.length || buf.length > 3e6) return null;
+      imagens.set(url, { buf, tipo });
+      if (imagens.size > IMG_MAX) imagens.delete(imagens.keys().next().value);
+      return imagens.get(url);
     } catch { return null; }
   }
+  // Fotograma tirado do próprio vídeo com o ffmpeg (1.º segundo), para os vídeos que chegam sem imagem ou com uma
+  // que já não abre: fica pronto em um ou dois segundos. No máximo dois de cada vez, para não esgotar a memória.
+  const FFMPEG = process.env.FFMPEG || "ffmpeg";
+  let ffmpegFalta = false;
+  let aCorrer = 0;
+  const espera = [];
+  const vez = () => (aCorrer < 2 ? (aCorrer++, Promise.resolve()) : new Promise((r) => espera.push(r)));
+  const larga = () => { const r = espera.shift(); if (r) r(); else aCorrer--; };
+  function umFotograma(src, seg) {
+    return new Promise((ok) => {
+      const pr = spawn(FFMPEG, ["-hide_banner", "-loglevel", "error", "-user_agent", UA_IMG, "-ss", String(seg), "-i", src,
+        "-frames:v", "1", "-vf", "scale=480:-2", "-f", "image2", "-c:v", "mjpeg", "-q:v", "5", "pipe:1"], { stdio: ["ignore", "pipe", "ignore"] });
+      const partes = [];
+      const fim = setTimeout(() => pr.kill("SIGKILL"), 10000);
+      pr.stdout.on("data", (d) => partes.push(d));
+      pr.on("error", (e) => { if (e.code === "ENOENT") ffmpegFalta = true; clearTimeout(fim); ok(null); });
+      pr.on("close", () => { clearTimeout(fim); const b = Buffer.concat(partes); ok(b.length > 500 ? b : null); });
+    });
+  }
+  async function fotograma(v) {
+    const src = v.mp4 || v.hls || (v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null);
+    if (!src || ffmpegFalta) return null;
+    await vez();
+    try {
+      const buf = (await umFotograma(src, 1)) || (await umFotograma(src, 0));
+      if (!buf) return null;
+      const chave = `frame:${v.video_id}`;
+      imagens.set(chave, { buf, tipo: "image/jpeg" });
+      if (imagens.size > IMG_MAX) imagens.delete(imagens.keys().next().value);
+      return chave;
+    } finally { larga(); }
+  }
 
-  // as publicações entram uma de cada vez: duas fontes com o mesmo vídeo ao mesmo segundo não dão dois cartões
+  async function hashMiniatura(url) {
+    const img = await descarregaImagem(url);
+    return img ? crypto.createHash("sha1").update(img.buf).digest("hex") : null;
+  }
+
+  // Alojamentos de vídeo (streamin, streamff, dubz…) que só dão uma página: vai-se buscar o ficheiro de vídeo
+  // que a página indica (og:video, <video>, <source>), para o vídeo tocar sozinho no site, mesmo em miniatura.
+  const SEM_PAGINA = /^(yt|st|x|tg|vr|ig):/;
+  const resolvidos = new Map(); // chave do vídeo → endereço do ficheiro (ou null)
+  const imagensDaPagina = new Map(); // chave do vídeo → imagem indicada pela página
+  async function ficheiroDaPagina(url) {
+    const k = chaveVideo(url);
+    if (!k || SEM_PAGINA.test(k)) return null;
+    if (resolvidos.has(k)) return resolvidos.get(k);
+    resolvidos.set(k, null);
+    if (resolvidos.size > 3000) resolvidos.clear();
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,*/*" } });
+      if (!r.ok) return null;
+      if (/^video\//i.test(r.headers.get("content-type") || "")) { resolvidos.set(k, url); return url; } // já era o ficheiro
+      const html = (await r.text()).slice(0, 2e6);
+      const img = [
+        html.match(/<meta[^>]+property=["']og:image(?::secure_url|:url)?["'][^>]+content=["']([^"']+)["']/i)?.[1],
+        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url|:url)?["']/i)?.[1],
+        html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1],
+        html.match(/<video[^>]+poster=["']([^"']+)["']/i)?.[1],
+        html.match(/"thumbnailUrl"\s*:\s*"([^"]+)"/i)?.[1],
+      ].filter(Boolean).map((u) => { try { return new URL(u.replace(/&amp;/g, "&").replace(/\\\//g, "/"), r.url).href; } catch { return null; } }).find(Boolean);
+      if (img) imagensDaPagina.set(k, img);
+      const cand = [
+        html.match(/<meta[^>]+property=["']og:video(?::secure_url|:url)?["'][^>]+content=["']([^"']+)["']/i)?.[1],
+        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video(?::secure_url|:url)?["']/i)?.[1],
+        html.match(/<meta[^>]+name=["']twitter:player:stream["'][^>]+content=["']([^"']+)["']/i)?.[1],
+        html.match(/<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)[^"']*)["']/i)?.[1],
+        html.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1],
+        html.match(/"contentUrl"\s*:\s*"([^"]+\.(?:mp4|m3u8)[^"]*)"/i)?.[1],
+        html.match(/["'](https?:[^"'\s]+\.(?:mp4|m3u8)(?:\?[^"'\s]*)?)["']/i)?.[1],
+      ].filter(Boolean).map((u) => { try { return new URL(u.replace(/&amp;/g, "&").replace(/\\\//g, "/"), r.url).href; } catch { return null; } }).filter(Boolean);
+      const f = cand.find((u) => /^https:/.test(u)) || cand[0] || null;
+      resolvidos.set(k, f);
+      return f;
+    } catch { return null; }
+  }
+  // miniatura do Streamable, pelo oEmbed público (sem chave)
+  async function miniaturaStreamable(url) {
+    try {
+      const r = await fetch(`https://api.streamable.com/oembed.json?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j.thumbnail_url ? new URL(j.thumbnail_url, "https://streamable.com").href : null;
+    } catch { return null; }
+  }
+  async function resolver(v) {
+    if (!v || (v.embed && v.thumbnail && imagens.has(v.thumbnail))) return;
+    const antes = `${v.embed?.src || ""}|${v.thumbnail || ""}`;
+    const p = v.sources.find((x) => x.video_url === v.video_url);
+    if (!v.embed) {
+      const f = await ficheiroDaPagina(v.video_url);
+      if (f && p) p.mp4 = f;
+    }
+    // sem miniatura, ou com uma que já não abre: a da página do vídeo, a do Streamable, ou a de outra fonte
+    aplicaPrincipal(v); // o ficheiro encontrado na página já conta para o fotograma
+    if (!v.thumbnail || !(await descarregaImagem(v.thumbnail))) {
+      // o mais rápido: um fotograma do próprio vídeo
+      const f = await fotograma(v);
+      if (f) { if (p) p.thumbnail = f; v.thumbnail = f; }
+    }
+    if (!v.thumbnail || !(await descarregaImagem(v.thumbnail))) {
+      const k = chaveVideo(v.video_url) || "";
+      if (!imagensDaPagina.has(k) && !k.startsWith("st:") && !SEM_PAGINA.test(k)) await ficheiroDaPagina(v.video_url);
+      const cands = [imagensDaPagina.get(k), k.startsWith("st:") ? await miniaturaStreamable(v.video_url) : null, ...v.sources.map((x) => x.thumbnail), miniaturaDe(v)];
+      for (const c of cands) {
+        if (c && await descarregaImagem(c)) { if (p) p.thumbnail = c; v.thumbnail = c; break; }
+      }
+    }
+    aplicaPrincipal(v);
+    if (`${v.embed?.src || ""}|${v.thumbnail || ""}` === antes) return;
+    v.upd = Date.now();
+    sujo = true;
+    broadcast("video-update", v);
+  }
+
+  // A miniatura (para detetar o mesmo vídeo com endereços diferentes) é descarregada fora da fila, em paralelo:
+  // dentro da fila, cada vídeo esperava até 4 s pelo anterior, e numa rajada de golos os últimos chegavam minutos
+  // depois. As publicações continuam a entrar uma de cada vez, para duas fontes com o mesmo vídeo não darem dois cartões.
   let fila = Promise.resolve();
-  const add = (raw) => { const p = fila.then(() => addUm(raw)).catch((e) => { log(`[Vídeos] ${e.message}`); return null; }); fila = p; return p; };
+  const add = (raw) => {
+    if (!raw?.post_id || vistos.has(raw.post_id)) { estado.recebidos++; return Promise.resolve(null); }
+    const hash = hashMiniatura(raw.thumbnail);
+    const p = fila.then(async () => addUm(raw, await hash)).catch((e) => { log(`[Vídeos] ${e.message}`); return null; });
+    fila = p;
+    p.then(resolver).catch(() => {});
+    return p;
+  };
 
   // entrada de uma publicação em bruto; devolve o vídeo criado ou aquele a que foi juntada
-  async function addUm(raw) {
+  async function addUm(raw, hashPronto) {
     estado.recebidos++;
     estado.fontes[raw.fonte] = (estado.fontes[raw.fonte] || 0) + 1;
     if (!raw.video_url || !raw.post_id || vistos.has(raw.post_id)) return null;
@@ -247,7 +392,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     // 1.º o endereço do vídeo, 2.º a publicação original de que esta é partilha, 3.º a miniatura, 4.º o lance
     let igual = videos.find((v) => v.sources.some((s) => (fonte.video_key && s.video_key === fonte.video_key)
       || (raw.crosspost_of && s.post_id === raw.crosspost_of) || (s.crosspost_of && s.crosspost_of === raw.post_id)));
-    const thumbnail_hash = igual ? null : await hashMiniatura(raw.thumbnail);
+    const thumbnail_hash = igual ? null : hashPronto;
     if (!igual && thumbnail_hash) igual = videos.find((v) => v.thumbnail_hash === thumbnail_hash);
     const candidato = { ...info, category: cat, created_time: raw.created_time };
     if (!igual) igual = videos.find((v) => mesmoLance(v, candidato));
@@ -295,6 +440,11 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     return v;
   }
 
+  // vídeos guardados de antes, ainda sem ficheiro que toque no site: tenta-se, devagar, depois do arranque
+  setTimeout(async () => {
+    for (const v of videos.filter((x) => idade(x) < 12 * 3600e3).slice(0, 200)) { await resolver(v); await new Promise((r) => setTimeout(r, 500)); }
+  }, 20000).unref?.();
+
   const limpar = () => { const antes = videos.length; videos = videos.filter((v) => idade(v) < IDADE_MAX); if (videos.length !== antes) sujo = true; };
   setInterval(limpar, 10 * 60e3).unref();
 
@@ -307,7 +457,17 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   const ignorar = () => { estado.ignorados++; };
   const contagem = () => videos.reduce((o, v) => { o[v.category] = (o[v.category] || 0) + 1; return o; }, {});
 
-  return { add, latest, ignorar, estado: () => ({ ...estado, total: videos.length, categorias: contagem() }) };
+  async function miniatura(id) {
+    const v = videos.find((x) => x.video_id === id);
+    if (!v) return null;
+    for (const u of [v.thumbnail, ...v.sources.map((x) => x.thumbnail), miniaturaDe(v)]) {
+      const img = u && await descarregaImagem(u);
+      if (img) return img;
+    }
+    return { v }; // sem imagem nenhuma: o servidor desenha uma
+  }
+
+  return { add, latest, ignorar, miniatura, estado: () => ({ ...estado, total: videos.length, categorias: contagem() }) };
 }
 
 export const _test = { limpa, norm };

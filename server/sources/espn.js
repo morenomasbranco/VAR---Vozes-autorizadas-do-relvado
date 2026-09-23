@@ -5,7 +5,7 @@
 import { sleep, norm, slug } from "../util.js";
 
 const BASE = process.env.ESPN_BASE || "https://site.api.espn.com/apis/site/v2/sports";
-const LIVE_MS = Math.max(5, Number(process.env.ESPN_SEGUNDOS) || 10) * 1000; // ritmo dos jogos a decorrer
+const LIVE_MS = Math.max(3, Number(process.env.ESPN_SEGUNDOS) || 5) * 1000; // ritmo dos jogos a decorrer
 const IDLE_MAX = 10 * 60e3;
 const NOTHING_TODAY = 30 * 60e3;
 // lances do jogo que dão notícia além dos golos: expulsões, penáltis e decisões do VAR
@@ -23,8 +23,11 @@ const tipoLance = (texto) => LANCES.find(([, re]) => re.test(texto))?.[0] || nul
 
 const BIG3 = [["benfica", /\bbenfica\b/], ["porto", /\bporto\b/], ["sporting", /^sporting( cp| lisbon| clube de portugal)?$/]];
 
+// a ESPN serve o scoreboard por uma CDN que guarda a resposta durante minutos: um golo aos 70' chegava aos 74'.
+// Um parâmetro diferente em cada pedido e os cabeçalhos no-cache obrigam a CDN a ir buscar a versão atual.
 async function getJson(url) {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const fresco = `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+  const res = await fetch(fresco, { headers: { Accept: "application/json", "Cache-Control": "no-cache", Pragma: "no-cache" } });
   if (!res.ok) throw Object.assign(new Error(`ESPN respondeu ${res.status}`), { status: res.status });
   return res.json();
 }
@@ -65,7 +68,12 @@ export function normalizeEvent(ev) {
     as: Number(away.score ?? 0),
     state: type.state, // "pre", "in" ou "post"
     completed: !!type.completed,
-    ht: /HALFTIME/i.test(type.name || "") || /^half/i.test(type.shortDetail || ""),
+    ht: /^STATUS_HALFTIME$/i.test(type.name || "") || /^(half|ht$)/i.test(type.shortDetail || ""),
+    // prolongamento (3.º e 4.º períodos), pausa antes do prolongamento ou ao intervalo dele, e penáltis
+    et: (ev.status?.period || 0) >= 3 || /EXTRA|OVERTIME|_ET\b|AET/i.test(type.name || "") || /\bET\b|extra|a\.?e\.?t|prol/i.test(type.shortDetail || ""),
+    pausa: /END_OF_REGULATION|HALFTIME_ET|END_OF_EXTRA|END_EXTRA|BREAK/i.test(type.name || "") || /^(end of (reg|90)|ht et|et ht)/i.test(type.shortDetail || ""),
+    pen: (ev.status?.period || 0) >= 5 || /SHOOTOUT|PENALT/i.test(type.name || "") || /pens|pen\.|shootout|penalt/i.test(type.shortDetail || ""),
+    ps: home.shootoutScore != null || away.shootoutScore != null ? { h: Number(home.shootoutScore ?? 0), a: Number(away.shootoutScore ?? 0) } : null,
     clock: type.shortDetail || ev.status?.displayClock || "",
     ultimo: ultimo ? { tipo: ultimo.tipo, label: ultimo.label, who: ultimo.who, home: ultimo.home } : null,
     lastScorer: last?.athletesInvolved?.[0]?.displayName || "",
@@ -103,10 +111,12 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
   // a ESPN escreve o minuto como «67'», «45'+2'» ou «90+4'»; ao intervalo não há minuto
   const minute = (m, lg) => {
     if (lg.sport !== "soccer") return m.clock || null;
-    const x = String(m.clock || "").match(/^(\d+)'?\s*(\+\s*\d+)?'?/);
+    if (m.pen || m.pausa) return null;
+    const x = String(m.clock || "").match(/(\d{1,3})'?\s*(\+\s*\d+)?'/) || String(m.clock || "").match(/^(\d{1,3})\s*(\+\s*\d+)?/);
     return x ? `${x[1]}${(x[2] || "").replace(/\s/g, "")}'` : null;
   };
   const score = (m, lg, ft = false) => ({ comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: ft ? null : minute(m, lg), ft, ht: !ft && !!m.ht,
+    ...(lg.sport === "soccer" ? { et: !!m.et, pausa: !ft && !!m.pausa, pen: !!m.pen, ps: m.ps || null } : {}),
     ult: m.ultimo ? { ...m.ultimo, equipa: m.ultimo.home ? m.home : m.away } : null });
   const base = (m, lg) => ({ src: "resultados", name: "Resultados em direto", orig: "multi", liga: lg.key, paisTema: lg.bandeira, mod: lg.mod, cats: cats(m, lg),
     equipas: [{ nome: m.home, papel: "envolvido", logo: m.homeLogo }, { nome: m.away, papel: "envolvido", logo: m.awayLogo }] });
@@ -162,8 +172,13 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
     let imp;
     if (kind === "inicio") { t = [`Começou o ==${m.home}==–==${m.away}==`, `Kick-off: ==${m.home}== v ==${m.away}==`]; imp = isBig ? 3 : 2; }
     if (kind === "intervalo") { t = [`Intervalo: ${sc(m)}`, `Half-time: ${sc(m)}`]; imp = 2; }
+    if (kind === "prolongamento") { t = [`Vai a prolongamento: ${sc(m)}`, `Extra time: ${sc(m)}`]; imp = isBig ? 4 : 3; }
+    if (kind === "penaltis") { t = [`Decisão por penáltis: ${sc(m)}`, `Penalty shoot-out: ${sc(m)}`]; imp = isBig ? 4 : 3; }
     if (kind === "anulado") { t = [`Golo anulado no ${m.home}–${m.away}: ${m.hs}–${m.as}`, `Goal ruled out in ${m.home} v ${m.away}: ${m.hs}–${m.as}`]; imp = isBig ? 3 : 2; }
-    if (kind === "final") { t = [`Final: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==`, `Full time: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==`]; imp = isBig ? 5 : top ? 3 : 2; }
+    if (kind === "final") {
+      const extra = lg.sport !== "soccer" ? ["", ""] : m.ps ? [` (${m.ps.h}–${m.ps.a} g.p.)`, ` (${m.ps.h}–${m.ps.a} pens)`] : m.et ? [" (a.p.)", " (a.e.t.)"] : ["", ""];
+      t = [`Final: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==${extra[0]}`, `Full time: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==${extra[1]}`]; imp = isBig ? 5 : top ? 3 : 2;
+    }
     if (kind === "golo") {
       const team = m.lastScorerHome === false ? m.away : m.home;
       t = [`Golo do ==${team}==! ${sc(m)}`, `Goal for ==${team}==! ${sc(m)}`];
@@ -210,7 +225,10 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
     if (lg.sport === "soccer" && scored && !novoLance("penalti_marcado") && !novoLance("autogolo")) news("golo", m, lg);
     if (lg.sport === "soccer" && (m.hs < prev.hs || m.as < prev.as) && !novoLance("anulado")) news("anulado", m, lg);
     if (m.ht && !prev.ht) news("intervalo", m, lg);
-    if (m.hs !== prev.hs || m.as !== prev.as || m.clock !== prev.clock || m.ht !== prev.ht || JSON.stringify(m.ultimo) !== JSON.stringify(prev.ultimo)) liveCard(m, lg);
+    if (lg.sport === "soccer" && (m.et || m.pausa) && !prev.et && !prev.pausa) news("prolongamento", m, lg);
+    if (lg.sport === "soccer" && m.pen && !prev.pen) news("penaltis", m, lg);
+    if (m.hs !== prev.hs || m.as !== prev.as || m.clock !== prev.clock || m.ht !== prev.ht || m.et !== prev.et || m.pausa !== prev.pausa || m.pen !== prev.pen
+      || JSON.stringify(m.ps) !== JSON.stringify(prev.ps) || JSON.stringify(m.ultimo) !== JSON.stringify(prev.ultimo)) liveCard(m, lg);
     tracked.set(m.id, m);
   };
 

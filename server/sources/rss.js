@@ -2,7 +2,7 @@
 // Se o site bloquear o servidor, não indicar o feed ou tiver um feed parado, a fonte passa a ser lida pelo
 // feed público do Google News para esse site (atraso de alguns minutos, mas funciona a partir de qualquer servidor).
 import Parser from "rss-parser";
-import { sleep, hash, BACKFILL_MS } from "../util.js";
+import { sleep, hash, BACKFILL_MS, lerTexto, entidades, conserta } from "../util.js";
 
 const parser = new Parser({
   timeout: 10000,
@@ -34,14 +34,10 @@ const LOCALES = { pt: "hl=pt-PT&gl=PT&ceid=PT:pt-150", en: "hl=en-GB&gl=GB&ceid=
   // edições regionais do Google News, para as fontes do Resto do Mundo (campo "locale" no fontes.json)
   br: "hl=pt-BR&gl=BR&ceid=BR:pt-419", ar: "hl=es-419&gl=AR&ceid=AR:es-419", mx: "hl=es-419&gl=MX&ceid=MX:es-419", us: "hl=en-US&gl=US&ceid=US:en" };
 const STALE_MS = 7 * 86400e3;
-const ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", hellip: "…", mdash: "—", ndash: "–", laquo: "«", raquo: "»", eacute: "é", egrave: "è", ecirc: "ê", aacute: "á", agrave: "à", acirc: "â", atilde: "ã", iacute: "í", icirc: "î", oacute: "ó", ocirc: "ô", otilde: "õ", uacute: "ú", ccedil: "ç", ntilde: "ñ", uuml: "ü", Eacute: "É", Aacute: "Á", Atilde: "Ã", Iacute: "Í", Oacute: "Ó", Uacute: "Ú", Ccedil: "Ç", Eacute2: "É" };
-const decode = (t) => t
-  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
-  .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-  .replace(/&([A-Za-z]+);/g, (m, n) => ENTITIES[n] ?? m);
+const decode = (t) => entidades(t); // tabela completa em util.js (inclui entidades duplamente escapadas)
 // o zerozero põe marcas internas no texto: {TEAM_LINK|9|FC Porto} fica só «FC Porto»
 const unmark = (t) => t.replace(/\{[A-Z_]+\|\d+\|([^}]*)\}/g, "$1").replace(/\{[A-Z_]+\|([^}|]*)\}/g, "$1");
-const clean = (html = "") => unmark(decode(String(html).replace(/<[^>]+>/g, " "))).replace(/\s+/g, " ").trim();
+const clean = (html = "") => conserta(unmark(decode(String(html).replace(/<[^>]+>/g, " ")))).replace(/\s+/g, " ").trim();
 // Feeds gerais (ex. últimas do JN, destaques do SAPO): só entram as notícias de desporto.
 // Decide-se por esta ordem: a secção do endereço manda, depois as categorias do feed,
 // e só quando nenhuma das duas diz nada é que se olha para as palavras do título.
@@ -85,7 +81,7 @@ export function googleNewsFeed(s) {
 export async function discover(site) {
   const res = await pedir(site, {});
   if (!res.ok) throw fail(`o site respondeu ${res.status}`, { status: res.status });
-  const html = await res.text();
+  const html = await lerTexto(res);
   const abs = (h) => new URL(h.replace(/&amp;/g, "&"), res.url).href;
   const tags = (html.match(/<link\b[^>]*>/gi) || []).filter((t) => /alternate/i.test(t) && /(rss|atom)\+xml/i.test(t));
   const link = tags.map((t) => t.match(/href\s*=\s*["']([^"']+)["']/i)?.[1]).find(Boolean);
@@ -109,7 +105,7 @@ export async function readFeed(url, cache = {}) {
   cache.etag = res.headers.get("etag");
   cache.lastModified = res.headers.get("last-modified");
   try {
-    return await parser.parseString(await res.text());
+    return await parser.parseString(await lerTexto(res));
   } catch {
     throw fail("o endereço não é um feed RSS válido", { parse: true });
   }

@@ -14,7 +14,7 @@ import { createStories } from "./stories.js";
 import { createDesdobrar, ativo as desdobraAtivo } from "./desdobra.js";
 import { createTeams } from "./teams.js";
 import { createTradutor, LINGUAS as LINGUAS_EXTRA } from "./traduz.js";
-import { slug } from "./util.js";
+import { slug, conserta } from "./util.js";
 import { createVideos } from "./videos.js";
 import { startReddit } from "./sources/reddit.js";
 import { startTgVideos } from "./sources/tgvideos.js";
@@ -42,6 +42,18 @@ const SOURCES = [
 const ESTADO_RSS = new Map(); // estado de cada feed: qual está em uso, se responde e há quanto tempo trouxe algo
 
 store.load();
+// texto guardado com acentos estragados (feeds lidos na codificação errada antes da correção): arranja-se no arranque
+{
+  let n = 0;
+  const arranja = (v) => { const c = conserta(v); if (c !== v) n++; return c; };
+  for (const it of store.all(100000)) {
+    if (it.text) it.text = arranja(it.text);
+    if (it.name) it.name = arranja(it.name);
+    for (const l of Object.keys(it.t || {})) it.t[l] = arranja(it.t[l]);
+    for (const l of Object.keys(it.b || {})) if (Array.isArray(it.b[l])) it.b[l] = it.b[l].map(arranja);
+  }
+  if (n) { store.touch(); log(`[VAR] acentos corrigidos em ${n} textos guardados`); }
+}
 // cartões de jogos em direto que ficaram gravados de uma sessão anterior e que já não são atualizados há muito
 // (o servidor reiniciou depois de o jogo acabar): saem, para o jogo não aparecer como a decorrer
 for (const it of store.all(100000)) {
@@ -212,6 +224,7 @@ function pista(item) {
 const enrich = createEnricher({ recent: () => store.recent().filter((i) => !i.pending), log });
 const seen = new Set(); // posts já recebidos (recolha inicial, religações)
 function onPost(post) {
+  post.text = conserta(String(post.text || ""));
   if (seen.has(post.postId) || store.has(post.postId)) return;
   if (seen.size > 20000) seen.clear();
   seen.add(post.postId);
@@ -321,10 +334,34 @@ app.get(["/api/videos/latest", "/videos/latest"], (req, res) => {
     video_id: v.video_id, title: v.title, thumbnail: v.thumbnail, video_url: v.video_url, reddit_url: v.reddit_url,
     category: v.category, teams: v.teams, home_team: v.home_team, away_team: v.away_team, score: v.score, scorer_side: v.scorer_side,
     player: v.player, minute: v.minute, opponent: v.opponent, competition: v.competition, liga: v.liga, paisTema: v.paisTema, equipas: v.equipas,
-    source: v.subreddit ? `r/${v.subreddit}` : v.canal === "vsports" ? "VSPORTS" : v.canal ? `t.me/${v.canal}` : v.source, subreddit: v.subreddit, author: v.author,
+    source: v.subreddit ? `r/${v.subreddit}` : v.canal === "vsports" ? "VSPORTS" : /^ig:/.test(v.canal || "") ? `@${v.canal.slice(3)}` : v.canal ? `t.me/${v.canal}` : v.source, subreddit: v.subreddit, author: v.author,
     sources: v.sources.map((x) => ({ fonte: x.fonte, subreddit: x.subreddit || null, canal: x.canal || null, url: x.reddit_url, created_time: x.created_time })),
     embed: v.embed, created_time: v.created_time, first_seen: v.first_seen,
   })));
+});
+// miniatura de um vídeo: a imagem guardada pelo servidor; sem imagem nenhuma, um cartão desenhado com o jogo
+const escXml = (t) => String(t ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c]));
+const COR_CAT = { goal: ["#E3AA12", "⚽"], red: ["#D7263D", "🟥"], var: ["#6A41D8", "🖥"], save: ["#0B7A47", "🧤"], highlight: ["#1D4E9E", "🎥"], skill: ["#C8581A", "🔥"], other: ["#3A4A42", "🎬"] };
+function cartaoSvg(v) {
+  const [cor, ico] = COR_CAT[v?.category] || COR_CAT.other;
+  const jogo = v?.teams ? `${v.teams.home} ${v.score ? v.score.replace("-", "–") : "–"} ${v.teams.away}` : String(v?.title || "").slice(0, 60);
+  const sub = [v?.player, v?.minute ? `${v.minute}'` : null].filter(Boolean).join(" ");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${cor}"/><stop offset="1" stop-color="#0B120E"/></linearGradient></defs>
+<rect width="640" height="360" fill="url(#g)"/>
+<text x="320" y="110" font-size="64" text-anchor="middle">${ico}</text>
+<text x="320" y="295" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#fff" text-anchor="middle">${escXml(jogo.length > 38 ? `${jogo.slice(0, 37)}…` : jogo)}</text>
+${sub ? `<text x="320" y="332" font-family="Arial,Helvetica,sans-serif" font-size="24" fill="#fff" fill-opacity=".85" text-anchor="middle">${escXml(sub)}</text>` : ""}
+</svg>`;
+}
+app.get("/api/videos/thumb/:id", async (req, res) => {
+  try {
+    const img = req.query.svg ? { v: videos.latest({ limit: 300 }).find((x) => x.video_id === req.params.id) } : await videos.miniatura(String(req.params.id));
+    if (img?.buf) return res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=3600" }).send(img.buf);
+    res.set({ "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=300" }).send(cartaoSvg(img?.v));
+  } catch {
+    res.set({ "Content-Type": "image/svg+xml; charset=utf-8" }).send(cartaoSvg(null));
+  }
 });
 app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS }));
 // Retransmissor: um computador de casa lê o Reddit (os servidores de alojamento são bloqueados pelo Reddit)

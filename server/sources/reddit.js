@@ -9,26 +9,41 @@ import Parser from "rss-parser";
 import { sleep } from "../util.js";
 
 const UA = process.env.REDDIT_USER_AGENT || "web:var-feed:1.0 (agregador de videos de futebol)";
-const VIDEO_HOSTS = /(^|\.)(v\.redd\.it|streamable\.com|streamin\.(one|me|link|fun)|streamja\.com|streamff\.(com|co|link)|streamgg\.com|dubz\.(co|link|live)|streamvi\.com|clippituser\.tv|mixture\.gg|juststream\.live|streambug\.io|youtube\.com|youtu\.be|x\.com|twitter\.com|imgur\.com|gfycat\.com|redgifs\.com|dailymotion\.com|dai\.ly|vimeo\.com|streamain\.com|caulse\.com|footy\.media|goalclip\.net)$/i;
-const IMAGEM = /\.(jpe?g|png|webp)(\?|$)/i;
+const VIDEO_HOSTS = /(^|\.)(v\.redd\.it|streamable\.com|streamin\.(one|me|link|fun)|streamja\.com|streamff\.(com|co|link)|streamgg\.com|dubz\.(co|link|live)|streamvi\.com|clippituser\.tv|mixture\.gg|juststream\.live|streambug\.io|youtube\.com|youtu\.be|x\.com|twitter\.com|imgur\.com|gfycat\.com|redgifs\.com|dailymotion\.com|dai\.ly|vimeo\.com|streamain\.com|caulse\.com|footy\.media|goalclip\.net|streamwo\.com|streamye\.com|streamnew\.(com|net)|streamclips\.\w+|clip\.dubz\.\w+|videy\.co|vidmoly\.\w+|ok\.ru|facebook\.com|fb\.watch|instagram\.com|tiktok\.com|kick\.com|twitch\.tv|clips\.twitch\.tv)$/i;
+const IMAGEM = /\.(jpe?g|png|webp|gif)(\?|$)/i;
+// ligações que nunca são o vídeo: o próprio Reddit, imagens e redes que não servem vídeo diretamente
+const NAO_VIDEO = /(^|\.)(reddit\.com|redd\.it|i\.redd\.it|preview\.redd\.it|redditmedia\.com|imgur\.com|wikipedia\.org|google\.[a-z.]+)$/i;
+// primeira ligação de vídeo dentro do texto de uma publicação (os subreddits de golos portugueses publicam
+// muitas vezes em texto, com o link e os «mirrors» no corpo, em vez de publicarem a ligação diretamente)
+function linkNoTexto(texto, aceitaLinks) {
+  const urls = [...String(texto || "").matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map((m) => decode(m[0]).replace(/[.,;!]+$/, ""));
+  return urls.find((u) => VIDEO_HOSTS.test(hostDe(u)) && !IMAGEM.test(u))
+    || (aceitaLinks ? urls.find((u) => !NAO_VIDEO.test(hostDe(u)) && !IMAGEM.test(u)) : null) || null;
+}
 const decode = (s) => String(s || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 const hostDe = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
 // uma publicação do JSON do Reddit → publicação em bruto para o feed de vídeos (ou null se não tiver vídeo)
-export function deJson(d, subs) {
-  if (!d || d.over_18 || d.removed_by_category || d.is_self) return null;
+export function deJson(d, subs, diag = null) {
+  const sub = subs.find((s) => s.sub.toLowerCase() === String(d?.subreddit).toLowerCase()) || {};
+  const conta = (motivo) => { if (diag) { const k = d?.subreddit || "?"; (diag[k] ||= {})[motivo] = (diag[k][motivo] || 0) + 1; } return null; };
+  if (!d || d.over_18 || d.removed_by_category) return conta("removido");
   const origem = d.crosspost_parent_list?.[0];
   const media = d.secure_media || d.media || origem?.secure_media || origem?.media;
   const rv = media?.reddit_video;
-  const url = decode(d.url_overridden_by_dest || d.url || "");
+  // publicação em texto: o vídeo está no corpo
+  const doTexto = d.is_self ? linkNoTexto(d.selftext || origem?.selftext, sub.aceitaLinks) : null;
+  if (d.is_self && !doTexto && !rv) return conta("texto sem vídeo");
+  const url = doTexto || decode(d.url_overridden_by_dest || d.url || "");
   const host = hostDe(url);
   const isVideo = d.is_video || !!rv || (VIDEO_HOSTS.test(host) && !IMAGEM.test(url) && !/i\.imgur\.com\/\w+\.(jpe?g|png)/.test(url))
-    || d.post_hint === "rich:video" || d.post_hint === "hosted:video" || media?.type === "youtube.com" || media?.oembed?.type === "video";
-  if (!isVideo) return null;
-  if (/(^|\.)imgur\.com$/.test(host) && !/\.(gifv|mp4)$/i.test(url)) return null; // imagens do imgur
-  const sub = subs.find((s) => s.sub.toLowerCase() === String(d.subreddit).toLowerCase()) || {};
+    || d.post_hint === "rich:video" || d.post_hint === "hosted:video" || media?.type === "youtube.com" || media?.oembed?.type === "video"
+    || !!doTexto || (sub.aceitaLinks && url && !NAO_VIDEO.test(host) && !IMAGEM.test(url));
+  if (!isVideo) return conta(`sem vídeo (${host || "sem ligação"})`);
+  if (/(^|\.)imgur\.com$/.test(host) && !/\.(gifv|mp4)$/i.test(url)) return conta("imagem"); // imagens do imgur
   const flair = d.link_flair_text || "";
-  if (sub.soMedia && !(rv || VIDEO_HOSTS.test(host))) return null;
+  if (sub.soMedia && !(rv || VIDEO_HOSTS.test(host))) return conta("soMedia");
+  conta("aceite");
   const img = d.preview?.images?.[0] || origem?.preview?.images?.[0];
   const res = (img?.resolutions || []).filter((r) => r.width >= 320);
   const thumbnail = decode(res[0]?.url || img?.source?.url || (/^https?:/.test(d.thumbnail || "") ? d.thumbnail : "")) || null;
@@ -54,15 +69,23 @@ export function deJson(d, subs) {
 
 // uma entrada do RSS (Atom) do Reddit: o endereço do vídeo vem no link «[link]» do conteúdo
 const rssParser = new Parser({ timeout: 10000, customFields: { item: [["media:thumbnail", "thumb", { keepArray: false }], ["category", "cat", { keepArray: false }]] } });
-export function deRss(it, subs) {
+export function deRss(it, subs, diag = null) {
   const html = it.content || "";
-  const link = decode(html.match(/<a href="([^"]+)">\[link\]<\/a>/)?.[1] || "");
-  const host = hostDe(link);
-  if (!link || !VIDEO_HOSTS.test(host) || IMAGEM.test(link)) return null;
-  const id = String(it.id || it.guid || "").replace(/^t3_/, "") || (it.link || "").match(/comments\/(\w+)/)?.[1];
-  if (!id) return null;
   const subNome = it.cat?.$?.term || it.link?.match(/\/r\/([^/]+)/)?.[1] || "";
   const sub = subs.find((s) => s.sub.toLowerCase() === subNome.toLowerCase()) || {};
+  const conta = (motivo) => { if (diag) { const k = subNome || "?"; (diag[k] ||= {})[motivo] = (diag[k][motivo] || 0) + 1; } return null; };
+  let link = decode(html.match(/<a href="([^"]+)">\[link\]<\/a>/)?.[1] || "");
+  // publicação em texto: o «[link]» aponta para o próprio Reddit e o vídeo está no corpo
+  if (!link || NAO_VIDEO.test(hostDe(link)) && !/v\.redd\.it/.test(link)) {
+    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]).join(" ");
+    link = linkNoTexto(hrefs, sub.aceitaLinks) || link;
+  }
+  const host = hostDe(link);
+  const aceita = VIDEO_HOSTS.test(host) || (sub.aceitaLinks && !NAO_VIDEO.test(host));
+  if (!link || !aceita || IMAGEM.test(link)) return conta(`sem vídeo (${host || "sem ligação"})`);
+  const id = String(it.id || it.guid || "").replace(/^t3_/, "") || (it.link || "").match(/comments\/(\w+)/)?.[1];
+  if (!id) return conta("sem id");
+  conta("aceite");
   const thumb = it.thumb?.$?.url || decode(html.match(/<img src="([^"]+)"/)?.[1] || "") || null;
   return {
     fonte: "reddit",
@@ -133,7 +156,8 @@ export function startReddit(subs, add, log, estado = {}, { relayAtivo = () => fa
     if (bloqueado(res, corpo)) throw Object.assign(new Error("o Reddit devolveu uma página de bloqueio em vez dos dados"), { status: 403 });
     const j = JSON.parse(corpo);
     const posts = (j?.data?.children || []).map((c) => c.data);
-    return { posts: posts.map((d) => deJson(d, subs)), pausa: pausaDoLimite(res) };
+    estado.porSub = {};
+    return { posts: posts.map((d) => deJson(d, subs, estado.porSub)), pausa: pausaDoLimite(res) };
   }
 
   async function lerRss() {
@@ -142,7 +166,8 @@ export function startReddit(subs, add, log, estado = {}, { relayAtivo = () => fa
     const corpo = await res.text();
     if (bloqueado(res, corpo)) throw Object.assign(new Error("o RSS do Reddit devolveu uma página de bloqueio"), { status: 403 });
     const feed = await rssParser.parseString(corpo);
-    return { posts: (feed.items || []).map((it) => deRss(it, subs)), pausa: 0 };
+    estado.porSub = {};
+    return { posts: (feed.items || []).map((it) => deRss(it, subs, estado.porSub)), pausa: 0 };
   }
 
   (async () => {

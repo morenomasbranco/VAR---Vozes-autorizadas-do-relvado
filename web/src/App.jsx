@@ -66,6 +66,8 @@ const inSection = (it, s) => {
 /* ───────── Textos da interface ───────── */
 const UI = {
   pt: {
+    autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
+    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -359,7 +361,9 @@ const LANGS = [
   { id: "it", sigla: "IT", nome: "Italiano" },
   { id: "de", sigla: "DE", nome: "Deutsch" },
 ];
-const TRADUZIDAS = { es: true, fr: true, it: true, de: true, pt: true, en: true };
+// o site fica só em português; quem quiser outra língua usa a tradução do próprio browser (Google Tradutor).
+// O pedido de português mantém-se para os títulos que chegam noutra língua e ainda não foram traduzidos.
+const TRADUZIDAS = { pt: true };
 // o título precisa de tradução: não existe nesta língua, ou a notícia não passou pelo Gemini e o título
 // em português/inglês ainda é o original da fonte («tr» diz as línguas em que já foi traduzido)
 const precisaTrad = (it, lang) => !it.t?.[lang] || (it.raw && (lang === "pt" || lang === "en") && !it.tr?.[lang]);
@@ -441,13 +445,45 @@ const evText = (u, lang) => {
   const quem = u.who ? `${u.who}${u.equipa ? ` (${u.equipa})` : ""}` : `${nome}${u.equipa ? ` · ${u.equipa}` : ""}`;
   return `${e.i} ${u.label ? `${u.label} ` : ""}${quem}`;
 };
-const minText = (sc, lang, ui) => (sc.ft ? ui.ft : sc.ht ? HT[lang] || HT.en : sc.min || ui.live);
+const ET = { pt: "Prolongamento", en: "Extra time", es: "Prórroga", fr: "Prolongation", it: "Supplementari", de: "Verlängerung" };
+const PAUSA = { pt: "Vai a prolongamento", en: "Going to extra time", es: "Va a la prórroga", fr: "Vers la prolongation", it: "Si va ai supplementari", de: "Verlängerung folgt" };
+const PEN = { pt: "Penáltis", en: "Penalties", es: "Penaltis", fr: "Tirs au but", it: "Rigori", de: "Elfmeterschießen" };
+// o servidor manda o minuto quando ele muda; entre duas leituras o browser vai contando, para o minuto não parar
+// (nunca passa o fim da parte: 45', 90', 105' ou 120')
+const minVivo = (sc, upd, now) => {
+  const m = String(sc.min || "").match(/^(\d{1,3})'?$/);
+  if (!m || !upd || !now) return sc.min;
+  const base = +m[1];
+  const lim = base < 45 ? 45 : base < 90 ? 90 : base < 105 ? 105 : 120;
+  return `${Math.min(lim, base + Math.floor(Math.max(0, now - upd) / 60000))}'`;
+};
+const minText = (sc, lang, ui, now, upd) => {
+  if (sc.ft) return sc.ps ? `${ui.ft} · ${PEN[lang] || PEN.en} ${sc.ps.h}–${sc.ps.a}` : sc.et ? `${ui.ft} · a.p.` : ui.ft;
+  if (sc.pen) return `${PEN[lang] || PEN.en}${sc.ps ? ` ${sc.ps.h}–${sc.ps.a}` : ""}`;
+  if (sc.pausa) return PAUSA[lang] || PAUSA.en;
+  if (sc.ht) return HT[lang] || HT.en;
+  const mm = minVivo(sc, upd, now);
+  if (sc.et) return `${ET[lang] || ET.en}${mm ? ` · ${mm}` : ""}`;
+  return mm || ui.live;
+};
 
 // canal do jogo a partir da grelha do Zapping, para quando o servidor ainda não o juntou ao cartão
 const eqKey = (n) => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
   .replace(/[.'’`-]/g, " ").replace(/\b(fc|sc|cf|ac|sl|cd|ad|afc|sad|ud|cs|gd|ssc|club|clube|de|da|do)\b/g, " ").replace(/\s+/g, " ").trim();
 const eqIgual = (a, b) => {
   const A = eqKey(a).split(" ").filter(Boolean), B = eqKey(b).split(" ").filter(Boolean);
+  if (!A.length || !B.length) return false;
+  const iguais = A.filter((x) => B.some((y) => x === y || (x.length >= 4 && y.length >= 4 && (x.startsWith(y) || y.startsWith(x))))).length;
+  return iguais / Math.max(A.length, B.length) >= 0.5;
+};
+const eqTokCache = new Map();
+const eqTok = (n) => {
+  let t = eqTokCache.get(n);
+  if (!t) { t = eqKey(n).split(" ").filter(Boolean); if (eqTokCache.size > 5000) eqTokCache.clear(); eqTokCache.set(n, t); }
+  return t;
+};
+const eqIgualT = (a, b) => {
+  const A = eqTok(a), B = eqTok(b);
   if (!A.length || !B.length) return false;
   const iguais = A.filter((x) => B.some((y) => x === y || (x.length >= 4 && y.length >= 4 && (x.startsWith(y) || y.startsWith(x))))).length;
   return iguais / Math.max(A.length, B.length) >= 0.5;
@@ -480,7 +516,7 @@ const VTXT = {
   it: { title: "Video", watch: "Guarda il video", close: "Chiudi", empty: "Gol e momenti migliori compaiono qui appena vengono pubblicati.", more: "Mostra altri", also: (n) => `anche su ${n}`, src: "Fonte" },
   de: { title: "Videos", watch: "Video ansehen", close: "Schließen", empty: "Tore und Highlights erscheinen hier, sobald sie veröffentlicht werden.", more: "Mehr anzeigen", also: (n) => `auch auf ${n}`, src: "Quelle" },
 };
-const vFonte = (s) => (s.subreddit ? `r/${s.subreddit}` : s.canal === "vsports" ? "VSPORTS" : s.canal ? `t.me/${s.canal}` : s.fonte);
+const vFonte = (s) => (s.subreddit ? `r/${s.subreddit}` : s.canal === "vsports" ? "VSPORTS" : /^ig:/.test(s.canal || "") ? `@${s.canal.slice(3)}` : s.canal ? `t.me/${s.canal}` : s.fonte);
 
 // os vídeos do Reddit vêm em HLS (com som); o Safari toca-os diretamente, os outros browsers com o hls.js,
 // que só é descarregado quando alguém carrega em «Ver vídeo»
@@ -493,7 +529,7 @@ const carregaHls = () => (hlsJs ||= new Promise((ok, falha) => {
   sc.onerror = falha;
   document.head.appendChild(sc);
 }));
-function VideoHls({ src, mp4 }) {
+function VideoHls({ src, mp4, auto = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -509,13 +545,58 @@ function VideoHls({ src, mp4 }) {
     }
     return () => hls?.destroy();
   }, [src, mp4]);
-  return <video ref={ref} className="vplayer" controls playsInline />;
+  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay /> : <video ref={ref} className="vplayer" controls playsInline />;
 }
 
-function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
+// Reprodução automática em miniatura: o vídeo só é carregado e posto a tocar (sem som) quando o cartão está à vista,
+// e pára quando sai do ecrã — assim a página aguenta muitos vídeos ao mesmo tempo
+const comAutoplay = (src) => {
+  try {
+    const u = new URL(src);
+    if (/youtube/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("mute", "1"); u.searchParams.set("controls", "0"); u.searchParams.set("loop", "1"); u.searchParams.set("playsinline", "1"); }
+    if (/streamable/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("muted", "1"); u.searchParams.set("loop", "1"); u.searchParams.set("nocontrols", "1"); }
+    return u.href;
+  } catch { return src; }
+};
+function AutoVideo({ embed, title }) {
+  const ref = useRef(null);
+  const [visto, setVisto] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver !== "function") { setVisto(true); return undefined; }
+    const io = new IntersectionObserver(([e]) => setVisto(e.isIntersecting), { rootMargin: "120px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="vauto" aria-hidden="true">
+      {visto && (embed.tipo === "iframe"
+        ? <iframe src={comAutoplay(embed.src)} title={title} allow="autoplay; encrypted-media; picture-in-picture" tabIndex={-1} />
+        : embed.tipo === "hls" ? <VideoHls src={embed.src} mp4={embed.mp4} auto />
+          : <video className="vplayer" src={embed.src} muted loop playsInline autoPlay />)}
+    </div>
+  );
+}
+
+// Imagem de um vídeo, sempre com alguma coisa para mostrar: 1) a miniatura guardada pelo servidor;
+// 2) se falhar, uma imagem tirada do próprio vídeo (1.º segundo); 3) no fim, o cartão desenhado pelo servidor
+const thumbUrl = (v, svg = false) => `${API}/api/videos/thumb/${encodeURIComponent(v.video_id)}${svg ? "?svg=1" : `?t=${encodeURIComponent(v.thumbnail || "")}`}`;
+const mp4De = (v) => (v.embed?.tipo === "mp4" ? v.embed.src : v.embed?.mp4) || null;
+function VideoImg({ v }) {
+  // sem miniatura mas com o ficheiro do vídeo: mostra logo o 1.º segundo, sem esperar pelo servidor
+  const inicio = !v.thumbnail && mp4De(v) ? 1 : 0;
+  const [fase, setFase] = useState(inicio);
+  useEffect(() => setFase(inicio), [v.thumbnail, v.embed?.src]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (fase === 1 && mp4De(v)) {
+    return <video className="vframe" src={`${mp4De(v)}#t=1`} preload="metadata" muted playsInline onError={() => setFase(2)} aria-hidden="true" />;
+  }
+  if (fase >= 1) return <img src={thumbUrl(v, true)} alt="" loading="lazy" />;
+  return <img src={thumbUrl(v)} alt="" loading="lazy" onError={() => setFase(1)} />;
+}
+
+function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false }) {
   const tx = VTXT[lang] || VTXT.pt;
   const c = VCAT[v.category] || VCAT.other;
-  const [semImg, setSemImg] = useState(false);
   const outras = [...new Set((v.sources || []).map(vFonte))].filter((f) => f !== v.source);
   const link = v.embed ? null : (v.reddit_url && /t\.me\//.test(v.reddit_url) ? v.reddit_url : v.video_url || v.reddit_url);
   const titulo = v.teams
@@ -530,15 +611,23 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
     )
     : v.title;
   return (
-    <li className={`vcard cat-${v.category}`}>
+    <li className={`vcard cat-${v.category} ${mini ? "mini" : ""}`}>
       <div className="vthumb">
-        {playing && v.embed ? (
+        {!playing && auto && v.embed && (
+          <button className="vplay vautobtn" onClick={() => onPlay(v.video_id)} aria-label={tx.watch}>
+            <VideoImg v={v} />
+            <AutoVideo embed={v.embed} title={v.title} />
+            <span className="vcat">{c[lang] || c.en}</span>
+            <span className="vsom" aria-hidden="true">🔇</span>
+          </button>
+        )}
+        {!playing && auto && v.embed ? null : playing && v.embed ? (
           v.embed.tipo === "iframe" ? <iframe src={v.embed.src} title={v.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
             : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={v.embed.mp4} />
               : <video className="vplayer" src={v.embed.src} controls autoPlay playsInline />
         ) : (
           <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
-            {v.thumbnail && !semImg ? <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setSemImg(true)} /> : <span className="vph" />}
+            <VideoImg v={v} />
             <span className="vbtn"><Play size={20} fill="currentColor" /></span>
             <span className="vcat">{c[lang] || c.en}</span>
           </button>
@@ -548,9 +637,9 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay }) {
       {(v.player || v.minute) && <p className="vsub">{v.player}{v.player && v.minute ? " " : ""}{v.minute ? `${v.minute}'` : ""}{v.opponent ? <span className="muted"> · vs {v.opponent}</span> : null}</p>}
       {v.teams && v.title && <p className="vorig" title={v.title}>{v.title}</p>}
       <div className="vmeta">
-        {v.competition && <span className="muted">{v.competition}</span>}
+        {v.competition && !mini && <span className="muted">{v.competition}</span>}
         <span className="vsrc" title={outras.length ? tx.also(outras.join(", ")) : undefined}>{v.source}{outras.length > 0 && <b> +{outras.length}</b>}</span>
-        <span className="muted vtime">{agoText(v.created_time, now, ui)}</span>
+        <span className="muted vtime" translate="no">{agoText(v.created_time, now, ui)}</span>
       </div>
       <div className="vacts">
         {playing
@@ -760,12 +849,29 @@ function Confirms({ it, lang, ui, now, srcPais }) {
             <Flag code={a.pais || srcPais[a.src]} lang={lang} />
             <b>{a.name || a.src}</b>
             <span className="muted">{recente ? ui.justConfirmed : ui.confirmedAt(new Date(quando).toLocaleTimeString(ui.locale, { hour: "2-digit", minute: "2-digit" }))}</span>
+            {a.url && <ExternalLink size={11} />}
           </>
         );
         return a.url
           ? <a key={a.postId || a.src} className={`conf ${recente ? "now" : ""}`} href={a.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }} onClick={(e) => e.stopPropagation()}>{conteudo}</a>
           : <span key={a.postId || a.src} className={`conf ${recente ? "now" : ""}`}>{conteudo}</span>;
       })}
+    </div>
+  );
+}
+
+// todas as fontes onde a notícia saiu (quem deu primeiro e quem confirmou), cada uma a abrir a notícia nessa fonte
+function FontesLinks({ it, lang, srcPais, nome, pais, ui }) {
+  if (!it.also?.length) return null;
+  const todas = [
+    { key: `o:${it.id}`, name: nome, url: it.url, pais, first: true },
+    ...it.also.map((a) => ({ key: a.postId || a.src, name: a.name || a.src, url: a.url, pais: a.pais || srcPais[a.src] })),
+  ];
+  return (
+    <div className="fontes" onClick={(e) => e.stopPropagation()}>
+      {todas.map((f) => (f.url
+        ? <a key={f.key} className={`flink ${f.first ? "first" : ""}`} href={f.url} target="_blank" rel="noreferrer" title={f.url}><Flag code={f.pais} lang={lang} />{f.name}<ExternalLink size={11} /></a>
+        : <span key={f.key} className={`flink off ${f.first ? "first" : ""}`} title={ui.noPost}><Flag code={f.pais} lang={lang} />{f.name}</span>))}
     </div>
   );
 }
@@ -784,8 +890,13 @@ const CSS = `
 .apito :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .apito .wrap{max-width:1560px;margin:0 auto;padding:0 20px}
 .apito .hdr{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line)}
-.apito .bar{display:flex;align-items:center;gap:12px 16px;padding:14px 0 8px;flex-wrap:wrap}
-.apito .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.apito .bar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;padding:12px 0 8px}
+.apito .barl{justify-self:start;min-width:0}
+.apito .barl .status{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apito .brand{display:flex;align-items:center;justify-content:center;gap:10px;justify-self:center}
+.apito .brandbtn{justify-content:center}
+.apito .searchrow{display:flex;justify-content:center;padding:0 0 8px}
+.apito .searchrow .search{width:min(480px,100%)}
 .apito .brand b{font-family:var(--display);font-weight:700;font-size:27px;line-height:1;letter-spacing:-.02em}
 .apito .tagline{font-size:13px;color:#fff;font-weight:700;margin-right:6px}
 .apito[data-theme="light"] .tagline{color:var(--ink)}
@@ -795,7 +906,10 @@ const CSS = `
 @keyframes apl{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live) 55%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
 .apito .pulse.off{color:var(--muted)} .apito .pulse.off i{background:var(--muted);animation:none}
 .apito .muted{color:var(--muted)}
-.apito .ctrls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.apito .ctrls{display:flex;align-items:center;justify-content:flex-end;gap:8px;justify-self:end}
+.apito .barl .status{display:block;max-width:100%}
+@media(max-width:480px){.apito .brand b{font-size:22px} .apito .brandbtn{gap:6px} .apito .tagline{font-size:10.5px;margin-right:0;letter-spacing:-.01em} .apito .brand .logo{width:24px;height:24px}
+  .apito .bar{gap:4px;grid-template-columns:14px minmax(0,1fr) auto} .apito .barl .status{font-size:0;gap:0} .apito .ctrls{gap:4px} .apito .ctrls .icon-btn{width:32px;height:32px}}
 .apito .search{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--raise);width:230px;color:var(--muted)}
 .apito .search input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;outline:none;width:100%}
 .apito .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--raise)}
@@ -804,6 +918,8 @@ const CSS = `
 .apito .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .apito .icon-btn{width:34px;height:34px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:999px;background:var(--raise)}
 .apito .tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:0 2px;margin:0 -8px;padding:0 8px 2px;overflow-x:auto;scrollbar-width:thin}
+.apito .tabs>.tab:first-child{margin-left:auto}
+.apito .tabs>.tab:last-child{margin-right:auto}
 .apito .tabs::-webkit-scrollbar{height:4px}
 .apito .tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
 @media(max-width:699px){
@@ -1062,13 +1178,48 @@ const CSS = `
 .apito .vmaisli{flex:0 0 auto;display:flex;align-items:center}
 .apito .vrow .vmais{height:100%;min-height:120px;padding:0 18px;margin:0;white-space:nowrap}
 @media(max-width:640px){.apito .vcard{flex-basis:82vw} .apito .varrows{display:none}}
+/* jogos a decorrer e vídeos juntos: cada jogo com os vídeos dele */
+.apito .jv .livehead{flex-wrap:wrap;gap:8px 12px}
+.apito .vautotg{margin-left:auto;font-size:12px}
+.apito .vautotg.on{color:var(--ink)}
+.apito .jvlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.apito .jvrow{display:grid;grid-template-columns:236px minmax(0,1fr);gap:12px;align-items:start;padding:0 0 10px;border-bottom:1px solid var(--line)}
+.apito .jvrow:last-child{border-bottom:0}
+.apito .jvrow .lcard{width:auto}
+.apito .lcard.done{border-top-color:var(--line)}
+.apito .jvother{display:flex;align-items:center;justify-content:space-between}
+.apito .jvvids{gap:10px;padding-bottom:6px}
+.apito .jvnone{align-self:center}
+.apito .jvmais{display:flex;justify-content:center}
+.apito .lmin.pausa{color:var(--accent)}
+.apito .lmin.et{color:var(--hist)}
+.apito .vcard.mini{flex:0 0 220px;padding:7px}
+.apito .vcard.mini .vtitle{font-size:13px;margin-top:5px}
+.apito .vcard.mini .vsub,.apito .vcard.mini .vorig{font-size:12px;margin:2px 0 0}
+.apito .vcard.mini .vorig{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apito .vcard.mini .vmeta{font-size:11px}
+.apito .vcard.mini .vacts{margin-top:4px}
+.apito .vauto{position:absolute;inset:0}
+.apito .vautobtn img,.apito .vframe{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.apito .vauto iframe,.apito .vauto video{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;pointer-events:none;background:transparent}
+.apito .vautobtn{background:#000}
+.apito .vsom{position:absolute;right:6px;bottom:6px;font-size:12px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.6)}
+@media(max-width:700px){.apito .jvrow{grid-template-columns:minmax(0,1fr)} .apito .vcard.mini{flex-basis:62vw}}
+/* todas as fontes onde a notícia saiu, cada uma a abrir a notícia nessa fonte */
+.apito .fontes{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0}
+.apito .flink{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:1px 6px;border:1px solid var(--line);border-radius:4px;background:var(--raise);color:var(--ink);text-decoration:none;white-space:nowrap}
+.apito .flink:hover{border-color:var(--ink)}
+.apito .flink.first{border-color:var(--accent)}
+.apito .flink.off{opacity:.6}
+.apito .flink .flag{width:14px;height:10px}
+.apito .conf svg{opacity:.7}
 /* nome do site: volta à página inicial */
 .apito .brandbtn{display:inline-flex;align-items:center;gap:10px;text-align:left}
 .apito .brandbtn:hover .tagline{text-decoration:underline;text-underline-offset:3px}
 /* Capas: dias da semana */
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
 /* Nesta semana */
-.apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent);margin-left:auto}
+.apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
 .apito .efem{max-width:900px}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
@@ -1256,7 +1407,7 @@ export default function App() {
   const [theme, setTheme] = useState(() =>
     typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   );
-  const [lang, setLang] = useState("pt");
+  const [lang] = useState("pt");
   const [section, setSection] = useState("destaque");
   const [items, setItems] = useState([]);
   const [conn, setConn] = useState("a ligar"); // ligação do browser ao servidor
@@ -1280,6 +1431,9 @@ export default function App() {
   const [vFiltro, setVFiltro] = useState("all");
   const [vN, setVN] = useState(20);
   const [aTocar, setATocar] = useState(null); // vídeo que está a tocar dentro do cartão
+  const [autoVid, setAutoVid] = useState(() => { try { return localStorage.getItem("var-autoplay") !== "0"; } catch { return true; } });
+  useEffect(() => { try { localStorage.setItem("var-autoplay", autoVid ? "1" : "0"); } catch { /* sem armazenamento */ } }, [autoVid]);
+  const [nBlocos, setNBlocos] = useState(8); // jogos com vídeos mostrados na página inicial
   const [capas, setCapas] = useState([]); // capas dos jornais desportivos de hoje (só as que são mesmo de hoje)
   const [capasSemana, setCapasSemana] = useState([]); // capas dos últimos sete dias, com o dia de cada uma
   const [capasDia, setCapasDia] = useState(null); // dia escolhido na secção Capas (null = o mais recente)
@@ -1356,6 +1510,12 @@ export default function App() {
           return novos.length ? [...novos, ...l].sort(byTime).slice(0, MAX_ITEMS) : l;
         });
       }).catch(() => {});
+      // e os vídeos que saíram entretanto (o telemóvel corta a ligação em segundo plano)
+      fetch(`${API}/api/videos/latest?limit=150`).then((r) => r.json()).then((l) => Array.isArray(l) && setVideos((cur) => {
+        const porId = new Map(cur.map((x) => [x.video_id, x]));
+        for (const v of l) porId.set(v.video_id, { ...porId.get(v.video_id), ...v });
+        return [...porId.values()].sort((a, b) => b.created_time - a.created_time).slice(0, 400);
+      })).catch(() => {});
     };
     document.addEventListener("visibilitychange", onBack);
     return () => document.removeEventListener("visibilitychange", onBack);
@@ -1680,6 +1840,31 @@ export default function App() {
   const videosVis = useMemo(() => videos.filter((v) => vFiltro === "all" || v.category === vFiltro || (vFiltro === "cards" && v.category === "red"))
     .filter((v) => !query.trim() || `${v.title} ${v.player || ""} ${v.teams?.home || ""} ${v.teams?.away || ""}`.toLowerCase().includes(query.trim().toLowerCase())),
   [videos, vFiltro, query]);
+
+  // Jogos e vídeos juntos: cada jogo com os vídeos que lhe pertencem. Primeiro os jogos a decorrer (com ou sem
+  // vídeos), depois os jogos que já acabaram e ainda têm vídeos, e no fim os vídeos que não se ligam a nenhum jogo.
+  const dezSeg = Math.floor(now / 10000);
+  const blocos = useMemo(() => {
+    const t = dezSeg * 10000;
+    const grupos = new Map();
+    const semJogo = [];
+    const chaveJogo = (g) => `g:${g.score.comp}|${g.score.h}|${g.score.a}`;
+    for (const g of games) if (isLive(g.score, g.upd || g.ts, t)) grupos.set(chaveJogo(g), { key: chaveJogo(g), jogo: g, live: true, vids: [], ult: g.upd || g.ts });
+    for (const v of videosVis) {
+      const h = v.teams?.home || v.home_team, a = v.teams?.away || v.away_team;
+      if (!h || !a) { semJogo.push(v); continue; }
+      const jogo = games.find((g) => Math.abs((g.upd || g.ts) - v.created_time) < 5 * 3600e3
+        && ((eqIgualT(g.score.h, h) && eqIgualT(g.score.a, a)) || (eqIgualT(g.score.h, a) && eqIgualT(g.score.a, h))));
+      const key = jogo ? chaveJogo(jogo) : `t:${eqTok(h).join(" ")}|${eqTok(a).join(" ")}`;
+      if (!grupos.has(key)) grupos.set(key, { key, jogo: jogo || null, live: !!jogo && isLive(jogo.score, jogo.upd || jogo.ts, t), vids: [], ult: 0, h, a, comp: v.competition, equipas: v.equipas });
+      const gr = grupos.get(key);
+      gr.vids.push(v);
+      gr.ult = Math.max(gr.ult, v.created_time);
+    }
+    const lista = [...grupos.values()].sort((x, y) => (y.live - x.live) || (y.ult - x.ult));
+    return { lista, semJogo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [games, videosVis, dezSeg]);
   const capasOrd = useMemo(() => [...capas].sort((a, b) => {
     const ia = ORDEM_CAPAS.indexOf(a.pais), ib = ORDEM_CAPAS.indexOf(b.pais);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.nome).localeCompare(String(b.nome), "pt");
@@ -1910,8 +2095,13 @@ export default function App() {
       <header className="hdr">
         <div className="wrap">
           <div className="bar">
+            <div className="barl">
+              {(conn !== "ok" || xStatus !== "ligado") && (
+                <span className="pulse off status"><i />{conn !== "ok" ? ui.offline : ui.connecting}</span>
+              )}
+            </div>
             <div className="brand">
-              <button className="brandbtn" onClick={irInicio} title={emLingua(CAT.destaque, lang)} aria-label={`VAR — ${ui.tagline}`}>
+              <button className="brandbtn" onClick={irInicio} title={emLingua(CAT.destaque, lang)} aria-label={`VAR — ${ui.tagline}`} translate="no">
               <svg className="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
                 <rect x="7" y="11.5" width="50" height="33" rx="6" fill="none" stroke="currentColor" strokeWidth="4.4" />
                 <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
@@ -1923,21 +2113,8 @@ export default function App() {
               <b>VAR</b>
               <span className="tagline">{ui.tagline}</span>
               </button>
-              <div className="status">
-                <span className={`pulse ${live ? "" : "off"}`}><i />{paused ? ui.paused : conn !== "ok" ? ui.offline : xStatus !== "ligado" ? ui.connecting : ""}</span>
-                <span className="muted">{ui.nSources(enabled === null ? sourceList.length : enabled.size)}</span>
-              </div>
             </div>
             <div className="ctrls">
-              <label className="search">
-                <Search size={15} aria-hidden="true" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={ui.search} aria-label={ui.search} />
-              </label>
-              <div className="seg langs" role="group" aria-label={ui.langLabel}>
-                {LANGS.map((l) => (
-                  <button key={l.id} aria-pressed={lang === l.id} title={l.nome} onClick={() => setLang(l.id)}>{l.sigla}</button>
-                ))}
-              </div>
               <button className="icon-btn" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 aria-label={theme === "dark" ? ui.toLight : ui.toDark} title={theme === "dark" ? ui.toLight : ui.toDark}>
                 {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
@@ -1958,6 +2135,12 @@ export default function App() {
                 )}
               </div>
             </div>
+          </div>
+          <div className="searchrow">
+            <label className="search">
+              <Search size={15} aria-hidden="true" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={ui.search} aria-label={ui.search} />
+            </label>
           </div>
           <nav className="tabs" aria-label={ui.sectionsLabel}>
             {CATS.map((c) => (
@@ -1980,15 +2163,6 @@ export default function App() {
               {section === "resultados" && leagues.length > 0 && (
                 <button className="textbtn" onClick={() => setShowLeagues((v) => !v)} aria-expanded={showLeagues}><ListFilter size={15} />{ui.pickLeagues}</button>
               )}
-              {/* pausar e marcar como lido só fazem sentido nas listas de notícias, não na página inicial */}
-              {!["destaque", "capas", "efemerides"].includes(section) && (
-                <>
-                  <button className="textbtn" onClick={togglePause}>
-                    {paused ? <Play size={15} /> : <Pause size={15} />}{paused ? ui.resume : ui.pause}
-                  </button>
-                  <button className="textbtn" onClick={markAllRead}><CheckCheck size={15} />{ui.markRead}</button>
-                </>
-              )}
             </div>
 
             {section === "resultados" && showLeagues && <div className="mobpanel leagues">{leaguesPanel}</div>}
@@ -2008,35 +2182,21 @@ export default function App() {
 
             {section === "destaque" ? (
               <>
-                <section className="livebar">
+                <section className="livebar jv" aria-label={ui.liveNow}>
                   <div className="livehead">
-                    <span className={`pulse ${aoVivo.length ? "" : "off"}`}><i />{aoVivo.length ? ui.liveNow : ui.nextTv}</span>
+                    <span className={`pulse ${aoVivo.length ? "" : "off"}`}><i />{aoVivo.length ? `${ui.liveNow} · ${(VTXT[lang] || VTXT.pt).title}` : (VTXT[lang] || VTXT.pt).title}</span>
+                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
+                      {VFILTROS.map(([k, n]) => (
+                        <button key={k} aria-pressed={vFiltro === k} onClick={() => setVFiltro(k)}>
+                          {n[lang] || n.en}<span className="ct" translate="no">{vContagem[k] || 0}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button className={`textbtn vautotg ${autoVid ? "on" : ""}`} aria-pressed={autoVid} onClick={() => setAutoVid((v) => !v)}>
+                      {autoVid ? <Pause size={14} /> : <Play size={14} />}{autoVid ? ui.autoOn : ui.autoOff}
+                    </button>
                   </div>
-                  {aoVivo.length > 0 ? (
-                    <ul className="livelist">
-                      {aoVivo.map((it) => {
-                        const sc = it.score;
-                        return (
-                          <li key={it.id} className="lcard">
-                            <span className="lcomp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
-                            <div className="lrow">
-                              <span className="lteam">{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}{sc.h}</span>
-                              <b>{sc.hs}</b>
-                            </div>
-                            <div className="lrow">
-                              <span className="lteam">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}{sc.a}</span>
-                              <b>{sc.as}</b>
-                            </div>
-                            <div className="lfoot">
-                              <span className="lmin">{minText(sc, lang, ui)}</span>
-                              {evText(sc.ult, lang) && <span key={evText(sc.ult, lang)} className="lult" title={evText(sc.ult, lang)}>{evText(sc.ult, lang)}</span>}
-                            </div>
-                            {(it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)) && <div className="ltv"><Tv tv={it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)} /></div>}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : proximasTv.length > 0 ? (
+                  {aoVivo.length === 0 && proximasTv.length > 0 && (
                     <ul className="livelist tvlist">
                       {proximasTv.map((z) => (
                         <li key={`${z.casa}|${z.fora}|${z.inicio}`} className="lcard next">
@@ -2047,29 +2207,64 @@ export default function App() {
                         </li>
                       ))}
                     </ul>
-                  ) : <p className="cempty">{ui.noLive}</p>}
-                </section>
-                <section className="vbar" aria-label={(VTXT[lang] || VTXT.pt).title}>
-                  <div className="livehead">
-                    <b className="capash"><span className="pulse"><i /></span> {(VTXT[lang] || VTXT.pt).title}</b>
-                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
-                      {VFILTROS.map(([k, n]) => (
-                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setVN(20); if (vRef.current) vRef.current.scrollLeft = 0; }}>
-                          {n[lang] || n.en}<span className="ct">{vContagem[k] || 0}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="varrows">
-                      <button className="icon-btn" onClick={() => rolaVideos(-1)} aria-label="←"><ChevronLeft size={16} /></button>
-                      <button className="icon-btn" onClick={() => rolaVideos(1)} aria-label="→"><ChevronRight size={16} /></button>
-                    </div>
-                  </div>
-                  {videosVis.length === 0 ? <p className="cempty">{(VTXT[lang] || VTXT.pt).empty}</p> : (
-                    <ul className="vlist vrow" ref={vRef} aria-live="polite">
-                      {videosVis.slice(0, vN).map((v) => (
-                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} />
-                      ))}
-                      {videosVis.length > vN && <li className="vmaisli"><button className="textbtn vmais" onClick={() => setVN((n) => n + 20)}>{(VTXT[lang] || VTXT.pt).more}</button></li>}
+                  )}
+                  {blocos.lista.length === 0 && blocos.semJogo.length === 0 ? (
+                    <p className="cempty">{aoVivo.length || proximasTv.length ? (VTXT[lang] || VTXT.pt).empty : ui.noLive}</p>
+                  ) : (
+                    <ul className="jvlist" aria-live="polite">
+                      {blocos.lista.slice(0, nBlocos).map((b) => {
+                        const it = b.jogo;
+                        const sc = it?.score;
+                        const tv = it && (it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts));
+                        return (
+                          <li key={b.key} className={`jvrow ${b.live ? "on" : ""}`}>
+                            {sc ? (
+                              <div className={`lcard ${b.live ? "" : "done"}`}>
+                                <span className="lcomp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
+                                <div className="lrow">
+                                  <span className="lteam">{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}{sc.h}</span>
+                                  <b translate="no">{sc.hs}</b>
+                                </div>
+                                <div className="lrow">
+                                  <span className="lteam">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}{sc.a}</span>
+                                  <b translate="no">{sc.as}</b>
+                                </div>
+                                <div className="lfoot">
+                                  <span className={`lmin ${sc.ht || sc.pausa ? "pausa" : ""} ${sc.et || sc.pen ? "et" : ""}`} translate="no">{b.live ? minText(sc, lang, ui, now, it.upd || it.ts) : sc.ft ? minText(sc, lang, ui) : (sc.min || "—")}</span>
+                                  {b.live && evText(sc.ult, lang) && <span key={evText(sc.ult, lang)} className="lult" title={evText(sc.ult, lang)}>{evText(sc.ult, lang)}</span>}
+                                </div>
+                                {tv && <div className="ltv"><Tv tv={tv} /></div>}
+                              </div>
+                            ) : (
+                              <div className="lcard done">
+                                {b.comp && <span className="lcomp">{b.comp}</span>}
+                                <div className="lrow"><span className="lteam">{b.equipas?.[0]?.logo && <Crest e={b.equipas[0]} theme={theme} size={20} />}{b.h}</span></div>
+                                <div className="lrow"><span className="lteam">{b.equipas?.[1]?.logo && <Crest e={b.equipas[1]} theme={theme} size={20} />}{b.a}</span></div>
+                              </div>
+                            )}
+                            {b.vids.length === 0 ? <p className="cempty jvnone">{ui.noGameVideos}</p> : (
+                              <ul className="vlist vrow jvvids">
+                                {b.vids.slice(0, 16).map((v) => (
+                                  <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      })}
+                      {blocos.semJogo.length > 0 && (blocos.lista.length <= nBlocos) && (
+                        <li className="jvrow">
+                          <div className="lcard done jvother"><span className="lcomp">{ui.otherVideos}</span><span className="muted" translate="no">{blocos.semJogo.length}</span></div>
+                          <ul className="vlist vrow jvvids">
+                            {blocos.semJogo.slice(0, 16).map((v) => (
+                              <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
+                            ))}
+                          </ul>
+                        </li>
+                      )}
+                      {blocos.lista.length > nBlocos && (
+                        <li className="jvmais"><button className="textbtn vmais" onClick={() => setNBlocos((n) => n + 8)}>{ui.moreGames}</button></li>
+                      )}
                     </ul>
                   )}
                 </section>
@@ -2089,7 +2284,7 @@ export default function App() {
                                 <div className="cmeta">
                                   <Flag code={flagOf(it)} lang={lang} title={ui.fromTitle} />
                                   <span className="src">{srcName(s)}</span>
-                                  <span className="muted ctime">{agoText(it.ts, now, ui)}</span>
+                                  <span className="muted ctime" translate="no">{agoText(it.ts, now, ui)}</span>
                                 </div>
                                 <h3 className="ctitle"><Rich text={T(it)} /></h3>
                                 {B(it)[0] && <p className="cbul"><Rich text={B(it)[0]} /></p>}
@@ -2109,6 +2304,7 @@ export default function App() {
                                     </a>
                                   )}
                                 </div>
+                                <FontesLinks it={it} lang={lang} srcPais={srcPais} nome={srcName(s)} pais={flagOf(it)} ui={ui} />
                               </li>
                             );
                           })}
@@ -2132,9 +2328,9 @@ export default function App() {
                       <li key={`${sc.comp}|${sc.h}|${sc.a}`} className={`match ${isLive(sc, it.upd || it.ts, now) ? "on" : ""}`}>
                         <span className="comp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}{it.mod && <span className="modtag">{modName(it.mod, lang)}</span>}{(it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)) && <span className="comptv"><Tv tv={it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)} size={18} /></span>}</span>
                         <span className="team h">{sc.h}{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={30} />}</span>
-                        <span className="res">{sc.hs}–{sc.as}</span>
+                        <span className="res" translate="no">{sc.hs}–{sc.as}</span>
                         <span className="team">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={30} />}{sc.a}</span>
-                        <span className="st">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{minText(sc, lang, ui)}</span> : <span className="muted">{sc.ft ? ui.ft : sc.min || "—"}</span>}</span>
+                        <span className="st" translate="no">{isLive(sc, it.upd || it.ts, now) ? <span className="pulse"><i />{minText(sc, lang, ui, now, it.upd || it.ts)}</span> : <span className="muted">{sc.ft ? minText(sc, lang, ui) : sc.min || "—"}</span>}</span>
                         <span className="upd">{isLive(sc, it.upd || it.ts, now) && evText(sc.ult, lang) && <b className="lultb">{evText(sc.ult, lang)} · </b>}{ui.updated(agoText(it.upd || it.ts, now, ui), srcName(s))}</span>
                       </li>
                     );
@@ -2152,7 +2348,7 @@ export default function App() {
                   const cls = ["item", it.unread && "unread", it.fresh && "fresh", it.hot && "hot"].filter(Boolean).join(" ");
                   return (
                     <li key={it.id} id={`n-${it.id}`} className={cls}>
-                      <div className="gut" title={new Date(it.ts).toLocaleTimeString(ui.locale)}>
+                      <div className="gut" translate="no" title={new Date(it.ts).toLocaleTimeString(ui.locale)}>
                         {(() => {
                           const a = ago(it.ts, now);
                           const tip = it.tsAprox ? ui.approx : undefined;
@@ -2190,12 +2386,12 @@ export default function App() {
                           <div className="score">
                             {it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={28} />}
                             <span>{it.score.h}</span>
-                            <span className="n">{it.score.hs}–{it.score.as}</span>
+                            <span className="n" translate="no">{it.score.hs}–{it.score.as}</span>
                             <span>{it.score.a}</span>
                             {it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={28} />}
                             {it.score.ft
-                              ? <span className="m muted">{ui.ft}</span>
-                              : <span className="m live">{it.score.min || ""}</span>}
+                              ? <span className="m muted" translate="no">{minText(it.score, lang, ui)}</span>
+                              : <span className="m live" translate="no">{it.score.ht || it.score.et || it.score.pen || it.score.pausa ? minText(it.score, lang, ui) : it.score.min || ""}</span>}
                             <Tv tv={it.tv} size={18} />
                           </div>
                         )}

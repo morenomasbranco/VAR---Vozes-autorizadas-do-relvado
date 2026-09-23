@@ -33,8 +33,12 @@ export function normalizeMatch(m) {
     leagueName: String(pick(m, ["league.name", "leagueName", "league_name", "competition.name"]) ?? ""),
     country: String(pick(m, ["league.country", "league.countryName", "country.name", "countryName", "country_name", "competition.area.name"]) ?? ""),
     lastScorer: Array.isArray(goals) && goals.length ? String(pick(goals[goals.length - 1], ["home_scorer", "away_scorer", "player.name", "player", "scorer", "name"]) ?? "") : "",
-    ft: /^(ft|aet|pen|finished|ended|after|full)/i.test(status),
+    ft: /^(ft|aet|pen$|pen[ .]|finished|ended|after|full)/i.test(status),
     ht: /^(ht|half)/i.test(status),
+    // prolongamento (ET), pausa antes ou a meio dele (BT) e penáltis a decorrer (P)
+    et: /^(et|extra|bt|break|p$|penalt|shoot|aet)/i.test(status) || Number(String(minute ?? "").split("+")[0]) > 90,
+    pausa: /^(bt|break)/i.test(status),
+    pen: /^(p|penalties|shootout|live_penalties)$/i.test(status),
     ns: /^(ns|not|sched|tbd|postp|canc)/i.test(status),
     kickoff: Date.parse(pick(m, ["kickoffUtc", "kickoff", "utcDate", "fixture.date", "date"]) ?? "") || null,
   };
@@ -127,6 +131,8 @@ export function startResults(leagues, publish, log, { upsert = () => {}, remove 
       golo: [`Golo do ==${extra.side === "h" ? m.home : m.away}==! ${sc}`, `Goal for ==${extra.side === "h" ? m.home : m.away}==! ${sc}`, big ? 4 : top ? 3 : 2],
       anulado: [`Golo anulado no ${m.home}–${m.away}: ${m.hs}–${m.as}`, `Goal ruled out in ${m.home} v ${m.away}: ${m.hs}–${m.as}`, big ? 3 : 2],
       intervalo: [`Intervalo: ${sc}`, `Half-time: ${sc}`, 2],
+      prolongamento: [`Vai a prolongamento: ${sc}`, `Extra time: ${sc}`, big ? 4 : 3],
+      penaltis: [`Decisão por penáltis: ${sc}`, `Penalty shoot-out: ${sc}`, big ? 4 : 3],
       final: [`Final: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==`, `Full time: ==${m.home}== ${m.hs}–${m.as} ==${m.away}==`, big ? 5 : top ? 3 : 2],
       direto: [`Em direto: ${sc}`, `Live: ${sc}`, 1],
     }[kind];
@@ -145,7 +151,7 @@ export function startResults(leagues, publish, log, { upsert = () => {}, remove 
       t: { pt: T[0], en: T[1] },
       b: bullets,
       imp: T[2],
-      score: { comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: m.minute, ft: kind === "final" },
+      score: { comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: m.minute, ft: kind === "final", et: !!m.et, pen: !!m.pen },
     });
   };
 
@@ -155,7 +161,7 @@ export function startResults(leagues, publish, log, { upsert = () => {}, remove 
     ts: Date.now(), cats: cats(m, lg), liga: lg.key, paisTema: lg.bandeira, mod: lg.mod,
     t: { pt: `Em direto: ${m.home} ${m.hs}–${m.as} ${m.away}`, en: `Live: ${m.home} ${m.hs}–${m.as} ${m.away}` },
     b: { pt: [lg.nome], en: [lg.nome_en || lg.nome] }, imp: 1,
-    score: { comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: m.ht ? null : m.minute, ht: m.ht, ft: false, ult: ult || null },
+    score: { comp: lg.nome, h: m.home, a: m.away, hs: m.hs, as: m.as, min: m.ht || m.pausa || m.pen ? null : m.minute, ht: m.ht, ft: false, et: !!m.et, pausa: !!m.pausa, pen: !!m.pen, ult: ult || null },
   });
 
   // janelas de jogo do dia: do apito inicial até ~2 h depois, juntando as que se sobrepõem
@@ -248,6 +254,8 @@ export function startResults(leagues, publish, log, { upsert = () => {}, remove 
         if (m.as > p.as) { emit("golo", m, lg, { side: "a" }); ult = golo("a"); }
         if (m.hs < p.hs || m.as < p.as) { emit("anulado", m, lg); ult = { tipo: "anulado", label: m.minute || "", who: "", equipa: m.hs < p.hs ? m.home : m.away }; }
         if (m.ht && !p.ht) emit("intervalo", m, lg);
+        if ((m.et || m.pausa) && !p.et && !p.pausa && !m.ft) emit("prolongamento", m, lg);
+        if (m.pen && !p.pen && !m.ft) emit("penaltis", m, lg);
         if (m.ft && !p.ft) { emit("final", m, lg); remove(`r:${m.id}:live`); }
         else if (!m.ft) liveCard(m, lg, ult);
         state.set(m.id, { m, lg, missing: 0, ult });

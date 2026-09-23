@@ -2,7 +2,7 @@
 // taças é publicado ali poucos minutos depois de acontecer, com o formato fixo
 // «GOLO! Braga, J. Wind aos 83', Braga 1-0 Estoril», e os resumos no fim de cada jogo.
 // É um site público português, que não bloqueia servidores de alojamento como o Reddit.
-import { sleep } from "../util.js";
+import { sleep, lerTexto } from "../util.js";
 import { simil } from "./zapping.js";
 
 const PAGINA = process.env.VSPORTS_PAGINA || "https://vsports.pt/";
@@ -95,7 +95,7 @@ export function startVsports(add, log, estado = {}) {
       try {
         const res = await fetch(PAGINA, { headers: { "User-Agent": UA, "Accept-Language": "pt-PT,pt;q=0.9" } });
         if (!res.ok) throw new Error(`o VSPORTS respondeu ${res.status}`);
-        const lidos = lerPagina(await res.text());
+        const lidos = lerPagina(await lerTexto(res));
         if (!lidos.length) throw new Error("não encontrei vídeos na página (o VSPORTS pode ter mudado o formato)");
         lidos.sort((a, b) => a.created_time - b.created_time).forEach((v) => add(v));
         Object.assign(estado, { ok: true, erro: null, ultimo: Date.now(), comVideo: lidos.length });

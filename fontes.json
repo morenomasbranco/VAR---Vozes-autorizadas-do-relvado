@@ -1404,11 +1404,12 @@
     }
   ],
   "videos": {
-    "_nota": "Feed de vídeos da página inicial. reddit: subreddits lidos num só pedido; \"regiao\": \"pt\" dá prioridade à fonte nos jogos portugueses; \"soMedia\": só entram publicações com vídeo alojado. telegram: canais públicos lidos pela página t.me/s/<canal>.",
+    "_nota": "Feed de vídeos da página inicial. reddit: subreddits lidos num só pedido; \"regiao\": \"pt\" dá prioridade à fonte nos jogos portugueses; \"soMedia\": só entram publicações com vídeo alojado. telegram: canais públicos lidos pela página t.me/s/<canal>. \"aceitaLinks\": true aceita qualquer ligação externa como vídeo (e procura o vídeo no texto das publicações), para subreddits que usam alojamentos de vídeo menos conhecidos.",
     "reddit": [
       {
         "sub": "Evangelista_TV",
-        "regiao": "pt"
+        "regiao": "pt",
+        "aceitaLinks": true
       },
       {
         "sub": "soccer",
