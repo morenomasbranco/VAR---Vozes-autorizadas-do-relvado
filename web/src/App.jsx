@@ -67,7 +67,7 @@ const inSection = (it, s) => {
 const UI = {
   pt: {
     autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
-    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos",
+    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -1178,19 +1178,31 @@ const CSS = `
 .apito .vmaisli{flex:0 0 auto;display:flex;align-items:center}
 .apito .vrow .vmais{height:100%;min-height:120px;padding:0 18px;margin:0;white-space:nowrap}
 @media(max-width:640px){.apito .vcard{flex-basis:82vw} .apito .varrows{display:none}}
-/* jogos a decorrer e vídeos juntos: cada jogo com os vídeos dele */
+/* jogos a decorrer e vídeos: faixa de jogos (serve de filtro) e uma grelha única de vídeos */
 .apito .jv .livehead{flex-wrap:wrap;gap:8px 12px}
 .apito .vautotg{margin-left:auto;font-size:12px}
 .apito .vautotg.on{color:var(--ink)}
-.apito .jvlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.apito .jvrow{display:grid;grid-template-columns:236px minmax(0,1fr);gap:12px;align-items:start;padding:0 0 10px;border-bottom:1px solid var(--line)}
-.apito .jvrow:last-child{border-bottom:0}
-.apito .jvrow .lcard{width:auto}
+.apito .jvstrip{list-style:none;margin:0 0 12px}
+.apito .jvstrip>li{flex:0 0 auto;display:flex}
+.apito .jvstrip .lcard{width:210px;text-align:left;display:block;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.apito .jvstrip .lcard .lrow,.apito .jvstrip .lcard .lfoot,.apito .jvstrip .lcard .ltv,.apito .jvstrip .lcard .lcomp{display:flex}
+.apito .jvstrip .lcard .lrow{font-size:14px}
+.apito .jvstrip .lcard .lrow b{font-size:17px}
+.apito .jvstrip .lcard .lfoot{margin-top:6px}
+.apito .jvstrip .lcard[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.apito .jvstrip .lcard:disabled{cursor:default;opacity:.85}
+.apito .jvstrip .lcard.next{cursor:default}
+.apito .jvall{width:112px!important;display:flex!important;flex-direction:column;justify-content:center;border-top-color:var(--accent)!important}
+.apito .jvall .lcomp{white-space:normal}
+.apito .jvgrid .vcard.mini .vorig{display:none}
+.apito .jvall b{font-family:var(--display);font-size:26px;line-height:1.1}
+.apito .jvall .muted{font-size:12px}
+.apito .jvn{margin-left:auto;display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--accent);color:#1B1B1B;flex:none}
+.apito .jvn.zero{background:var(--line);color:var(--muted)}
 .apito .lcard.done{border-top-color:var(--line)}
-.apito .jvother{display:flex;align-items:center;justify-content:space-between}
-.apito .jvvids{gap:10px;padding-bottom:6px}
-.apito .jvnone{align-self:center}
-.apito .jvmais{display:flex;justify-content:center}
+.apito .jvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
+.apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .lmin.pausa{color:var(--accent)}
 .apito .lmin.et{color:var(--hist)}
 .apito .vcard.mini{flex:0 0 220px;padding:7px}
@@ -1204,7 +1216,8 @@ const CSS = `
 .apito .vauto iframe,.apito .vauto video{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;pointer-events:none;background:transparent}
 .apito .vautobtn{background:#000}
 .apito .vsom{position:absolute;right:6px;bottom:6px;font-size:12px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.6)}
-@media(max-width:700px){.apito .jvrow{grid-template-columns:minmax(0,1fr)} .apito .vcard.mini{flex-basis:62vw}}
+@media(max-width:560px){.apito .jvgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px} .apito .jvstrip .lcard{width:180px}
+  .apito .vcard.mini .vorig,.apito .vcard.mini .vmeta .vsrc b{display:none} .apito .vcard.mini .vacts .textbtn{font-size:12px}}
 /* todas as fontes onde a notícia saiu, cada uma a abrir a notícia nessa fonte */
 .apito .fontes{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0}
 .apito .flink{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:1px 6px;border:1px solid var(--line);border-radius:4px;background:var(--raise);color:var(--ink);text-decoration:none;white-space:nowrap}
@@ -1433,7 +1446,8 @@ export default function App() {
   const [aTocar, setATocar] = useState(null); // vídeo que está a tocar dentro do cartão
   const [autoVid, setAutoVid] = useState(() => { try { return localStorage.getItem("var-autoplay") !== "0"; } catch { return true; } });
   useEffect(() => { try { localStorage.setItem("var-autoplay", autoVid ? "1" : "0"); } catch { /* sem armazenamento */ } }, [autoVid]);
-  const [nBlocos, setNBlocos] = useState(8); // jogos com vídeos mostrados na página inicial
+  const [jogoSel, setJogoSel] = useState(null); // jogo escolhido na faixa de jogos (null = todos os vídeos)
+  const [nGrelha, setNGrelha] = useState(12); // vídeos mostrados na grelha antes de «Ver mais»
   const [capas, setCapas] = useState([]); // capas dos jornais desportivos de hoje (só as que são mesmo de hoje)
   const [capasSemana, setCapasSemana] = useState([]); // capas dos últimos sete dias, com o dia de cada uma
   const [capasDia, setCapasDia] = useState(null); // dia escolhido na secção Capas (null = o mais recente)
@@ -2187,7 +2201,7 @@ export default function App() {
                     <span className={`pulse ${aoVivo.length ? "" : "off"}`}><i />{aoVivo.length ? `${ui.liveNow} · ${(VTXT[lang] || VTXT.pt).title}` : (VTXT[lang] || VTXT.pt).title}</span>
                     <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
                       {VFILTROS.map(([k, n]) => (
-                        <button key={k} aria-pressed={vFiltro === k} onClick={() => setVFiltro(k)}>
+                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setNGrelha(12); }}>
                           {n[lang] || n.en}<span className="ct" translate="no">{vContagem[k] || 0}</span>
                         </button>
                       ))}
@@ -2196,77 +2210,79 @@ export default function App() {
                       {autoVid ? <Pause size={14} /> : <Play size={14} />}{autoVid ? ui.autoOn : ui.autoOff}
                     </button>
                   </div>
-                  {aoVivo.length === 0 && proximasTv.length > 0 && (
-                    <ul className="livelist tvlist">
-                      {proximasTv.map((z) => (
-                        <li key={`${z.casa}|${z.fora}|${z.inicio}`} className="lcard next">
-                          <span className="lcomp">{new Date(z.inicio).toLocaleString(ui.locale, { weekday: "short", hour: "2-digit", minute: "2-digit" })}{z.qualificador ? ` · ${z.qualificador}` : ""}</span>
-                          <div className="lrow"><span className="lteam">{z.casa}</span></div>
-                          <div className="lrow"><span className="lteam">{z.fora}</span></div>
-                          <div className="lfoot"><Tv tv={z} /></div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {blocos.lista.length === 0 && blocos.semJogo.length === 0 ? (
-                    <p className="cempty">{aoVivo.length || proximasTv.length ? (VTXT[lang] || VTXT.pt).empty : ui.noLive}</p>
-                  ) : (
-                    <ul className="jvlist" aria-live="polite">
-                      {blocos.lista.slice(0, nBlocos).map((b) => {
-                        const it = b.jogo;
-                        const sc = it?.score;
-                        const tv = it && (it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts));
-                        return (
-                          <li key={b.key} className={`jvrow ${b.live ? "on" : ""}`}>
-                            {sc ? (
-                              <div className={`lcard ${b.live ? "" : "done"}`}>
-                                <span className="lcomp"><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</span>
-                                <div className="lrow">
-                                  <span className="lteam">{it.equipas?.[0]?.logo && <Crest e={it.equipas[0]} theme={theme} size={20} />}{sc.h}</span>
-                                  <b translate="no">{sc.hs}</b>
-                                </div>
-                                <div className="lrow">
-                                  <span className="lteam">{it.equipas?.[1]?.logo && <Crest e={it.equipas[1]} theme={theme} size={20} />}{sc.a}</span>
-                                  <b translate="no">{sc.as}</b>
-                                </div>
-                                <div className="lfoot">
-                                  <span className={`lmin ${sc.ht || sc.pausa ? "pausa" : ""} ${sc.et || sc.pen ? "et" : ""}`} translate="no">{b.live ? minText(sc, lang, ui, now, it.upd || it.ts) : sc.ft ? minText(sc, lang, ui) : (sc.min || "—")}</span>
-                                  {b.live && evText(sc.ult, lang) && <span key={evText(sc.ult, lang)} className="lult" title={evText(sc.ult, lang)}>{evText(sc.ult, lang)}</span>}
-                                </div>
-                                {tv && <div className="ltv"><Tv tv={tv} /></div>}
+                  {/* 1) faixa de jogos: a decorrer primeiro, depois os que já acabaram e têm vídeos; cada um serve de filtro */}
+                  {(() => {
+                    const sel = jogoSel && blocos.lista.find((b) => b.key === jogoSel) ? jogoSel : null;
+                    const doSel = sel ? blocos.lista.find((b) => b.key === sel) : null;
+                    const grelha = doSel ? doSel.vids : videosVis;
+                    return (
+                      <>
+                        <ul className="livelist jvstrip">
+                          {blocos.lista.length + blocos.semJogo.length > 0 && (
+                            <li>
+                              <button className="lcard jvall" aria-pressed={!sel} onClick={() => { setJogoSel(null); setNGrelha(12); }}>
+                                <span className="lcomp">{ui.allGames}</span>
+                                <b translate="no">{videosVis.length}</b>
+                                <span className="muted">{(VTXT[lang] || VTXT.pt).title.toLowerCase()}</span>
+                              </button>
+                            </li>
+                          )}
+                          {blocos.lista.map((b) => {
+                            const it = b.jogo;
+                            const sc = it?.score;
+                            const tv = it && (it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts));
+                            return (
+                              <li key={b.key}>
+                                <button className={`lcard ${b.live ? "" : "done"}`} aria-pressed={sel === b.key} disabled={!b.vids.length}
+                                  onClick={() => { setJogoSel(sel === b.key ? null : b.key); setNGrelha(12); }}>
+                                  <span className="lcomp">{sc ? <><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</> : b.comp || ui.otherVideos}</span>
+                                  <span className="lrow">
+                                    <span className="lteam">{(it?.equipas || b.equipas)?.[0]?.logo && <Crest e={(it?.equipas || b.equipas)[0]} theme={theme} size={18} />}{sc ? sc.h : b.h}</span>
+                                    {sc && <b translate="no">{sc.hs}</b>}
+                                  </span>
+                                  <span className="lrow">
+                                    <span className="lteam">{(it?.equipas || b.equipas)?.[1]?.logo && <Crest e={(it?.equipas || b.equipas)[1]} theme={theme} size={18} />}{sc ? sc.a : b.a}</span>
+                                    {sc && <b translate="no">{sc.as}</b>}
+                                  </span>
+                                  <span className="lfoot">
+                                    {sc && <span className={`lmin ${sc.ht || sc.pausa ? "pausa" : ""} ${sc.et || sc.pen ? "et" : ""}`} translate="no">{b.live ? minText(sc, lang, ui, now, it.upd || it.ts) : sc.ft ? minText(sc, lang, ui) : (sc.min || "")}</span>}
+                                    {b.live && evText(sc?.ult, lang) && <span key={evText(sc.ult, lang)} className="lult" title={evText(sc.ult, lang)}>{evText(sc.ult, lang)}</span>}
+                                    <span className={`jvn ${b.vids.length ? "" : "zero"}`} translate="no"><Play size={11} fill="currentColor" />{b.vids.length}</span>
+                                  </span>
+                                  {tv && <span className="ltv"><Tv tv={tv} /></span>}
+                                </button>
+                              </li>
+                            );
+                          })}
+                          {aoVivo.length === 0 && proximasTv.map((z) => (
+                            <li key={`${z.casa}|${z.fora}|${z.inicio}`}>
+                              <div className="lcard next">
+                                <span className="lcomp">{new Date(z.inicio).toLocaleString(ui.locale, { weekday: "short", hour: "2-digit", minute: "2-digit" })}{z.qualificador ? ` · ${z.qualificador}` : ""}</span>
+                                <span className="lrow"><span className="lteam">{z.casa}</span></span>
+                                <span className="lrow"><span className="lteam">{z.fora}</span></span>
+                                <span className="lfoot"><Tv tv={z} /></span>
                               </div>
-                            ) : (
-                              <div className="lcard done">
-                                {b.comp && <span className="lcomp">{b.comp}</span>}
-                                <div className="lrow"><span className="lteam">{b.equipas?.[0]?.logo && <Crest e={b.equipas[0]} theme={theme} size={20} />}{b.h}</span></div>
-                                <div className="lrow"><span className="lteam">{b.equipas?.[1]?.logo && <Crest e={b.equipas[1]} theme={theme} size={20} />}{b.a}</span></div>
-                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        {/* 2) uma só grelha de vídeos, do mais recente para o mais antigo, que se ajusta à largura do ecrã */}
+                        {grelha.length === 0 ? (
+                          <p className="cempty">{aoVivo.length || proximasTv.length ? (VTXT[lang] || VTXT.pt).empty : ui.noLive}</p>
+                        ) : (
+                          <>
+                            <ul className="vlist jvgrid" aria-live="polite">
+                              {grelha.slice(0, nGrelha).map((v) => (
+                                <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
+                              ))}
+                            </ul>
+                            {grelha.length > nGrelha && (
+                              <div className="jvmais"><button className="textbtn vmais" onClick={() => setNGrelha((n) => n + 12)}>{(VTXT[lang] || VTXT.pt).more} ({grelha.length - nGrelha})</button></div>
                             )}
-                            {b.vids.length === 0 ? <p className="cempty jvnone">{ui.noGameVideos}</p> : (
-                              <ul className="vlist vrow jvvids">
-                                {b.vids.slice(0, 16).map((v) => (
-                                  <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        );
-                      })}
-                      {blocos.semJogo.length > 0 && (blocos.lista.length <= nBlocos) && (
-                        <li className="jvrow">
-                          <div className="lcard done jvother"><span className="lcomp">{ui.otherVideos}</span><span className="muted" translate="no">{blocos.semJogo.length}</span></div>
-                          <ul className="vlist vrow jvvids">
-                            {blocos.semJogo.slice(0, 16).map((v) => (
-                              <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
-                            ))}
-                          </ul>
-                        </li>
-                      )}
-                      {blocos.lista.length > nBlocos && (
-                        <li className="jvmais"><button className="textbtn vmais" onClick={() => setNBlocos((n) => n + 8)}>{ui.moreGames}</button></li>
-                      )}
-                    </ul>
-                  )}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </section>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
