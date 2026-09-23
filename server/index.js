@@ -336,7 +336,7 @@ app.get(["/api/videos/latest", "/videos/latest"], (req, res) => {
     player: v.player, minute: v.minute, opponent: v.opponent, competition: v.competition, liga: v.liga, paisTema: v.paisTema, equipas: v.equipas,
     source: v.subreddit ? `r/${v.subreddit}` : v.canal === "vsports" ? "VSPORTS" : /^ig:/.test(v.canal || "") ? `@${v.canal.slice(3)}` : v.canal ? `t.me/${v.canal}` : v.source, subreddit: v.subreddit, author: v.author,
     sources: v.sources.map((x) => ({ fonte: x.fonte, subreddit: x.subreddit || null, canal: x.canal || null, url: x.reddit_url, created_time: x.created_time })),
-    embed: v.embed, created_time: v.created_time, first_seen: v.first_seen,
+    embed: v.embed, created_time: v.created_time, first_seen: v.first_seen, portugues: !!v.portugues,
   })));
 });
 // miniatura de um vídeo: a imagem guardada pelo servidor; sem imagem nenhuma, um cartão desenhado com o jogo

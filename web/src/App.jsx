@@ -67,7 +67,8 @@ const inSection = (it, s) => {
 const UI = {
   pt: {
     autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
-    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos", pickGame: "Carrega num jogo para ver os vídeos dele.",
+    otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos", pickGame: "Carrega num jogo para ver os vídeos dele.", videoHighlights: "Destaques",
+    videoHighlightsNote: "Os vídeos de maior interesse das últimas 24 horas",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -1190,7 +1191,7 @@ const CSS = `
 .apito .jvstrip .lcard .lrow b{font-size:17px}
 .apito .jvstrip .lcard .lfoot{margin-top:6px}
 .apito .jvstrip .lcard[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
-.apito .jvstrip .lcard:disabled{cursor:default;opacity:.85}
+.apito .jvstrip .lcard:disabled{cursor:default;color:inherit}
 .apito .jvstrip .lcard.next{cursor:default}
 .apito .jvall{width:130px!important;display:flex!important;flex-direction:column;justify-content:space-between}
 .apito .jvhint{padding:2px 0 6px}
@@ -1204,6 +1205,10 @@ const CSS = `
 .apito .jvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
+.apito .vdest{margin:6px 0 18px}
+.apito .vdest .vcard.mini .vorig{display:none}
+.apito .vdest .vrow .vcard.mini{flex:0 0 240px}
+@media(max-width:560px){.apito .vdest .vrow .vcard.mini{flex-basis:62vw}}
 .apito .lmin.pausa{color:var(--accent)}
 .apito .lmin.et{color:var(--hist)}
 .apito .vcard.mini{flex:0 0 220px;padding:7px}
@@ -1856,6 +1861,44 @@ export default function App() {
     .filter((v) => !query.trim() || `${v.title} ${v.player || ""} ${v.teams?.home || ""} ${v.teams?.away || ""}`.toLowerCase().includes(query.trim().toLowerCase())),
   [videos, vFiltro, query]);
 
+  // Destaques de vídeo: os de maior interesse das últimas 24 h. A nota junta o tipo de lance (golo, expulsão e VAR
+  // acima de defesas e fintas, e estas acima de resumos), o jogo (os três grandes, a Liga Portugal e os jogos a
+  // decorrer), os golos tardios, o número de fontes que publicaram o mesmo vídeo (sinal de que é falado) e a
+  // frescura (a nota cai para metade a cada 4 horas). No máximo dois vídeos por jogo, para a faixa não ficar só com um.
+  const horaDest = Math.floor(now / 60000);
+  const destaquesVid = useMemo(() => {
+    const t = horaDest * 60000;
+    const PESO = { goal: 5, red: 4.5, var: 4, save: 3.5, skill: 3, highlight: 2, other: 0.5 };
+    const GRANDES = /benfica|porto|sporting/i;
+    const aoVivoTok = aoVivo.map((g) => g.score);
+    const nota = (v) => {
+      const idadeH = (t - v.created_time) / 3600e3;
+      if (idadeH > 24) return 0;
+      const eq = `${v.teams?.home || ""} ${v.teams?.away || ""} ${v.title || ""}`;
+      let n = PESO[v.category] ?? 1;
+      if (GRANDES.test(eq)) n += 3;
+      if (v.portugues) n += 1.5;
+      if (v.teams && aoVivoTok.some((sc) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)))) n += 1.5;
+      const min = parseInt(v.minute, 10);
+      if (v.category === "goal" && min >= 85) n += 1.5;
+      if (v.player) n += 0.5;
+      n += Math.min(3, ((v.sources?.length || 1) - 1) * 1);
+      if (v.embed) n += 0.5;
+      return n * Math.pow(0.5, idadeH / 4);
+    };
+    const porJogo = new Map();
+    const out = [];
+    for (const [v, n] of videos.map((v) => [v, nota(v)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])) {
+      const k = v.teams ? `${eqTok(v.teams.home).join(" ")}|${eqTok(v.teams.away).join(" ")}` : v.video_id;
+      if ((porJogo.get(k) || 0) >= 2) continue;
+      porJogo.set(k, (porJogo.get(k) || 0) + 1);
+      out.push(v);
+      if (out.length >= 14) break;
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos, horaDest, aoVivo.length]);
+
   // Jogos e vídeos juntos: cada jogo com os vídeos que lhe pertencem. Primeiro os jogos a decorrer (com ou sem
   // vídeos), depois os jogos que já acabaram e ainda têm vídeos, e no fim os vídeos que não se ligam a nenhum jogo.
   const dezSeg = Math.floor(now / 10000);
@@ -1876,7 +1919,10 @@ export default function App() {
       gr.vids.push(v);
       gr.ult = Math.max(gr.ult, v.created_time);
     }
-    const lista = [...grupos.values()].sort((x, y) => (y.live - x.live) || (y.ult - x.ult));
+    // ordem estável: os jogos a decorrer pela hora a que começaram (não saltam de lugar quando sai um vídeo),
+    // depois os que já acabaram e têm vídeos, do vídeo mais recente para o mais antigo
+    const lista = [...grupos.values()].sort((x, y) => (y.live - x.live)
+      || (x.live ? (x.jogo?.ts || 0) - (y.jogo?.ts || 0) || String(x.key).localeCompare(String(y.key)) : y.ult - x.ult));
     return { lista, semJogo };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games, videosVis, dezSeg]);
@@ -2287,6 +2333,23 @@ export default function App() {
                     );
                   })()}
                 </section>
+                {destaquesVid.length > 0 && (
+                  <section className="vbar vdest" aria-label={ui.videoHighlights}>
+                    <div className="livehead">
+                      <b className="capash">⭐ {ui.videoHighlights}</b>
+                      <span className="muted small">{ui.videoHighlightsNote}</span>
+                      <div className="varrows">
+                        <button className="icon-btn" onClick={() => rolaVideos(-1)} aria-label="←"><ChevronLeft size={16} /></button>
+                        <button className="icon-btn" onClick={() => rolaVideos(1)} aria-label="→"><ChevronRight size={16} /></button>
+                      </div>
+                    </div>
+                    <ul className="vlist vrow" ref={vRef}>
+                      {destaquesVid.map((v) => (
+                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
+                      ))}
+                    </ul>
+                  </section>
+                )}
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
