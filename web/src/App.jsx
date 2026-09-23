@@ -1206,6 +1206,8 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
+/* título dos Destaques igual ao «Live» */
+.apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
 .apito .vdest .vrow .vcard.mini{flex:0 0 240px}
 @media(max-width:560px){.apito .vdest .vrow .vcard.mini{flex-basis:62vw}}
@@ -1450,8 +1452,7 @@ export default function App() {
   const [vFiltro, setVFiltro] = useState("all");
   const [vN, setVN] = useState(20);
   const [aTocar, setATocar] = useState(null); // vídeo que está a tocar dentro do cartão
-  const [autoVid, setAutoVid] = useState(() => { try { return localStorage.getItem("var-autoplay") !== "0"; } catch { return true; } });
-  useEffect(() => { try { localStorage.setItem("var-autoplay", autoVid ? "1" : "0"); } catch { /* sem armazenamento */ } }, [autoVid]);
+  const autoVid = true; // os vídeos tocam sempre sozinhos em miniatura (sem botão para desligar)
   const [jogoSel, setJogoSel] = useState(null); // jogo escolhido na faixa de jogos (null = todos os vídeos)
   const [nGrelha, setNGrelha] = useState(12); // vídeos mostrados na grelha antes de «Ver mais»
   const [capas, setCapas] = useState([]); // capas dos jornais desportivos de hoje (só as que são mesmo de hoje)
@@ -1908,12 +1909,17 @@ export default function App() {
     const semJogo = [];
     const chaveJogo = (g) => `g:${g.score.comp}|${g.score.h}|${g.score.a}`;
     for (const g of games) if (isLive(g.score, g.upd || g.ts, t)) grupos.set(chaveJogo(g), { key: chaveJogo(g), jogo: g, live: true, vids: [], ult: g.upd || g.ts });
+    // no Live só entram jogos de agora: os vídeos de jogos que já acabaram ficam 3 horas e depois saem
+    // (o feed guarda vídeos durante dias, e apareciam jogos do Brasileirão de há dois dias)
+    const RECENTE = 3 * 3600e3;
     for (const v of videosVis) {
       const h = v.teams?.home || v.home_team, a = v.teams?.away || v.away_team;
-      if (!h || !a) { semJogo.push(v); continue; }
+      const velho = t - v.created_time > RECENTE;
+      if (!h || !a) { if (!velho) semJogo.push(v); continue; }
       const jogo = games.find((g) => Math.abs((g.upd || g.ts) - v.created_time) < 5 * 3600e3
         && ((eqIgualT(g.score.h, h) && eqIgualT(g.score.a, a)) || (eqIgualT(g.score.h, a) && eqIgualT(g.score.a, h))));
       const key = jogo ? chaveJogo(jogo) : `t:${eqTok(h).join(" ")}|${eqTok(a).join(" ")}`;
+      if (velho && !(grupos.get(key)?.live)) continue; // vídeo antigo de um jogo que não está a decorrer
       if (!grupos.has(key)) grupos.set(key, { key, jogo: jogo || null, live: !!jogo && isLive(jogo.score, jogo.upd || jogo.ts, t), vids: [], ult: 0, h, a, comp: v.competition, equipas: v.equipas });
       const gr = grupos.get(key);
       gr.vids.push(v);
@@ -2253,9 +2259,6 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    <button className={`textbtn vautotg ${autoVid ? "on" : ""}`} aria-pressed={autoVid} onClick={() => setAutoVid((v) => !v)}>
-                      {autoVid ? <Pause size={14} /> : <Play size={14} />}{autoVid ? ui.autoOn : ui.autoOff}
-                    </button>
                   </div>
                   {/* 1) faixa de jogos: a decorrer primeiro, depois os que já acabaram e têm vídeos; cada um serve de filtro */}
                   {(() => {
@@ -2316,7 +2319,7 @@ export default function App() {
                         </ul>
                         {/* 2) uma só grelha de vídeos, do mais recente para o mais antigo, que se ajusta à largura do ecrã */}
                         {!sel ? (
-                          <p className="cempty jvhint">{blocos.lista.some((b) => b.vids.length) || blocos.semJogo.length ? ui.pickGame : blocos.lista.length || proximasTv.length ? (VTXT[lang] || VTXT.pt).empty : ui.noLive}</p>
+                          (blocos.lista.length || blocos.semJogo.length || proximasTv.length ? null : <p className="cempty jvhint">{ui.noLive}</p>)
                         ) : (
                           <>
                             <ul className="vlist jvgrid" aria-live="polite">
@@ -2336,7 +2339,7 @@ export default function App() {
                 {destaquesVid.length > 0 && (
                   <section className="vbar vdest" aria-label={ui.videoHighlights}>
                     <div className="livehead">
-                      <b className="capash">⭐ {ui.videoHighlights}</b>
+                      <h2 className="vdesth">{ui.videoHighlights}</h2>
                       <span className="muted small">{ui.videoHighlightsNote}</span>
                       <div className="varrows">
                         <button className="icon-btn" onClick={() => rolaVideos(-1)} aria-label="←"><ChevronLeft size={16} /></button>
