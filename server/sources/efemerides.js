@@ -133,8 +133,8 @@ async function wikipedia(lang, mes, dia) {
   const caminho = `feed/onthisday/all/${dd(mes)}/${dd(dia)}`;
   // a REST de cada Wikipédia; se falhar, o agregador da Wikimedia
   let d = null;
-  try { d = await json(`https://${lang}.wikipedia.org/api/rest_v1/${caminho}`, { tentativas: 1 }); }
-  catch { d = await json(`https://api.wikimedia.org/feed/v1/wikipedia/${lang}/onthisday/all/${dd(mes)}/${dd(dia)}`, { tentativas: 1 }); }
+  try { d = await json(`https://${lang}.wikipedia.org/api/rest_v1/${caminho}`, { tentativas: 1, timeout: 12000 }); }
+  catch { d = await json(`https://api.wikimedia.org/feed/v1/wikipedia/${lang}/onthisday/all/${dd(mes)}/${dd(dia)}`, { tentativas: 1, timeout: 12000 }); }
   if (!d) return [];
   const out = [];
   for (const [campo, tipo] of Object.entries(TIPOS_WIKI)) {
@@ -392,6 +392,7 @@ async function jogosEspn(ligas, semana, log, aoChegar = () => {}) {
     }
   };
   await Promise.all(Array.from({ length: ESPN_PARALELO }, trabalhador));
+  if (parar) out.parou = true;
   return out;
 }
 
@@ -418,6 +419,9 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     // para cada dia da semana, os anos que fazem aniversário redondo (há 1, 2… 100 anos)
     const alvoDia = new Map(sem.dias.map((d) => [d.iso, ANOS.map((n) => d.ano - n).filter((a) => existe(a, d.mes, d.dia))]));
     const erros = {};
+    // hoje primeiro, depois os dias que faltam da semana e por fim os que já passaram
+    const iHoje = Math.max(0, sem.dias.findIndex((d) => d.iso === sem.hoje));
+    const ordem = [...sem.dias.slice(iHoje), ...sem.dias.slice(0, iHoje)];
     // numa revisão da mesma semana, a lista anterior fica visível enquanto a nova se compõe
     const mesma = dados?.semana === sem.id;
     const novo = {
@@ -438,31 +442,33 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     if (!mesma) publicar(); // o site passa logo para a semana nova, a mostrar «a preparar»
     try {
       await Promise.all([
-        // 1) Wikipédia, nas seis línguas (a portuguesa primeiro), para cada dia da semana
+        // 1) Wikipédia, dia a dia (hoje primeiro), as seis línguas ao mesmo tempo; o que chega é logo publicado
         (async () => {
-          for (const l of LINGUAS) {
-            const lista = [];
-            let falhou = 0;
-            for (const d of sem.dias) {
-              const anos = new Set(alvoDia.get(d.iso));
+          const listas = Object.fromEntries(LINGUAS.map((l) => [l, []]));
+          const falhas = Object.fromEntries(LINGUAS.map((l) => [l, 0]));
+          for (const d of ordem) {
+            const anos = new Set(alvoDia.get(d.iso));
+            await Promise.all(LINGUAS.map(async (l) => {
               let doDia = [];
-              try { doDia = await wikipedia(l, d.mes, d.dia); } catch (e) { erros[`wikipedia-${l}`] = e.message; falhou++; }
+              try { doDia = await wikipedia(l, d.mes, d.dia); } catch (e) { erros[`wikipedia-${l}`] = e.message; falhas[l]++; }
               // a API não deu nada de desporto (ou falhou): a página do dia, em português e inglês
               if (!doDia.length && PAGINA_DIA[l]) {
                 try { doDia = await wikipediaPagina(l, d.mes, d.dia); } catch (e) { erros[`wikipedia-pagina-${l}`] = e.message; }
               }
-              lista.push(...doDia.filter((x) => anos.has(x.ano)).map((x) => ({ ...x, dia: d.iso })));
-              await sleep(250);
-            }
-            if (lista.length || falhou < sem.dias.length || !novo.wiki[l]) novo.wiki[l] = lista;
-            publicar();
+              listas[l].push(...doDia.filter((x) => anos.has(x.ano)).map((x) => ({ ...x, dia: d.iso })));
+            }));
+            // semana nova: aparece dia a dia; revisão da mesma semana: a lista anterior fica até a nova estar feita
+            if (!mesma) { for (const l of LINGUAS) novo.wiki[l] = [...listas[l]]; publicar(); }
+            await sleep(250);
           }
+          for (const l of LINGUAS) if (listas[l].length || falhas[l] < sem.dias.length || !novo.wiki[l]) novo.wiki[l] = listas[l];
+          publicar();
         })(),
         // 2) Wikidata: nascimentos e mortes, dia a dia (as datas guardadas como dia exato)
         (async () => {
           const pessoas = [];
           let falhas = 0;
-          for (const d of sem.dias) {
+          for (const d of ordem) {
             const datas = alvoDia.get(d.iso).map((a) => `${a}-${dd(d.mes)}-${dd(d.dia)}`);
             const [n, m] = await Promise.allSettled([wikidata("P569", datas), wikidata("P570", datas)]);
             if (n.status === "rejected") { erros.wikidata = n.reason?.message; falhas++; }
@@ -478,7 +484,7 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
         (async () => {
           const eventos = [];
           let falhas = 0;
-          for (const d of sem.dias) {
+          for (const d of ordem) {
             const datas = alvoDia.get(d.iso).map((a) => `${a}-${dd(d.mes)}-${dd(d.dia)}`);
             try { eventos.push(...(await acontecimentos(datas)).map((e) => ({ ...e, dia: d.iso }))); }
             catch (e) { erros["wikidata-acontecimentos"] = e.message; falhas++; }
@@ -493,7 +499,9 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
           if (cacheJogos.semana === sem.id && cacheJogos.lista.length) return;
           try {
             const lista = await jogosEspn(ligas, sem, log, (parcial) => { novo.jogos = [...parcial]; publicar(); });
-            cacheJogos.lista = lista; cacheJogos.semana = sem.id;
+            // se a ESPN travou a meio, a lista parcial mostra-se mas volta a pedir-se na revisão seguinte
+            if (!lista.parou) { cacheJogos.lista = lista; cacheJogos.semana = sem.id; }
+            else erros.espn = "a ESPN travou os pedidos a meio";
             novo.jogos = lista;
           } catch (e) { erros.espn = e.message; }
           publicar();
@@ -572,7 +580,8 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       try { await montar(); } catch (e) { log(`[Nesta semana] ${e.message}`); }
       // espera até à próxima revisão ou até a semana mudar (segunda-feira à meia-noite de Lisboa), o que vier primeiro
       const semana = semanaLisboa().id;
-      const ate = Date.now() + REVER_MS;
+      const falhou = Object.keys(estado.erros || {}).length > 0 || !dados?.completo;
+      const ate = Date.now() + (falhou ? 5 * 60e3 : REVER_MS);
       while (Date.now() < ate && semanaLisboa().id === semana) await sleep(30000);
     }
   }

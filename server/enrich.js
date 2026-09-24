@@ -57,7 +57,7 @@ Pontos
 
 Secções (pode haver várias)
 - porto, sporting, benfica: quando o clube é assunto, incluindo as modalidades.
-- mercado: transferências, renovações, empréstimos, rescisões, saídas e entradas de treinadores.
+- mercado: transferências, renovações, empréstimos, rescisões, saídas e entradas de treinadores. Nunca marques mercado em prémios e distinções (Bola de Ouro, The Best, jogador do mês, nomeados), nem em rankings de valores de mercado.
 - modalidades: tudo o que não seja futebol de onze (futsal, andebol, hóquei em patins, basquetebol, voleibol…).
 - estatisticas: posts centrados em números, rankings, xG ou notas.
 - premios: distinções, jogador do mês, Bola de Ouro, equipas do ano.
@@ -90,7 +90,7 @@ Clubes e seleções (equipas)
 - Não incluas clubes mencionados só de passagem. Se a notícia não tratar de nenhum, lista vazia.
 
 Repetidos (igual_a)
-- Se o post relata o mesmo facto de uma notícia da lista recente (a mesma transferência, a mesma lesão), devolve o id dessa notícia.
+- Se o post relata exatamente o mesmo facto de uma notícia da lista recente (a mesma transferência do mesmo jogador, a mesma lesão do mesmo jogador, o mesmo resultado), devolve o id dessa notícia. Notícias do mesmo clube ou do mesmo jogador com factos diferentes não são repetidas. Na dúvida, null.
 - Se relata o mesmo facto de um post anterior do mesmo lote, devolve "#" seguido do número desse post (por exemplo "#0").
 - Caso contrário, null.
 
@@ -129,7 +129,7 @@ export const RULES = [
   ["porto", /\b(fc )?porto\b|drag[aã]o|drag[oõ]es|azuis e brancos/i],
   ["sporting", /\bsporting\b(?! (de |clube de )?braga)|le[oõ]es|alvalade|sporting cp/i],
   ["benfica", /\bbenfica\b|[aá]guias|encarnados|luz\b/i],
-  ["mercado", /here we go|transfer|contrat|renov|empr[eé]stimo|cl[aá]usula|assina|rescis|mercado|signs?\b|loan\b|fichaje/i],
+  ["mercado", /here we go|transfer(?!markt)|contrat|renov|empr[eé]stimo|cl[aá]usula|\bassin(a|ou|ar)\b|rescis|(?<!valor(es)? de )\bmercado\b|signs?\b|loan\b|fichaje/i],
   ["modalidades", /futsal|andebol|h[oó]quei|basquet|voleibol|handball|volleyball|basketball|nba\b|t[eé]nis|tennis|golfe|golf\b|ciclismo|cycling|atletismo|athletics|nata[cç][aã]o|r[aá]guebi|rugby|cricket|f[oó]rmula ?1|formula ?1|\bf1\b|motogp|nfl\b|padel|p[aá]del|corrida de cavalos|horse racing|us open|solheim|ryder cup|ehf|euroleague|liga betclic de basquetebol|final four|superta[cç]a de andebol/i],
   ["premios", /pr[eé]mio|bola de ouro|ballon d'or|jogador do m[eê]s|player of the month|melhor jogador|troféu|hall of fame/i],
   ["estatisticas", /estat[ií]stica|statistics|ranking|xg\b|m[eé]dia de idades|n[uú]meros e curiosidades/i],

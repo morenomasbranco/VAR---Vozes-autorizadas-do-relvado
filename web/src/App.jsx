@@ -10,7 +10,7 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 
 /* ───────── Secções ───────── */
 const CATS = [
-  { id: "destaque", pt: "Live", en: "Live", es: "Live", fr: "Live", it: "Live", de: "Live", hl: "dest" },
+  { id: "destaque", pt: "Feed", en: "Feed", es: "Feed", fr: "Feed", it: "Feed", de: "Feed", hl: "dest" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
   { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
@@ -53,13 +53,19 @@ const MUNDO_TEXTO = /brasileir[aã]o|libertadores|sudamericana|sul-americana|con
 const COL_N = 14; // notícias por coluna
 const MIN_IMP_COL = 2; // importância mínima para entrar nos Destaques
 
+// prémios (Bola de Ouro, jogador do mês…) e rankings de valores de mercado não são Mercado, a menos que falem de uma transferência
+const PREMIO = /bola de ouro|ballon d'?or|bal[oó]n de oro|pallone d'oro|goldener? ball|golden boy|trof[eé]u (kopa|yashin|gerd m[uü]ller)|kopa trophy|yashin trophy|pr[eé]mio puskas|puskas award|(fifa )?the best awards?|pr[eé]mios? the best|jogador do m[eê]s|treinador do m[eê]s|player of the month|manager of the month|equipa do ano|team of the year|fifpro|\bnominees?\b|valor(es)? de mercado|market values?\b|marktwert|valori? di mercato|mais valiosos|most valuable/i;
+const MERCADO_FORTE = /here we go|\btransfer[eê]ncia|\btransfers?\b|contrata[cç][aã]o|\bcontratad[oa]|\brefor[cç]o\b|empr[eé]stimo|\bloan\b|fichaj|\bsigns?\b|\bsigned\b|\bsigning\b|assinou|renov(ou|a[cç][aã]o)|rescis|exames m[eé]dicos|\bmedical\b|acordo (total|verbal|para a (sa[ií]da|transfer))|deal (agreed|done)|mercado de (transfer|inverno|ver[aã]o)|janela de transfer|novo treinador|new (head )?coach|despedid|\bsacked\b/i;
+const foraDoMercado = (t) => PREMIO.test(t) && !MERCADO_FORTE.test(t);
+
 const inSection = (it, s) => {
   if (s === "historias" || s === "favoritos" || s === "capas" || s === "efemerides") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
-  if (it.src === "resultados") return false; // notícias dos resultados em direto só no Live e nos Resultados
+  if (it.src === "resultados") return false; // notícias dos resultados em direto só no Feed e nos Resultados
   if (s === "destaque") return (it.imp || 0) >= MIN_IMP_COL;
+  if (s === "mercado") return it.cats.includes(s) && !foraDoMercado(`${it.t?.pt || ""} ${(it.b?.pt || []).join(" ")} ${it.text || ""}`);
   return it.cats.includes(s);
 };
 
@@ -536,6 +542,7 @@ function VideoHls({ src, mp4, auto = false }) {
     const el = ref.current;
     let hls = null;
     if (!el) return undefined;
+    el.muted = true; // começa sempre sem som; o som liga-se nos controlos do vídeo
     const tocar = () => el.play().catch(() => {});
     if (el.canPlayType("application/vnd.apple.mpegurl")) { el.src = src; tocar(); }
     else {
@@ -546,7 +553,7 @@ function VideoHls({ src, mp4, auto = false }) {
     }
     return () => hls?.destroy();
   }, [src, mp4]);
-  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay /> : <video ref={ref} className="vplayer" controls playsInline />;
+  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay /> : <video ref={ref} className="vplayer" muted controls playsInline />;
 }
 
 // Reprodução automática em miniatura: o vídeo só é carregado e posto a tocar (sem som) quando o cartão está à vista,
@@ -556,6 +563,15 @@ const comAutoplay = (src) => {
     const u = new URL(src);
     if (/youtube/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("mute", "1"); u.searchParams.set("controls", "0"); u.searchParams.set("loop", "1"); u.searchParams.set("playsinline", "1"); }
     if (/streamable/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("muted", "1"); u.searchParams.set("loop", "1"); u.searchParams.set("nocontrols", "1"); }
+    return u.href;
+  } catch { return src; }
+};
+// ao abrir um vídeo, começa sem som (YouTube, Streamable e Instagram); o som liga-se no próprio leitor
+const semSom = (src) => {
+  try {
+    const u = new URL(src);
+    if (/youtube/.test(u.hostname)) u.searchParams.set("mute", "1");
+    if (/streamable/.test(u.hostname)) u.searchParams.set("muted", "1");
     return u.href;
   } catch { return src; }
 };
@@ -623,9 +639,9 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
           </button>
         )}
         {!playing && auto && v.embed ? null : playing && v.embed ? (
-          v.embed.tipo === "iframe" ? <iframe src={v.embed.src} title={v.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+          v.embed.tipo === "iframe" ? <iframe src={semSom(v.embed.src)} title={v.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
             : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={v.embed.mp4} />
-              : <video className="vplayer" src={v.embed.src} controls autoPlay playsInline />
+              : <video className="vplayer" src={v.embed.src} muted controls autoPlay playsInline />
         ) : (
           <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
             <VideoImg v={v} />
@@ -1206,7 +1222,7 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
-/* título dos Destaques igual ao «Live» */
+/* título dos Destaques igual ao «Feed» */
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
 .apito .vdest .vrow .vcard.mini{flex:0 0 240px}
@@ -1909,7 +1925,7 @@ export default function App() {
     const semJogo = [];
     const chaveJogo = (g) => `g:${g.score.comp}|${g.score.h}|${g.score.a}`;
     for (const g of games) if (isLive(g.score, g.upd || g.ts, t)) grupos.set(chaveJogo(g), { key: chaveJogo(g), jogo: g, live: true, vids: [], ult: g.upd || g.ts });
-    // no Live só entram jogos de agora: os vídeos de jogos que já acabaram ficam 3 horas e depois saem
+    // no Feed só entram jogos de agora: os vídeos de jogos que já acabaram ficam 3 horas e depois saem
     // (o feed guarda vídeos durante dias, e apareciam jogos do Brasileirão de há dois dias)
     const RECENTE = 3 * 3600e3;
     for (const v of videosVis) {
@@ -2250,16 +2266,11 @@ export default function App() {
             {section === "destaque" ? (
               <>
                 <section className="livebar jv" aria-label={ui.liveNow}>
-                  <div className="livehead">
-                    <span className={`pulse ${aoVivo.length ? "" : "off"}`}><i />{aoVivo.length ? `${ui.liveNow} · ${(VTXT[lang] || VTXT.pt).title}` : (VTXT[lang] || VTXT.pt).title}</span>
-                    <div className="seg vfil" role="group" aria-label={(VTXT[lang] || VTXT.pt).title}>
-                      {VFILTROS.map(([k, n]) => (
-                        <button key={k} aria-pressed={vFiltro === k} onClick={() => { setVFiltro(k); setNGrelha(12); }}>
-                          {n[lang] || n.en}<span className="ct" translate="no">{vContagem[k] || 0}</span>
-                        </button>
-                      ))}
+                  {aoVivo.length > 0 && (
+                    <div className="livehead">
+                      <span className="pulse"><i />{ui.liveNow}</span>
                     </div>
-                  </div>
+                  )}
                   {/* 1) faixa de jogos: a decorrer primeiro, depois os que já acabaram e têm vídeos; cada um serve de filtro */}
                   {(() => {
                     // os vídeos só aparecem depois de escolher um jogo (ou «Outros vídeos», os que não se ligam a nenhum jogo)
@@ -2504,7 +2515,7 @@ export default function App() {
                               <ExternalLink size={14} />{ui.viewSrc}
                             </span>
                           )}
-                          {it.pending ? <span className="tr">{ui.processing}</span> : it.orig && it.orig !== "multi" && it.orig !== lang && (!it.raw || it.tr?.[lang]) && <span className="tr">{ui.trFrom[it.orig] || ui.trOther}</span>}
+                          {!it.pending && it.orig && it.orig !== "multi" && it.orig !== lang && (!it.raw || it.tr?.[lang]) && <span className="tr">{ui.trFrom[it.orig] || ui.trOther}</span>}
                         </div>
                       </article>
                     </li>

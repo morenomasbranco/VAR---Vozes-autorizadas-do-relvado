@@ -177,6 +177,8 @@ export function startRss(sources, onPost, log, estado = new Map()) {
             if (Date.now() - ts > BACKFILL_MS) continue;
             // no Google News o título vem com « - Nome do jornal» no fim e a descrição repete o título
             const title = google ? clean(it.title).replace(/\s+-\s+[^-]+$/, "") : clean(it.title);
+            // no Google News, o jornal que publicou a notícia (serve para as confirmações não trocarem de fonte)
+            const editor = google ? clean(it.title).match(/\s+-\s+([^-]+)$/)?.[1]?.trim() || undefined : undefined;
             // num feed geral, deixar passar só o que é desporto (categoria, endereço ou texto)
             if (s.soFutebol) {
               const alvo = `${(it.categories || []).join(" ")} ${it.link || ""} ${title} ${it.contentSnippet || ""}`;
@@ -206,6 +208,7 @@ export function startRss(sources, onPost, log, estado = new Map()) {
               src: s.id,
               name: s.nome,
               via: google ? "Google News" : "RSS",
+              editor,
               url: it.link || s.site,
               text: `${title}\n${body}`.trim().slice(0, 1500),
               lang: s.lang,

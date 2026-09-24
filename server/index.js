@@ -39,6 +39,17 @@ const SOURCES = [
   { handle: "resultados", name: "Resultados em direto", col: "mundo" },
 ];
 
+// agregadores (pesquisas do Google News e Reddit): juntam notícias de outros jornais, por isso não contam como
+// confirmação com o nome deles; no Google News conta o jornal que publicou
+const AGREGADOR = new Set(RSS.filter((s) => /news\.google\.com/.test(s.site || "") || /^reddit-/.test(s.id)).map((s) => s.id));
+// país de cada casa editorial, para a bandeira de quem confirma
+const PAIS_CASA = new Map([...RSS, ...TELEGRAM, ...BLUESKY].filter((s) => !AGREGADOR.has(s.id)).map((s) => [store.chaveFonte(s.nome, s.id), s.pais]));
+const confDe = (post) => ({
+  src: post.src, name: post.editor || post.name, editor: post.editor, postId: post.postId, url: post.url, ts: post.ts,
+  pais: (post.editor && PAIS_CASA.get(store.chaveFonte(post.editor))) || PAIS[post.src],
+  agregador: AGREGADOR.has(post.src) && !post.editor,
+});
+
 const ESTADO_RSS = new Map(); // estado de cada feed: qual está em uso, se responde e há quanto tempo trouxe algo
 
 store.load();
@@ -70,9 +81,25 @@ for (const it of store.all(100000)) {
 }
 // lotarias e jogos de sorte (Euromilhões, Totoloto…): não são desporto, mesmo quando vêm de jornais desportivos
 // e falam em «prémio» — era por isso que o Euromilhões aparecia em Prémios
+// prémios e rankings de valor de mercado não são mercado de transferências, a menos que falem mesmo de uma
+const PREMIO = /bola de ouro|ballon d'?or|bal[oó]n de oro|pallone d'oro|goldener? ball|golden boy|trof[eé]u (kopa|yashin|gerd m[uü]ller)|kopa trophy|yashin trophy|pr[eé]mio puskas|puskas award|(fifa )?the best awards?|pr[eé]mios? the best|jogador do m[eê]s|treinador do m[eê]s|player of the month|manager of the month|equipa do ano|team of the year|fifpro|\bnominees?\b|valor(es)? de mercado|market values?\b|marktwert|valori? di mercato|mais valiosos|most valuable/i;
+const MERCADO_FORTE = /here we go|\btransfer[eê]ncia|\btransfers?\b|contrata[cç][aã]o|\bcontratad[oa]|\brefor[cç]o\b|empr[eé]stimo|\bloan\b|fichaj|\bsigns?\b|\bsigned\b|\bsigning\b|assinou|renov(ou|a[cç][aã]o)|rescis|exames m[eé]dicos|\bmedical\b|acordo (total|verbal|para a (sa[ií]da|transfer))|deal (agreed|done)|mercado de (transfer|inverno|ver[aã]o)|janela de transfer|novo treinador|new (head )?coach|despedid|\bsacked\b/i;
+const foraDoMercado = (t) => PREMIO.test(t) && !MERCADO_FORTE.test(t);
 const LOTARIA = /euromilh[õo]es|euromillions|totoloto|totobola|lotaria|eurodreams|\bm1lh[aã]o\b|raspadinha|jogos santa casa|jackpot|chave (do sorteio|vencedora|do euromilh)|n[uú]meros (da chave|sorteados)/i;
 const eLotaria = (it) => LOTARIA.test(`${it.text || ""} ${it.t?.pt || ""} ${it.url || ""}`);
 for (const it of store.all(100000)) if (!it.score && eLotaria(it)) store.remove(it.id);
+// confirmações guardadas antes das regras novas (a própria casa, repetidas, agregadores): saem no arranque
+{
+  const n = store.limparConfirmacoes(AGREGADOR);
+  if (n) log(`[VAR] ${n} confirmações que não o eram retiradas`);
+}
+// prémios (Bola de Ouro, jogador do mês…) e valores de mercado que tinham ficado no Mercado
+for (const it of store.all(100000)) {
+  if (it.cats?.includes("mercado") && foraDoMercado(`${it.text || ""} ${it.t?.pt || ""} ${(it.b?.pt || []).join(" ")}`)) {
+    it.cats = it.cats.filter((c) => c !== "mercado");
+    store.touch();
+  }
+}
 const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
 const clients = new Set();
 const status = { x: "ligado", fila: 0, publicadas: 0, juntas: 0, ignoradas: 0, semTraducao: 0 };
@@ -132,6 +159,7 @@ function secoes(post, ai) {
   const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
   if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
   if (LOTARIA.test(texto)) cats.delete("premios");
+  if (foraDoMercado(texto)) cats.delete("mercado");
   // «Portugueses pelo mundo» é só para quem está fora de Portugal
   if (cats.has("portugueses") && (ai.pais_tema === "pt" || !ai.pais_tema)) cats.delete("portugueses");
   return [...cats];
@@ -159,14 +187,18 @@ function refine(post, ai) {
   const drop = () => { store.remove(it.id); broadcast("remove", { id: it.id }); };
   if (!ai || !ai.relevante) { status.ignoradas++; return drop(); }
   if (ai.bruto) status.semTraducao++;
-  if (ai.igual_a && ai.igual_a !== it.id) {
-    const merged = store.attach(ai.igual_a, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
+  const conf = confDe(post);
+  // o modelo diz que é a mesma notícia de outra: só se junta se os títulos o confirmarem
+  const alvo = ai.igual_a && ai.igual_a !== it.id ? store.get(ai.igual_a) : null;
+  if (alvo && !alvo.score && !alvo.pending && store.mesmoFacto(ai.titulo_pt, alvo)) {
+    const merged = store.attach(alvo.id, conf);
     if (merged) { status.juntas++; drop(); broadcast("update", merged); pista(merged); return; }
+    if (conf.agregador) { status.juntas++; return drop(); } // repetição trazida por um agregador
   }
   // segunda rede: o título traduzido pode revelar que é a mesma notícia de outra já publicada
-  const dup = store.findSimilar({ titulo: ai.titulo_pt, ts: it.ts, src: post.src, excluir: it.id });
+  const dup = store.findSimilar({ titulo: ai.titulo_pt, ts: it.ts, src: post.src, name: post.name, editor: post.editor, excluir: it.id });
   if (dup && !dup.pending) {
-    const merged = store.attach(dup.id, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
+    const merged = store.attach(dup.id, conf);
     if (merged) {
       status.juntas++;
       drop();
@@ -174,6 +206,7 @@ function refine(post, ai) {
       pista(merged);
       return;
     }
+    if (conf.agregador || store.mesmaCasa(dup, conf)) { status.juntas++; return drop(); } // a mesma notícia outra vez
   }
   Object.assign(it, toItem(post, ai), { pending: false });
   store.touch();
@@ -230,17 +263,20 @@ function onPost(post) {
   seen.add(post.postId);
   if (LOTARIA.test(`${post.text} ${post.url || ""}`)) { status.ignoradas++; return; } // lotarias não entram
   // a mesma notícia já publicada por outra fonte: junta-se em vez de aparecer de novo
-  const igual = store.findSimilar({ titulo: post.text.split("\n")[0], url: post.url, ts: post.ts, src: post.src });
+  const igual = store.findSimilar({ titulo: post.text.split("\n")[0], url: post.url, ts: post.ts, src: post.src, name: post.name, editor: post.editor });
   if (igual) {
-    const merged = store.attach(igual.id, { src: post.src, name: post.name, postId: post.postId, url: post.url, ts: post.ts });
+    const conf = confDe(post);
+    const merged = store.attach(igual.id, conf);
     if (merged) {
       status.juntas++;
       broadcast("update", merged);
       pista(merged);
       return;
     }
+    // a mesma casa a repetir a notícia, ou um agregador: não é notícia nova nem confirmação
+    if (conf.agregador || store.mesmaCasa(igual, conf)) { status.juntas++; return; }
   }
-  publish({ id: post.postId, src: post.src, name: post.name, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], tsAprox: post.tsAprox, pending: true, ...toItem(post, fallback(post)) });
+  publish({ id: post.postId, src: post.src, name: post.name, editor: post.editor, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], tsAprox: post.tsAprox, pending: true, ...toItem(post, fallback(post)) });
   status.fila++;
   enrich(post).then((ai) => { status.fila--; refine(post, ai); });
 }
