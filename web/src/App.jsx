@@ -536,7 +536,7 @@ const carregaHls = () => (hlsJs ||= new Promise((ok, falha) => {
   sc.onerror = falha;
   document.head.appendChild(sc);
 }));
-function VideoHls({ src, mp4, auto = false }) {
+function VideoHls({ src, mp4, auto = false, ...ev }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -547,13 +547,17 @@ function VideoHls({ src, mp4, auto = false }) {
     if (el.canPlayType("application/vnd.apple.mpegurl")) { el.src = src; tocar(); }
     else {
       carregaHls().then((Hls) => {
-        if (Hls?.isSupported()) { hls = new Hls(); hls.loadSource(src); hls.attachMedia(el); tocar(); }
+        if (Hls?.isSupported()) {
+          hls = new Hls(); hls.loadSource(src); hls.attachMedia(el); tocar();
+          // se o HLS falhar (Chrome/Edge usam o hls.js), passa para o MP4 do mesmo vídeo
+          hls.on(Hls.Events.ERROR, (_, d) => { if (d?.fatal && mp4) { hls.destroy(); hls = null; el.src = mp4; tocar(); } });
+        }
         else if (mp4) { el.src = mp4; tocar(); }
       }).catch(() => { if (mp4) { el.src = mp4; tocar(); } });
     }
     return () => hls?.destroy();
   }, [src, mp4]);
-  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay /> : <video ref={ref} className="vplayer" muted controls playsInline />;
+  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay {...ev} /> : <video ref={ref} className="vplayer" muted controls playsInline />;
 }
 
 // Reprodução automática em miniatura: o vídeo só é carregado e posto a tocar (sem som) quando o cartão está à vista,
@@ -578,6 +582,12 @@ const semSom = (src) => {
 function AutoVideo({ embed, title }) {
   const ref = useRef(null);
   const [visto, setVisto] = useState(false);
+  const [aTocar, setATocar] = useState(false);
+  useEffect(() => { if (!visto) setATocar(false); }, [visto]);
+  const ev = {
+    onTimeUpdate: (e) => { if (e.currentTarget.currentTime > 0.2) setATocar(true); },
+    onError: () => setATocar(false),
+  };
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver !== "function") { setVisto(true); return undefined; }
@@ -586,11 +596,11 @@ function AutoVideo({ embed, title }) {
     return () => io.disconnect();
   }, []);
   return (
-    <div ref={ref} className="vauto" aria-hidden="true">
+    <div ref={ref} className={`vauto ${aTocar ? "on" : ""}`} aria-hidden="true">
       {visto && (embed.tipo === "iframe"
         ? <iframe src={comAutoplay(embed.src)} title={title} allow="autoplay; encrypted-media; picture-in-picture" tabIndex={-1} />
-        : embed.tipo === "hls" ? <VideoHls src={embed.src} mp4={embed.mp4} auto />
-          : <video className="vplayer" src={embed.src} muted loop playsInline autoPlay />)}
+        : embed.tipo === "hls" ? <VideoHls src={embed.src} mp4={embed.mp4} auto {...ev} />
+          : <video className="vplayer" src={embed.src} muted loop playsInline autoPlay {...ev} />)}
     </div>
   );
 }
@@ -603,9 +613,15 @@ function VideoImg({ v }) {
   // sem miniatura mas com o ficheiro do vídeo: mostra logo o 1.º segundo, sem esperar pelo servidor
   const inicio = !v.thumbnail && mp4De(v) ? 1 : 0;
   const [fase, setFase] = useState(inicio);
-  useEffect(() => setFase(inicio), [v.thumbnail, v.embed?.src]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [frame, setFrame] = useState(false);
+  useEffect(() => { setFase(inicio); setFrame(false); }, [v.thumbnail, v.embed?.src]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (fase !== 1 || frame || !mp4De(v)) return undefined;
+    const t = setTimeout(() => setFase(2), 4000);
+    return () => clearTimeout(t);
+  }, [fase, frame]); // eslint-disable-line react-hooks/exhaustive-deps
   if (fase === 1 && mp4De(v)) {
-    return <video className="vframe" src={`${mp4De(v)}#t=1`} preload="metadata" muted playsInline onError={() => setFase(2)} aria-hidden="true" />;
+    return <video className="vframe" src={`${mp4De(v)}#t=1`} preload="auto" muted playsInline onLoadedData={() => setFrame(true)} onError={() => setFase(2)} aria-hidden="true" />;
   }
   if (fase >= 1) return <img src={thumbUrl(v, true)} alt="" loading="lazy" />;
   return <img src={thumbUrl(v)} alt="" loading="lazy" onError={() => setFase(1)} />;
@@ -934,7 +950,7 @@ const CSS = `
 .apito .seg button{padding:4px 11px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
 .apito .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .apito .icon-btn{width:34px;height:34px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:999px;background:var(--raise)}
-.apito .tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:0 2px;margin:0 -8px;padding:0 8px 2px;overflow-x:auto;scrollbar-width:thin}
+.apito .tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:0 2px;margin:0 -8px;padding:0 8px 2px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .apito .tabs>.tab:first-child{margin-left:auto}
 .apito .tabs>.tab:last-child{margin-right:auto}
 .apito .tabs::-webkit-scrollbar{height:4px}
@@ -1093,7 +1109,7 @@ const CSS = `
 .apito .livebar{margin:0 0 18px}
 .apito .livehead{display:flex;align-items:center;gap:12px;margin:0 0 8px}
 .apito .livehead .pulse{font-size:14px}
-.apito .livelist{list-style:none;margin:0;padding:0 0 8px;display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin}
+.apito .livelist{list-style:none;margin:0;padding:0 0 8px;display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .apito .livelist::-webkit-scrollbar{height:6px}
 .apito .livelist::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
 .apito .lcard{flex:0 0 auto;width:236px;border:1px solid var(--line);border-top:3px solid var(--live);border-radius:8px;padding:8px 10px 9px;background:var(--raise)}
@@ -1146,7 +1162,7 @@ const CSS = `
 .apito .srcgroup summary::after{margin-left:8px}
 .apito .grpacts{display:flex;gap:6px;padding:0 4px 2px 26px}
 .apito .srclist.plain{max-height:none;overflow:visible;margin:0 0 6px;padding-left:18px}
-.apito .colsbar{overflow-x:auto;overflow-y:hidden;height:10px;margin:0 0 4px;scrollbar-width:thin}
+.apito .colsbar{overflow-x:auto;overflow-y:hidden;height:10px;margin:0 0 4px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .apito .colsbar>div{height:1px}
 .apito .colsbar::-webkit-scrollbar{height:7px}
 .apito .colsbar::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
@@ -1184,7 +1200,7 @@ const CSS = `
 .apito .varrows{display:flex;gap:6px;margin-left:auto}
 .apito .varrows .icon-btn{width:30px;height:30px}
 .apito .vlist{list-style:none;margin:0;padding:0}
-.apito .vrow{display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:0 0 10px;scroll-snap-type:x proximity;scrollbar-width:thin;overscroll-behavior-x:contain}
+.apito .vrow{display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:0 0 10px;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:var(--line) transparent;overscroll-behavior-x:contain}
 .apito .vrow::-webkit-scrollbar{height:7px}
 .apito .vrow::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
 .apito .vcard{flex:0 0 300px;min-width:0;scroll-snap-align:start;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--raise);animation:evin .45s ease-out}
@@ -1238,6 +1254,8 @@ const CSS = `
 .apito .vauto{position:absolute;inset:0}
 .apito .vautobtn img,.apito .vframe{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000}
 .apito .vauto iframe,.apito .vauto video{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;pointer-events:none;background:transparent}
+.apito .vauto video{opacity:0;transition:opacity .25s}
+.apito .vauto.on video{opacity:1}
 .apito .vautobtn{background:#000}
 .apito .vsom{position:absolute;right:6px;bottom:6px;font-size:12px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.6)}
 @media(max-width:560px){.apito .jvgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px} .apito .jvstrip .lcard{width:180px}
@@ -1309,7 +1327,7 @@ const CSS = `
 .apito .capasbar{margin:0 0 18px}
 .apito .capash{font-family:var(--display);font-size:15px}
 .apito .capasbar .livehead .textbtn{margin-left:auto}
-.apito .capasstrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 8px;scrollbar-width:thin}
+.apito .capasstrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 8px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .apito .capa{margin:0;flex:none}
 .apito .capa button{display:block;width:100%;border-radius:4px;overflow:hidden;box-shadow:0 1px 0 var(--line),0 2px 10px rgba(0,0,0,.12);background:#fff}
 .apito .capa img{display:block;width:100%;height:auto}
