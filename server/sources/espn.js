@@ -242,6 +242,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
         blocked = 0;
         let live = false;
         let next = null;
+        let atrasado = false; // já passou a hora do apito, mas a ESPN ainda não deu o jogo como começado
         for (const ev of data.events || []) {
           const m = normalizeEvent(ev);
           if (!m.home || !m.away) continue;
@@ -249,9 +250,11 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
           handle(m, lg, first);
           if (m.state === "in") live = true;
           if (m.state === "pre" && m.start && m.start > Date.now()) next = Math.min(next ?? Infinity, m.start);
+          else if (m.state === "pre" && m.start && Date.now() - m.start < 3 * 3600e3) atrasado = true;
         }
         first = false;
-        if (live) wait = LIVE_MS;
+        // sem isto, um jogo que a ESPN ainda mostrava por começar à hora do apito punha a liga a dormir 30 min
+        if (live || atrasado) wait = LIVE_MS;
         else if (next) wait = Math.min(IDLE_MAX, Math.max(LIVE_MS, next - Date.now() - 60e3));
       } catch (e) {
         if ([401, 403, 429].includes(e.status) && ++blocked >= 3) {

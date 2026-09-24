@@ -304,7 +304,13 @@ app.use((req, res, next) => {
   if (origin && ORIGINS.includes(origin)) res.set({ "Access-Control-Allow-Origin": origin, Vary: "Origin" });
   next();
 });
-app.get("/api/items", (req, res) => res.json(store.all(Math.min(Number(req.query.limit) || 1000, 5000))));
+// os cartões dos jogos em direto têm a hora do apito inicial: com muitas notícias depois disso ficavam fora do
+// limite e o site não recebia o cartão que se vai atualizando. Seguem sempre, além das notícias pedidas.
+app.get("/api/items", (req, res) => {
+  const lista = store.all(Math.min(Number(req.query.limit) || 1000, 5000));
+  const ids = new Set(lista.map((i) => i.id));
+  res.json([...lista, ...store.all(100000).filter((i) => i.board && !ids.has(i.id))]);
+});
 app.get("/api/sources", (req, res) => res.json(SOURCES));
 // estado de cada fonte: por onde está a ser lida, se está a responder e a hora da última notícia que trouxe
 app.get("/api/fontes", (req, res) => {

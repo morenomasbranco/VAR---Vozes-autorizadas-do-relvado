@@ -1594,16 +1594,28 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
   // ao voltar ao separador, busca o que entrou enquanto o site esteve em segundo plano
+  // e atualiza o que mudou entretanto (resultados e minutos dos jogos em direto)
+  const resyncRef = useRef(() => {});
   useEffect(() => {
+    const leItems = () => fetch(`${API}/api/items?limit=400`).then((r) => r.json()).then((list) => {
+      setItems((l) => {
+        const doServidor = new Map(list.map((x) => [x.id, x]));
+        let mudou = false;
+        const atual = l.map((x) => {
+          const s = doServidor.get(x.id);
+          if (!s || (s.upd || s.ts) <= (x.upd || x.ts)) return x;
+          mudou = true;
+          return { ...x, ...s, hot: isHot(s) };
+        });
+        const known = new Set(l.map((x) => x.id));
+        const novos = list.filter((x) => !known.has(x.id));
+        return novos.length || mudou ? [...novos, ...atual].sort(byTime).slice(0, MAX_ITEMS) : l;
+      });
+    }).catch(() => {});
+    resyncRef.current = leItems;
     const onBack = () => {
       if (document.visibilityState !== "visible") return;
-      fetch(`${API}/api/items?limit=400`).then((r) => r.json()).then((list) => {
-        setItems((l) => {
-          const known = new Set(l.map((x) => x.id));
-          const novos = list.filter((x) => !known.has(x.id));
-          return novos.length ? [...novos, ...l].sort(byTime).slice(0, MAX_ITEMS) : l;
-        });
-      }).catch(() => {});
+      leItems();
       // e os vídeos que saíram entretanto (o telemóvel corta a ligação em segundo plano)
       fetch(`${API}/api/videos/latest?limit=150`).then((r) => r.json()).then((l) => Array.isArray(l) && setVideos((cur) => {
         const porId = new Map(cur.map((x) => [x.video_id, x]));
@@ -1686,7 +1698,12 @@ export default function App() {
 
     const es = new EventSource(`${API}/api/stream`);
     // ao (re)ligar, relê o que pode ter mudado enquanto a ligação esteve em baixo
-    es.onopen = () => { setConn("ok"); lerCapas(); lerEfem(langRef.current); };
+    let abriu = false;
+    es.onopen = () => {
+      setConn("ok"); lerCapas(); lerEfem(langRef.current);
+      if (abriu) resyncRef.current(); // religou: os resultados que mudaram com a ligação em baixo
+      abriu = true;
+    };
     es.onerror = () => setConn("offline");
     es.addEventListener("status", (e) => setXStatus(JSON.parse(e.data).x));
     es.addEventListener("item", (e) => {
@@ -1724,7 +1741,8 @@ export default function App() {
     es.addEventListener("update", (e) => {
       const it = JSON.parse(e.data);
       const up = (x) => (x.id === it.id ? { ...x, ...it, hot: isHot(it) } : x);
-      setItems((l) => l.map(up));
+      // um cartão que o site ainda não tinha (jogo que começou com a ligação em baixo) entra em vez de ser ignorado
+      setItems((l) => (l.some((x) => x.id === it.id) ? l.map(up) : [prep(it, false), ...l].sort(byTime).slice(0, MAX_ITEMS)));
       setFavs((f) => (f.some((x) => x.id === it.id) ? f.map((x) => (x.id === it.id ? { ...x, ...it, hot: isHot(it) } : x)) : f));
       setPending((p) => p.map(up));
     });
