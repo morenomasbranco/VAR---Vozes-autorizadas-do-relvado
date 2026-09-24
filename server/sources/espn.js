@@ -3,6 +3,7 @@
 // bloquear servidores. Se bloquear, estas ligas passam para a GOAL API (se houver chave) e o VAR não insiste.
 // Cada liga só é consultada a cada 15 s enquanto tem jogos a decorrer; fora disso, espera pelo próximo jogo.
 import { sleep, norm, slug } from "../util.js";
+import { simil } from "./zapping.js";
 
 const BASE = process.env.ESPN_BASE || "https://site.api.espn.com/apis/site/v2/sports";
 const LIVE_MS = Math.max(3, Number(process.env.ESPN_SEGUNDOS) || 5) * 1000; // ritmo dos jogos a decorrer
@@ -136,6 +137,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
 
   // notícia de um lance: expulsão, penálti, golo anulado, autogolo ou revisão do VAR
   const playNews = (p, m, lg) => {
+    if (lg.extra) return; // jogos de outras ligas: só o cartão em direto
     const equipa = p.home ? m.home : m.away;
     const isBig = big(m, lg);
     const quando = p.label ? ` aos ${p.label}` : "";
@@ -165,6 +167,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
   };
 
   const news = (kind, m, lg) => {
+    if (lg.extra) return;
     const isBig = big(m, lg);
     const top = isBig || lg.seccao === "big5" || /campe|europa|confer/i.test(lg.nome);
     const b = { pt: [lg.nome], en: [lg.nome_en || lg.nome] };
@@ -206,9 +209,10 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
       return;
     }
     if (m.state === "post") {
-      if (m.completed) {
+      if (m.completed && !lg.extra) {
         news("final", m, lg);
-        Promise.resolve(onFinal(lg, m, m)).catch((e) => log(`[Histórias] ${e.message}`));
+        // as pistas de histórias precisam das classificações e das fichas da ESPN
+        if (lg.espn) Promise.resolve(onFinal(lg, m, m)).catch((e) => log(`[Histórias] ${e.message}`));
       }
       remove(`r:espn:${m.id}:live`);
       tracked.delete(m.id);
@@ -247,6 +251,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
           const m = normalizeEvent(ev);
           if (!m.home || !m.away) continue;
           if (lg.so && !lg.so.some((t) => norm(m.home) === norm(t) || norm(m.away) === norm(t))) continue;
+          daLiga.add(m.id);
           handle(m, lg, first);
           if (m.state === "in") live = true;
           if (m.state === "pre" && m.start && m.start > Date.now()) next = Math.min(next ?? Infinity, m.start);
@@ -258,9 +263,15 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
         else if (next) wait = Math.min(IDLE_MAX, Math.max(LIVE_MS, next - Date.now() - 60e3));
       } catch (e) {
         if ([401, 403, 429].includes(e.status) && ++blocked >= 3) {
-          log(`[ESPN] ${lg.nome}: a ESPN está a recusar os pedidos (${e.status}); esta liga passa para a GOAL API`);
-          onBlocked(lg);
-          return;
+          // sem chave da GOAL API a liga não passa para lado nenhum: espera e volta a tentar na ESPN
+          if (onBlocked(lg)) {
+            log(`[ESPN] ${lg.nome}: a ESPN está a recusar os pedidos (${e.status}); esta liga passa para a GOAL API`);
+            return;
+          }
+          log(`[ESPN] ${lg.nome}: a ESPN está a recusar os pedidos (${e.status}); volto a tentar dentro de 2 min`);
+          blocked = 0;
+          await sleep(2 * 60e3);
+          continue;
         }
         if (e.status === 404) { log(`[ESPN] ${lg.nome}: a ESPN não tem esta competição; deixo de a consultar`); return; }
         log(`[ESPN] ${lg.nome}: ${e.message}`);
@@ -270,7 +281,63 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
     }
   };
 
+  // Todos os outros jogos de futebol que a ESPN tem hoje, de qualquer liga do mundo que não esteja em ligas.json:
+  // só o cartão em direto (resultado, minuto e último lance), sem notícias por golo nem pistas de histórias.
+  // Os jogos das ligas de ligas.json continuam a ser tratados pelo ciclo da própria liga.
+  const daLiga = new Set();
+  const EVITAR = /women|feminin|femenin|female|frauen|\bu-?(17|18|19|20|21|23)\b|youth|juvenil|reserve|amateur/i;
+  const nomeCompeticao = (ev) => {
+    const n = ev.league?.name || ev.competitions?.[0]?.league?.name;
+    if (n) return n;
+    const s = String(ev.season?.slug || "").replace(/^\d{4}(-\d{2,4})?-/, "").replace(/-/g, " ").trim();
+    return s ? s.replace(/\b\w/g, (c) => c.toUpperCase()) : "Futebol";
+  };
+  const loopTodos = async () => {
+    const ritmo = Math.max(LIVE_MS, 15e3); // uma resposta grande: de 15 em 15 s chega para o atraso máximo de 30 s
+    for (;;) {
+      let wait = NOTHING_TODAY;
+      try {
+        const data = await getJson(`${BASE}/soccer/all/scoreboard`);
+        let live = false;
+        let next = null;
+        let atrasado = false;
+        for (const ev of data.events || []) {
+          const m = normalizeEvent(ev);
+          if (!m.home || !m.away || daLiga.has(m.id)) continue;
+          // jogo que já chega por outra fonte (Sofascore): sai o cartão repetido que a ESPN tenha criado
+          if (deFora(m)) {
+            if (tracked.has(m.id)) { remove(`r:espn:${m.id}:live`); tracked.delete(m.id); }
+            continue;
+          }
+          const nome = nomeCompeticao(ev);
+          if (EVITAR.test(`${nome} ${ev.season?.slug || ""} ${m.home} ${m.away}`)) continue;
+          handle(m, { nome, nome_en: nome, sport: "soccer", extra: true }, false);
+          if (m.state === "in") live = true;
+          if (m.state === "pre" && m.start && m.start > Date.now()) next = Math.min(next ?? Infinity, m.start);
+          else if (m.state === "pre" && m.start && Date.now() - m.start < 3 * 3600e3) atrasado = true;
+        }
+        if (live || atrasado) wait = ritmo;
+        else if (next) wait = Math.min(IDLE_MAX, Math.max(ritmo, next - Date.now() - 60e3));
+      } catch (e) {
+        log(`[ESPN] outras ligas: ${e.message}`);
+        wait = [401, 403, 429].includes(e.status) ? 2 * 60e3 : 60e3;
+      }
+      await sleep(wait);
+    }
+  };
+
+  // Jogos de outras fontes (Sofascore: Liga 2, Liga 3, Next Gen, Liga BPI, supertaças), tratados como os da ESPN:
+  // cartão em direto, golos, lances e final. O id de cada jogo já vem com o prefixo da fonte.
+  const externos = new Map(); // jogos de outras fontes que estão a decorrer, para o quadro completo não os repetir
+  const deFora = (m) => [...externos.values()].some((x) => simil(x.home, m.home) >= 0.75 && simil(x.away, m.away) >= 0.75);
+  list.alimentar = (m, lg, first = false) => {
+    if (m.state === "post") externos.delete(m.id); else externos.set(m.id, { home: m.home, away: m.away });
+    handle(m, lg, first);
+  };
+
   list.forEach((lg, i) => setTimeout(() => loop(lg), i * 500)); // arranque espaçado, sem rajadas
+  // depois de cada liga ter feito a primeira leitura e marcado os seus jogos
+  if (process.env.ESPN_TODOS !== "0") setTimeout(loopTodos, list.length * 500 + 10e3);
   log(`[ESPN] a acompanhar ${list.length} liga(s) de futebol e basquetebol`);
   return list;
 }

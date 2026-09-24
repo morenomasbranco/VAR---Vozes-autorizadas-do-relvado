@@ -9,6 +9,7 @@ import { startTelegram } from "./sources/telegram.js";
 import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
 import { startEspn } from "./sources/espn.js";
+import { startSofascore } from "./sources/sofascore.js";
 import { createZapping } from "./sources/zapping.js";
 import { createStories } from "./stories.js";
 import { createDesdobrar, ativo as desdobraAtivo } from "./desdobra.js";
@@ -335,7 +336,7 @@ app.get("/api/fontes", (req, res) => {
     };
   }));
 });
-app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira, mod: l.mod }))));
+app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || l.sofascore || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira, mod: l.mod, nova: !!l.nova }))));
 app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/zapping", (req, res) => res.json(zapping.all())); // grelha de transmissões (canal de cada jogo)
 app.get("/api/zapping/estado", (req, res) => res.json(zapping.estado()));
@@ -474,8 +475,10 @@ efemerides.start();
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear
-const goal = startResults(LIGAS.filter((l) => !l.espn), publish, log, { upsert, remove: removeItem });
+const goal = startResults(LIGAS.filter((l) => !l.espn && !l.sofascore), publish, log, { upsert, remove: removeItem });
 const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
+// Liga 2, Liga 3, Next Gen, Liga BPI e supertaças portuguesas: Sofascore, com a GOAL API como reserva
+startSofascore(LIGAS.filter((l) => l.sofascore && !l.espn), { alimentar: espnLeagues.alimentar, log, onBlocked: (ls) => goal.add(ls) });
 stories.watch(espnLeagues);
 // quando o diretório de emblemas fica pronto, as notícias já guardadas recebem o país de cada clube
 // (serve para pôr cada notícia na coluna certa da página inicial)

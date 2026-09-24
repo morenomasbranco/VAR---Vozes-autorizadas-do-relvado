@@ -23,7 +23,48 @@
     ],
     "pais": "portugal",
     "nome_en": "Liga Portugal 2",
-    "bandeira": "pt"
+    "bandeira": "pt",
+    "sofascore": true,
+    "nova": true
+  },
+  {
+    "nome": "Liga 3",
+    "procurar": [
+      "liga 3"
+    ],
+    "pais": "portugal",
+    "nome_en": "Liga 3",
+    "bandeira": "pt",
+    "sofascore": true,
+    "nova": true
+  },
+  {
+    "nome": "Liga Portugal Next Gen",
+    "procurar": [
+      "next gen",
+      "revelacao"
+    ],
+    "pais": "portugal",
+    "nome_en": "Liga Portugal Next Gen",
+    "bandeira": "pt",
+    "sofascore": true,
+    "aceitar": true,
+    "nova": true
+  },
+  {
+    "nome": "Liga BPI",
+    "procurar": [
+      "liga bpi",
+      "campeonato nacional feminino",
+      "liga feminina",
+      "primeira divisao feminina"
+    ],
+    "pais": "portugal",
+    "nome_en": "Liga BPI (women)",
+    "bandeira": "pt",
+    "sofascore": true,
+    "aceitar": true,
+    "nova": true
   },
   {
     "nome": "Taça de Portugal",
@@ -36,6 +77,40 @@
     "bandeira": "pt"
   },
   {
+    "nome": "Supertaça feminina",
+    "procurar": [
+      "supertaca feminina",
+      "supertaca femenina",
+      "supertaca, women",
+      "supertaca women",
+      "women's super cup"
+    ],
+    "pais": "portugal",
+    "nome_en": "Portuguese Women's Super Cup",
+    "bandeira": "pt",
+    "sofascore": true,
+    "aceitar": true,
+    "nova": true
+  },
+  {
+    "nome": "Supertaça",
+    "procurar": [
+      "supertaca",
+      "super cup"
+    ],
+    "pais": "portugal",
+    "evitar": [
+      "femin",
+      "femen",
+      "women"
+    ],
+    "nome_en": "Portuguese Super Cup",
+    "bandeira": "pt",
+    "sofascore": true,
+    "importante": true,
+    "nova": true
+  },
+  {
     "nome": "Liga dos Campeões",
     "procurar": [
       "uefa champions league"
@@ -43,6 +118,17 @@
     "espn": "soccer/uefa.champions",
     "nome_en": "Champions League",
     "bandeira": "eu"
+  },
+  {
+    "nome": "Liga dos Campeões feminina",
+    "procurar": [
+      "uefa women's champions league"
+    ],
+    "espn": "soccer/uefa.wchampions",
+    "nome_en": "Women's Champions League",
+    "bandeira": "eu",
+    "aceitar": true,
+    "nova": true
   },
   {
     "nome": "Liga Europa",
@@ -61,6 +147,16 @@
     "espn": "soccer/uefa.europa.conf",
     "nome_en": "Conference League",
     "bandeira": "eu"
+  },
+  {
+    "nome": "Supertaça Europeia",
+    "procurar": [
+      "uefa super cup"
+    ],
+    "espn": "soccer/uefa.super_cup",
+    "nome_en": "UEFA Super Cup",
+    "bandeira": "eu",
+    "nova": true
   },
   {
     "nome": "Premier League",
@@ -121,6 +217,61 @@
     "espn": "soccer/fra.1",
     "nome_en": "Ligue 1",
     "bandeira": "fr"
+  },
+  {
+    "nome": "Supertaça de Inglaterra",
+    "procurar": [
+      "community shield"
+    ],
+    "pais": "england",
+    "espn": "soccer/eng.charity",
+    "nome_en": "Community Shield",
+    "bandeira": "gb-eng",
+    "nova": true
+  },
+  {
+    "nome": "Supertaça de Espanha",
+    "procurar": [
+      "supercopa"
+    ],
+    "pais": "spain",
+    "espn": "soccer/esp.super_cup",
+    "nome_en": "Spanish Super Cup",
+    "bandeira": "es",
+    "nova": true
+  },
+  {
+    "nome": "Supertaça de Itália",
+    "procurar": [
+      "supercoppa"
+    ],
+    "pais": "italy",
+    "espn": "soccer/ita.super_cup",
+    "nome_en": "Italian Super Cup",
+    "bandeira": "it",
+    "nova": true
+  },
+  {
+    "nome": "Supertaça da Alemanha",
+    "procurar": [
+      "supercup"
+    ],
+    "pais": "germany",
+    "espn": "soccer/ger.super_cup",
+    "nome_en": "German Super Cup",
+    "bandeira": "de",
+    "nova": true
+  },
+  {
+    "nome": "Supertaça de França",
+    "procurar": [
+      "trophee des champions"
+    ],
+    "pais": "france",
+    "espn": "soccer/fra.super_cup",
+    "nome_en": "Trophée des Champions",
+    "bandeira": "fr",
+    "nova": true
   },
   {
     "nome": "Eredivisie",

@@ -49,7 +49,7 @@ export function matchLeague(m, leagues) {
   const country = norm(m.country);
   for (const lg of leagues) {
     if (lg.id != null) { if (String(lg.id) === m.leagueId) return lg; continue; }
-    if (AVOID.some((w) => name.includes(w))) continue;
+    if (!lg.aceitar && AVOID.some((w) => name.includes(w))) continue; // «aceitar»: ligas femininas e de sub-23 pedidas de propósito
     if (!lg.procurar.some((t) => name.includes(norm(t)))) continue;
     if (lg.pais && !country.includes(norm(lg.pais))) continue;
     if (lg.evitar?.some((w) => name.includes(norm(w)))) continue;
@@ -279,6 +279,7 @@ export function startResults(leagues, publish, log, { upsert = () => {}, remove 
     add(more) {
       leagues.push(...more.map((l) => ({ ...l, key: slug(l.nome) })));
       scheduleDay = ""; // volta a ler o calendário com as ligas novas
+      return true;
     },
   };
 }

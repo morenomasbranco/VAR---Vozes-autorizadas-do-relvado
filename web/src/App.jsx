@@ -669,7 +669,6 @@ function VideoImg({ v }) {
 function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false }) {
   const tx = VTXT[lang] || VTXT.pt;
   const c = VCAT[v.category] || VCAT.other;
-  const outras = [...new Set((v.sources || []).map(vFonte))].filter((f) => f !== v.source);
   const link = v.embed ? null : (v.reddit_url && /t\.me\//.test(v.reddit_url) ? v.reddit_url : v.video_url || v.reddit_url);
   const titulo = v.teams
     ? (
@@ -710,14 +709,13 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
       {v.teams && v.title && <p className="vorig" title={v.title}>{v.title}</p>}
       <div className="vmeta">
         {v.competition && !mini && <span className="muted">{v.competition}</span>}
-        <span className="vsrc" title={outras.length ? tx.also(outras.join(", ")) : undefined}>{v.source}{outras.length > 0 && <b> +{outras.length}</b>}</span>
         <span className="muted vtime" translate="no">{agoText(v.created_time, now, ui)}</span>
       </div>
       <div className="vacts">
         {playing
           ? <button className="textbtn" onClick={() => onPlay(null)}><Fechar size={14} />{tx.close}</button>
           : <button className="textbtn vwatch" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))}><Play size={14} />{tx.watch}</button>}
-        {v.reddit_url && <a className="textbtn" href={v.reddit_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title={v.reddit_url}><ExternalLink size={13} /></a>}
+        {v.reddit_url && <a className="textbtn" href={v.reddit_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}
       </div>
     </li>
   );
@@ -1676,7 +1674,22 @@ export default function App() {
         setSourceList(list.map((x) => [x.handle, x.name, x.pais, x.col]));
       })
       .catch(() => {});
-    fetch(`${API}/api/leagues`).then((r) => r.json()).then((l) => !stop && setLeagues(l)).catch(() => {});
+    fetch(`${API}/api/leagues`).then((r) => r.json()).then((l) => {
+      if (stop) return;
+      setLeagues(l);
+      // ligas que o servidor passou a acompanhar entram ligadas, mesmo para quem já tinha escolhido as suas
+      try {
+        const vistas = JSON.parse(localStorage.getItem("var-ligas-vistas") || "null");
+        const novas = l.filter((x) => (vistas ? !vistas.includes(x.key) : x.nova)).map((x) => x.key);
+        localStorage.setItem("var-ligas-vistas", JSON.stringify(l.map((x) => x.key)));
+        if (novas.length) setLigasOn((cur) => {
+          if (!cur) return cur;
+          const n = new Set([...cur, ...novas]);
+          localStorage.setItem("var-ligas", JSON.stringify([...n]));
+          return n;
+        });
+      } catch { /* sem armazenamento */ }
+    }).catch(() => {});
     fetch(`${API}/api/stories`).then((r) => r.json()).then((l) => !stop && setStories(l)).catch(() => {});
     fetch(`${API}/api/videos/latest?limit=150`).then((r) => r.json())
       .then((l) => !stop && Array.isArray(l) && setVideos((cur) => {
