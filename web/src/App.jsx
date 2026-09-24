@@ -474,14 +474,21 @@ const minText = (sc, lang, ui, now, upd) => {
   return mm || ui.live;
 };
 
-// canal do jogo a partir da grelha do Zapping, para quando o servidor ainda não o juntou ao cartão
-const eqKey = (n) => String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  .replace(/[.'’`-]/g, " ").replace(/\b(fc|sc|cf|ac|sl|cd|ad|afc|sad|ud|cs|gd|ssc|club|clube|de|da|do)\b/g, " ").replace(/\s+/g, " ").trim();
-const eqIgual = (a, b) => {
-  const A = eqKey(a).split(" ").filter(Boolean), B = eqKey(b).split(" ").filter(Boolean);
-  if (!A.length || !B.length) return false;
-  const iguais = A.filter((x) => B.some((y) => x === y || (x.length >= 4 && y.length >= 4 && (x.startsWith(y) || y.startsWith(x))))).length;
-  return iguais / Math.max(A.length, B.length) >= 0.5;
+// canal do jogo a partir da grelha do Zapping, para quando o servidor ainda não o juntou ao cartão.
+// Os nomes das equipas comparam-se com as mesmas regras do servidor (zapping.js): sem siglas de clube e com as
+// abreviaturas que a ESPN, o zerozero e os títulos dos vídeos escrevem de maneiras diferentes («Man Utd», «Spurs», «PSG»)
+const EQ_RUIDO = /\b(fc|sc|cf|ac|sl|cd|ad|ca|rc|afc|sad|ud|cs|gd|ss|us|ssc|vfl|vfb|bsc|tsg|fsv|nk|fk|sk|if|bk|cp|aa|gc|se|ec|club|clube|de|da|do|of|the|and|le|la|el)\b/g;
+const EQ_NOMES = {
+  vitoria: "vitoria guimaraes", guimaraes: "vitoria guimaraes", "sporting braga": "braga", inter: "inter milan", internazionale: "inter milan",
+  atleti: "atletico madrid", atletico: "atletico madrid", psg: "paris saint germain", "paris sg": "paris saint germain", betis: "real betis", spurs: "tottenham", wolves: "wolverhampton",
+  leipzig: "rb leipzig", brighton: "brighton hove albion", leverkusen: "bayer leverkusen", dortmund: "borussia dortmund",
+  athletic: "athletic bilbao", "olympique marseille": "marseille", "olympique lyonnais": "lyon", "olympique lyon": "lyon", estoril: "estoril praia",
+};
+const EQ_PALAVRAS = { munique: "munich", munchen: "munich", muenchen: "munich", koln: "cologne", colonia: "cologne", utd: "united", gladbach: "monchengladbach", mgladbach: "monchengladbach", nottm: "nottingham", afs: "avs", hotspur: "tottenham" };
+const eqKey = (n) => {
+  const base = String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[.'’`-]/g, " ").replace(EQ_RUIDO, " ").replace(/\s+/g, " ").trim();
+  return (EQ_NOMES[base] || base).split(" ").map((w) => EQ_PALAVRAS[w] || w).join(" ");
 };
 const eqTokCache = new Map();
 const eqTok = (n) => {
@@ -489,13 +496,45 @@ const eqTok = (n) => {
   if (!t) { t = eqKey(n).split(" ").filter(Boolean); if (eqTokCache.size > 5000) eqTokCache.clear(); eqTokCache.set(n, t); }
   return t;
 };
-const eqIgualT = (a, b) => {
+// semelhança entre dois nomes (0 a 1); uma palavra que começa pela outra conta como igual («Man» e «Manchester»).
+// Se sobram palavras diferentes dos dois lados, são clubes distintos com uma palavra em comum (Real Madrid e Real Sociedad)
+const eqSimil = (a, b) => {
   const A = eqTok(a), B = eqTok(b);
-  if (!A.length || !B.length) return false;
-  const iguais = A.filter((x) => B.some((y) => x === y || (x.length >= 4 && y.length >= 4 && (x.startsWith(y) || y.startsWith(x))))).length;
-  return iguais / Math.max(A.length, B.length) >= 0.5;
+  if (!A.length || !B.length) return 0;
+  const par = (x, y) => x === y || (x.length >= 3 && y.length >= 3 && (x.startsWith(y) || y.startsWith(x)));
+  const iguais = A.filter((x) => B.some((y) => par(x, y))).length;
+  if (iguais < A.length && B.some((y) => !A.some((x) => par(x, y)))) return 0;
+  return iguais / Math.max(A.length, B.length);
 };
-const tvDaGrelha = (sc, zapping, ts) => zapping.find((z) => !z.qualificador && Math.abs(z.inicio - ts) < 5 * 3600e3 && eqIgual(z.casa, sc.h) && eqIgual(z.fora, sc.a)) || null;
+const eqIgualT = (a, b) => eqSimil(a, b) >= 0.5;
+// o mesmo jogo: as duas equipas parecidas e o par convincente no conjunto (o Real Madrid não passa por Real Sociedad);
+// aceita as equipas trocadas, porque há títulos de vídeos que as escrevem ao contrário
+const parNota = (h1, a1, h2, a2) => {
+  const d = [eqSimil(h1, h2), eqSimil(a1, a2)], t = [eqSimil(h1, a2), eqSimil(a1, h2)];
+  const ok = (p) => p[0] >= 0.5 && p[1] >= 0.5 && p[0] + p[1] >= 1.3;
+  return Math.max(ok(d) ? d[0] + d[1] : 0, ok(t) ? t[0] + t[1] : 0);
+};
+const tvDaGrelha = (sc, zapping, ts) => {
+  let melhor = null, nota = 0;
+  for (const z of zapping) {
+    if (z.qualificador || Math.abs(z.inicio - ts) > 5 * 3600e3) continue;
+    const n = parNota(z.casa, z.fora, sc.h, sc.a);
+    if (n > nota) { nota = n; melhor = z; }
+  }
+  return melhor;
+};
+
+// resultado tirado dos títulos dos vídeos de um jogo («Benfica [2] - 1 Porto»): o de mais golos, e entre iguais o mais recente
+const placarDosVideos = (vids) => {
+  let melhor = null;
+  for (const v of vids || []) {
+    const m = String(v.score || "").match(/^(\d{1,2})-(\d{1,2})$/);
+    if (!m) continue;
+    const p = { hs: +m[1], as: +m[2], t: v.created_time || 0 };
+    if (!melhor || p.hs + p.as > melhor.hs + melhor.as || (p.hs + p.as === melhor.hs + melhor.as && p.t > melhor.t)) melhor = p;
+  }
+  return melhor;
+};
 
 /* ───────── Vídeos ───────── */
 const VCAT = {
@@ -930,8 +969,8 @@ const CSS = `
 .apito .brandbtn{justify-content:center}
 .apito .searchrow{display:flex;justify-content:center;padding:0 0 8px}
 .apito .searchrow .search{width:min(480px,100%)}
-.apito .brand b{font-family:var(--display);font-weight:700;font-size:27px;line-height:1;letter-spacing:-.02em}
-.apito .tagline{font-size:13px;color:#fff;font-weight:700;margin-right:6px}
+.apito .brand b{font-family:var(--display);font-weight:700;font-size:32px;line-height:1;letter-spacing:-.02em}
+.apito .tagline{font-size:15px;color:#fff;font-weight:700;margin-right:6px}
 .apito[data-theme="light"] .tagline{color:var(--ink)}
 .apito .status{display:flex;align-items:center;gap:10px;font-size:14px}
 .apito .pulse{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--live)}
@@ -941,7 +980,7 @@ const CSS = `
 .apito .muted{color:var(--muted)}
 .apito .ctrls{display:flex;align-items:center;justify-content:flex-end;gap:8px;justify-self:end}
 .apito .barl .status{display:block;max-width:100%}
-@media(max-width:480px){.apito .brand b{font-size:22px} .apito .brandbtn{gap:6px} .apito .tagline{font-size:10.5px;margin-right:0;letter-spacing:-.01em} .apito .brand .logo{width:24px;height:24px}
+@media(max-width:480px){.apito .brand b{font-size:26px} .apito .brandbtn{gap:6px} .apito .tagline{font-size:11.5px;margin-right:0;letter-spacing:-.01em} .apito .brand .logo{width:28px;height:28px}
   .apito .bar{gap:4px;grid-template-columns:14px minmax(0,1fr) auto} .apito .barl .status{font-size:0;gap:0} .apito .ctrls{gap:4px} .apito .ctrls .icon-btn{width:32px;height:32px}}
 .apito .search{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--raise);width:230px;color:var(--muted)}
 .apito .search input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;outline:none;width:100%}
@@ -1887,6 +1926,19 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
 
+  // todos os jogos, sem o filtro de ligas, de fontes ou de pesquisa: servem para ligar cada vídeo ao seu jogo,
+  // para o cartão do Feed ter sempre o resultado e o canal mesmo quando a liga está desligada nos Resultados
+  const jogosTodos = useMemo(() => {
+    const map = new Map();
+    for (const it of items) {
+      if (!it.score) continue;
+      const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
+      if (map.has(k) && (map.get(k).upd || map.get(k).ts) >= (it.upd || it.ts)) continue;
+      map.set(k, it);
+    }
+    return [...map.values()];
+  }, [items]);
+
   // jogos a decorrer, para a página inicial (o quadro completo continua na secção Resultados)
   const aoVivo = useMemo(() => games.filter((it) => isLive(it.score, it.upd || it.ts, now)), [games, now]);
   // próximas transmissões na televisão portuguesa, quando não há jogos a decorrer
@@ -1950,8 +2002,13 @@ export default function App() {
       const h = v.teams?.home || v.home_team, a = v.teams?.away || v.away_team;
       const velho = t - v.created_time > RECENTE;
       if (!h || !a) { if (!velho) semJogo.push(v); continue; }
-      const jogo = games.find((g) => Math.abs((g.upd || g.ts) - v.created_time) < 5 * 3600e3
-        && ((eqIgualT(g.score.h, h) && eqIgualT(g.score.a, a)) || (eqIgualT(g.score.h, a) && eqIgualT(g.score.a, h))));
+      // o jogo com o par de equipas mais parecido (a decorrer primeiro, depois o mais próximo na hora)
+      let jogo = null, nota = 0;
+      for (const g of jogosTodos) {
+        if (Math.abs((g.upd || g.ts) - v.created_time) > 5 * 3600e3) continue;
+        const n = parNota(g.score.h, g.score.a, h, a) + (isLive(g.score, g.upd || g.ts, t) ? 0.5 : 0);
+        if (n > 0.5 && n > nota) { nota = n; jogo = g; }
+      }
       const key = jogo ? chaveJogo(jogo) : `t:${eqTok(h).join(" ")}|${eqTok(a).join(" ")}`;
       if (velho && !(grupos.get(key)?.live)) continue; // vídeo antigo de um jogo que não está a decorrer
       if (!grupos.has(key)) grupos.set(key, { key, jogo: jogo || null, live: !!jogo && isLive(jogo.score, jogo.upd || jogo.ts, t), vids: [], ult: 0, h, a, comp: v.competition, equipas: v.equipas });
@@ -1965,7 +2022,7 @@ export default function App() {
       || (x.live ? (x.jogo?.ts || 0) - (y.jogo?.ts || 0) || String(x.key).localeCompare(String(y.key)) : y.ult - x.ult));
     return { lista, semJogo };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [games, videosVis, dezSeg]);
+  }, [games, jogosTodos, videosVis, dezSeg]);
   const capasOrd = useMemo(() => [...capas].sort((a, b) => {
     const ia = ORDEM_CAPAS.indexOf(a.pais), ib = ORDEM_CAPAS.indexOf(b.pais);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.nome).localeCompare(String(b.nome), "pt");
@@ -2203,7 +2260,7 @@ export default function App() {
             </div>
             <div className="brand">
               <button className="brandbtn" onClick={irInicio} title={emLingua(CAT.destaque, lang)} aria-label={`VAR — ${ui.tagline}`} translate="no">
-              <svg className="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+              <svg className="logo" width="36" height="36" viewBox="0 0 64 64" aria-hidden="true">
                 <rect x="7" y="11.5" width="50" height="33" rx="6" fill="none" stroke="currentColor" strokeWidth="4.4" />
                 <g stroke="currentColor" strokeWidth="4" strokeLinecap="round">
                   <path d="M15.5 21.5h15" /><path d="M15.5 28h10" /><path d="M15.5 34.5h13" />
@@ -2303,7 +2360,9 @@ export default function App() {
                           {blocos.lista.map((b) => {
                             const it = b.jogo;
                             const sc = it?.score;
-                            const tv = it && (it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts));
+                            // jogo sem resultados em direto ligados: o resultado do vídeo mais recente e o canal pela grelha do Zapping
+                            const placar = sc || placarDosVideos(b.vids);
+                            const tv = it ? (it.tv || tvDaGrelha(sc, zapping, it.upd || it.ts)) : (b.h && b.a ? tvDaGrelha({ h: b.h, a: b.a }, zapping, b.ult) : null);
                             return (
                               <li key={b.key}>
                                 <button className={`lcard ${b.live ? "" : "done"}`} aria-pressed={sel === b.key} disabled={!b.vids.length}
@@ -2311,11 +2370,11 @@ export default function App() {
                                   <span className="lcomp">{sc ? <><Flag code={topicOf(it)} lang={lang} /> {leagueName(it.liga) || sc.comp}</> : b.comp || ui.otherVideos}</span>
                                   <span className="lrow">
                                     <span className="lteam">{(it?.equipas || b.equipas)?.[0]?.logo && <Crest e={(it?.equipas || b.equipas)[0]} theme={theme} size={18} />}{sc ? sc.h : b.h}</span>
-                                    {sc && <b translate="no">{sc.hs}</b>}
+                                    {placar && <b translate="no">{placar.hs}</b>}
                                   </span>
                                   <span className="lrow">
                                     <span className="lteam">{(it?.equipas || b.equipas)?.[1]?.logo && <Crest e={(it?.equipas || b.equipas)[1]} theme={theme} size={18} />}{sc ? sc.a : b.a}</span>
-                                    {sc && <b translate="no">{sc.as}</b>}
+                                    {placar && <b translate="no">{placar.as}</b>}
                                   </span>
                                   <span className="lfoot">
                                     {sc && <span className={`lmin ${sc.ht || sc.pausa ? "pausa" : ""} ${sc.et || sc.pen ? "et" : ""}`} translate="no">{b.live ? minText(sc, lang, ui, now, it.upd || it.ts) : sc.ft ? minText(sc, lang, ui) : (sc.min || "")}</span>}
