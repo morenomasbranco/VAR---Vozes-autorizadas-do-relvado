@@ -160,6 +160,19 @@ Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta
 
 As páginas montadas no browser (como a da Lega Serie A) também se leem pela lista que vem em JSON dentro da própria página; cada fonte pode ter páginas alternativas (`alternativas`, por exemplo a versão italiana) e várias pesquisas do Google News, experimentadas por ordem. As horas escritas sem fuso são lidas no fuso do país da fonte (Roma, Madrid, Paris, Berlim, Londres, São Paulo), e quando a lista só dá o dia, ou não dá data nenhuma, o servidor abre a notícia para ler a hora exata da publicação. As entradas gravadas antes desta correção são datadas de novo, devagar, quando o servidor arranca.
 
+## Distritais
+
+A secção **Distritais** (ao lado de «Portugueses pelo mundo») mostra os posts mais recentes do Instagram dos clubes de cada associação de futebol, uma coluna por associação, à maneira da «Ronda pela atualidade». Os clubes e as contas são os do `pt/clubes.json`.
+
+O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o servidor percorre os perfis devagar, um de cada vez (`server/pt/distritais.js`):
+
+- primeiro os clubes que ainda não foram lidos; depois, os que publicam muito (relidos a cada 45 min) antes dos que publicam pouco (a cada 4 h);
+- um perfil a cada 12 s sem sessão, ou a cada 6 s com `IG_SESSIONID` (`DISTRITAIS_SEGUNDOS`). A primeira volta aos 570 clubes leva cerca de duas horas sem sessão;
+- se o Instagram recusar, a leitura passa uns minutos para a página pública do perfil num visualizador anónimo (`DISTRITAIS_FONTES`, por omissão o imginn);
+- os perfis que a recolha dos jogos já leu (clubes a jogar) entram também, sem pedidos a mais.
+
+As imagens passam pelo servidor (`/api/distritais/img`), porque o Instagram não as deixa abrir noutros sites. Os posts ficam em `data/pt-distritais.json` (os das últimas 3 semanas, `DISTRITAIS_DIAS`); cada post novo chega ao site no mesmo instante. `DISTRITAIS=0` desliga a secção.
+
 ## Resultados de Portugal (nacionais e distritais)
 
 Na secção Resultados, a vista **Portugal** tem todos os campeonatos seniores de futebol e de futsal do país — Liga Portugal, FPF e as 22 associações distritais e regionais — e o campeonato nacional de sub-23. Ficam de fora a formação, os sub-22/sub-23 e esperanças distritais, os veteranos, o futebol de praia, o futebol de 7/9 e o INATEL (regras em `server/pt/catalogo.js`). Tudo é gratuito.
@@ -169,6 +182,8 @@ Há quatro vistas, com filtros de modalidade (futebol, futsal), nível (nacionai
 - **Competição**: a jornada da semana de uma competição e série, com setas para as anteriores e as seguintes, e a classificação ao lado (ao vivo quando há jogos). A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
 - **Jornadas da semana**: a jornada atual (ou a próxima) de todas as competições ao mesmo tempo, com os jogos, as horas e os resultados que já houver.
 - **Jogos de hoje**: todos os jogos do dia, agrupados por competição, os que estão a decorrer primeiro.
+- **Enquanto o servidor lê as competições**, a vista mostra o progresso (associações e competições já lidas, páginas na fila) e, se a FPF não estiver a responder ao servidor, o erro. As competições aparecem assim que são encontradas, mesmo antes de estarem lidas.
+- **Guardar os dados entre arranques**: tudo o que foi lido fica na pasta `data/`. Se o alojamento apagar essa pasta a cada publicação (no Northflank, quando o serviço não tem um volume), a leitura recomeça do zero. Para isso não acontecer, junta ao serviço um volume montado em `/app/data`, se o plano o permitir.
 - **Todas as tabelas**: as classificações de todos os campeonatos, nacionais e distritais, agrupadas por organizador (FPF, Liga Portugal e cada associação, com atalhos para saltar para cada uma) e com pesquisa por equipa. Uma série que ainda não tem resultados nem tabela oficial aparece com as equipas do calendário a zero.
 
 Os golos, intervalos e finais destes jogos entram nos Acontecimentos (o feed da secção Resultados) e no quadro de resultados, com um filtro por organizador no botão «Escolher ligas» («Portugal · AF Porto», etc.).
@@ -192,12 +207,16 @@ Os clubes não precisam de fazer nada (nem de identificar o site), e **não é p
 
 O texto de cada story vem, por esta ordem: do texto automático que o próprio Instagram gera para as imagens; do **Tesseract** (OCR livre, já instalado na imagem Docker, com português; os vídeos passam pelo ffmpeg, que tira três fotogramas); e, só quando os dois não dão números, do **Gemini** (o mesmo `GEMINI_API_KEY`, no máximo 60 imagens por hora, `STORIES_GEMINI_POR_HORA`).
 
-Cada story é uma **prova**, não uma ordem (`server/pt/stories/evidencia.js`):
+Cada story ou post é uma **prova**, não uma ordem (`server/pt/stories/evidencia.js`):
+
+- **Stories e posts valem o mesmo, e conta o que chegar primeiro.** Muitos clubes, sobretudo nas distritais, dão os golos e o resultado em posts. Se o story chega primeiro, é ele que cria o golo (com o seu minuto) e o post do mesmo golo conta como confirmação; se o post chega primeiro, é ao contrário. O segundo só junta o que faltava: o nome do marcador ou o minuto escrito. Um clube que só publica posts tem os golos pelos posts.
+- **Posts durante o jogo**: leem-se desde o apito inicial, a cada 5 minutos (`IG_POSTS_SEGUNDOS`), e a cada 2 minutos nos clubes que já se viu atualizarem o jogo por post (`IG_POSTS_VIVO_SEGUNDOS`), até 10 clubes por volta (`IG_POSTS_POR_CICLO`) para não gastar os pedidos dos stories. Quando o clube edita a legenda do mesmo post («ATUALIZADO: 2-1»), cada versão conta como uma prova nova.
+- **Post de resumo** («Resultado final 2-1 ⚽ Tiago Mendes 12', 80'»): completa os golos do clube com os marcadores e os minutos escritos, pela ordem; se não houve nada durante o jogo (ou só o resultado oficial), cria esses golos. O minuto de um golo que só aparece num post de fim de jogo, sem minuto escrito, fica desconhecido em vez de estimado pela hora do post.
 
 - O resultado só anda para a frente. Um story com um resultado anterior (publicado com atraso) fica como histórico; um que não bate certo fica «a confirmar» até haver outra prova.
 - **Confirmação pelo outro clube**: quando o adversário publica o mesmo resultado (mesmo escrito ao contrário, «0-1» em vez de «1-0»), não cria outro golo — conta como confirmação, e o golo passa a dizer «confirmado pelos dois clubes».
 - **Quem escreveu o quê**: o visitante tanto escreve «casa-fora» como «nós primeiro». Decide-se pelos nomes das equipas no texto, pela convenção que o sistema vai aprendendo de cada clube (`data/pt-clubes.json`) e pela coerência com o jogo (quem publica «GOLO» costuma ser quem marcou).
-- **Minuto**: o que vem escrito no story («23'»). Sem ele, o minuto é estimado pela hora de publicação do story (menos 1 minuto de atraso, `STORY_ATRASO_SEGUNDOS`), contado a partir do story de início do jogo, do de intervalo ou do de recomeço; sem nenhum, a partir da hora marcada. Os minutos estimados aparecem com «~». O minuto a que vai o jogo é calculado da mesma maneira. No futsal, em que o cronómetro para, a conta é proporcional (20 minutos de jogo em perto de 40 reais).
+- **Minuto**: o que vem escrito no story («23'»). Sem ele, o minuto é estimado pela hora de publicação do story (menos 1 minuto de atraso, `STORY_ATRASO_SEGUNDOS`; num post, 3 minutos, `POST_ATRASO_SEGUNDOS`), contado a partir do story de início do jogo, do de intervalo ou do de recomeço; sem nenhum, a partir da hora marcada. Os minutos estimados aparecem com «~». O minuto a que vai o jogo é calculado da mesma maneira. No futsal, em que o cronómetro para, a conta é proporcional (20 minutos de jogo em perto de 40 reais).
 - **Stories perdidos**: de 0-0 para 2-1 criam-se os golos que faltam, com minuto desconhecido, e só o último leva minuto.
 - **Clubes que não publicam**: o jogo fica com a hora marcada («a decorrer?» e, depois do fim provável, «à espera do resultado») e recebe o resultado quando um dos clubes o puser num post ou quando a associação o publicar no resultados.fpf.pt. O resultado oficial passa sempre por cima do dos stories (o dos stories fica marcado com «*» até lá).
 
@@ -229,7 +248,8 @@ As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incl
 | `STORIES_ANONIMO=0`, `STORIES_FONTES`, `STORIES_ANONIMO_SEGUNDOS`, `STORIES_ANONIMO_PEDIDOS_MINUTO` | modo sem conta: desligar, lista de visualizadores (com `{u}`), ritmo (60 s) e limite de pedidos (30/min) |
 | `PT_LEITOR_DIRETO=1` | os resultados enviados pelos leitores contam sem precisar de uma segunda pessoa |
 | `PT_TOKEN` | chave do retransmissor e da API da redação |
-| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS`, `IG_POSTS_SEGUNDOS` | ritmo da recolha no Instagram com sessão (40/min, 45 s, 60 s, 420 s) |
+| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS` | ritmo da recolha no Instagram com sessão (40/min, 45 s, 60 s) |
+| `IG_POSTS_SEGUNDOS`, `IG_POSTS_VIVO_SEGUNDOS`, `IG_POSTS_POR_CICLO`, `POST_ATRASO_SEGUNDOS` | posts dos clubes durante o jogo: de quanto em quanto tempo (300 s; 120 s nos clubes que atualizam por post), quantos por volta (10) e o atraso de um post para estimar o minuto (180 s) |
 | `STORIES_GEMINI_POR_HORA` | imagens que podem ir ao Gemini por hora (60; 0 desliga) |
 | `STORY_ATRASO_SEGUNDOS` | atraso médio entre o lance e o story (60) |
 | `FPF_EPOCA` | época no resultados.fpf.pt (106 = 2026/27) |

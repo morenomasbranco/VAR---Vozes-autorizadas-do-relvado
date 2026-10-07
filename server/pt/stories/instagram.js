@@ -5,7 +5,8 @@
 // diretamente, 20 clubes por pedido, e só dos que estão a jogar. Seguir é opcional e só poupa pedidos:
 //   - reels_tray: UM pedido diz que contas seguidas têm stories novos;
 //   - reels_media: os stories de até 20 contas por pedido (seguidas ou não);
-//   - web_profile_info: os últimos posts (legendas «Resultado final…»), só dos clubes que estão a jogar.
+//   - web_profile_info: os últimos posts (golos e «Resultado final…» nas legendas e nas imagens), só dos clubes
+//     que estão a jogar, desde o início do jogo.
 // Só se consultam os clubes que têm jogo a decorrer (ou a começar, ou acabado há pouco). Cada story novo vai
 // para o OCR (ocr.js) e o texto segue para o motor de evidência.
 //
@@ -13,14 +14,15 @@
 // verificação à conta usada ou bloqueá-la se houver pedidos a mais — por isso há um limite de pedidos por
 // minuto (IG_PEDIDOS_MINUTO), pausas automáticas e o retransmissor (scripts/instagram-relay.js), que corre num
 // computador de casa, onde o Instagram desconfia menos.
-import { sleep } from "../../util.js";
+import { sleep, hash } from "../../util.js";
 import { lerStory } from "./ocr.js";
 
 const APP_ID = "936619743392459";
 const UA = process.env.IG_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const CICLO_MS = Math.max(20, Number(process.env.IG_SEGUNDOS) || 45) * 1000;
 const DIRETO_MS = Math.max(45, Number(process.env.IG_DIRETO_SEGUNDOS) || 60) * 1000; // clubes que a conta não segue
-const POSTS_MS = Math.max(120, Number(process.env.IG_POSTS_SEGUNDOS) || 420) * 1000;
+const POSTS_MS = Math.max(60, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000;
+const POSTS_POR_CICLO = Math.max(1, Number(process.env.IG_POSTS_POR_CICLO) || 10); // não deixar os posts comer os pedidos dos stories
 const POR_MINUTO = Math.max(5, Number(process.env.IG_PEDIDOS_MINUTO) || 40);
 
 export function cookieDoEnv(env = process.env) {
@@ -32,12 +34,13 @@ export function cookieDoEnv(env = process.env) {
   return partes.join("; ");
 }
 
-export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, info = () => ({}), log = () => {} }) {
+export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, info = () => ({}), perfil = () => {}, log = () => {} }) {
   const estado = { ativo: !!cookie, pedidos: 0, erros: 0, ultimoErro: null, pausaAte: 0, stories: 0, posts: 0, tray: null, seguidas: 0, alvos: 0, ultimoCiclo: null };
   if (!cookie) return { estado, parar() {} };
   const csrf = cookie.match(/csrftoken=([^;]+)/)?.[1];
   const vezes = [];
   const vistos = new Set(); // ids de stories e posts já tratados
+  const legendas = new Map(); // post → versão da legenda já lida
 
   async function pedir(url) {
     if (Date.now() < estado.pausaAte) throw Object.assign(new Error("Instagram em pausa"), { pausa: true });
@@ -118,13 +121,17 @@ export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, i
     const user = j?.data?.user;
     if (user?.id && !info(handle).igId) guardar(handle, { igId: user.id });
     const edges = user?.edge_owner_to_timeline_media?.edges || [];
+    perfil(handle, edges); // também para a secção «Distritais»
     for (const { node } of edges.slice(0, 6)) {
-      const id = `ig:post:${node.id}`;
+      const legenda = node.edge_media_to_caption?.edges?.[0]?.node?.text || "";
+      // há clubes que vão editando a legenda do mesmo post durante o jogo («ATUALIZADO: 2-1»): cada versão conta
+      const id = `ig:post:${node.id}:${hash(legenda)}`;
       if (vistos.has(id)) continue;
       vistos.add(id);
-      const ts = (node.taken_at_timestamp || 0) * 1000;
+      const editado = legendas.has(node.id) && legendas.get(node.id) !== id;
+      legendas.set(node.id, id);
+      const ts = editado ? Date.now() : (node.taken_at_timestamp || 0) * 1000;
       if (alvo.desde && ts < alvo.desde) continue;
-      const legenda = node.edge_media_to_caption?.edges?.[0]?.node?.text || "";
       // o texto do post está muitas vezes na imagem: o texto alternativo do Instagram e, se for preciso, OCR
       const texto = await lerStory({ url: legenda && /\d\s*[-–x]\s*\d/.test(legenda) ? null : node.display_url, video: false, alt: node.accessibility_caption || "", legenda });
       estado.posts++;
@@ -165,9 +172,13 @@ export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, i
             devidos.forEach((h) => ultimoDireto.set(h, Date.now()));
             await lerReels(devidos, porHandle);
           }
-          // 3. posts: só a partir da hora do fim provável do jogo (resultado final) e de tempos a tempos
-          for (const a of lista) {
-            if (Date.now() < (a.postsDesde || 0) || Date.now() - (ultimoPost.get(a.handle) || 0) < POSTS_MS) continue;
+          // 3. posts: desde o início do jogo (há clubes que dão os golos por post), os mais atrasados primeiro,
+          // até POSTS_POR_CICLO por volta; a lista diz de quanto em quanto tempo ler cada clube (postsMs)
+          const devidosPosts = lista
+            .filter((a) => Date.now() >= (a.postsDesde || 0) && Date.now() - (ultimoPost.get(a.handle) || 0) >= (a.postsMs || POSTS_MS))
+            .sort((x, y) => (y.prioridade || 0) - (x.prioridade || 0) || (ultimoPost.get(x.handle) || 0) - (ultimoPost.get(y.handle) || 0))
+            .slice(0, POSTS_POR_CICLO);
+          for (const a of devidosPosts) {
             ultimoPost.set(a.handle, Date.now());
             await lerPosts(a.handle, a).catch((e) => log(`[Instagram] posts de @${a.handle}: ${e.message}`));
           }
@@ -177,7 +188,7 @@ export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, i
           log(`[Instagram] ${e.message}`);
         }
       }
-      if (vistos.size > 50000) vistos.clear();
+      if (vistos.size > 50000) { vistos.clear(); legendas.clear(); }
       await sleep(lista.length ? CICLO_MS : 60e3);
     }
   })();

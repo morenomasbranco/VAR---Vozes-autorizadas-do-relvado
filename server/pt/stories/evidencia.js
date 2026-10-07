@@ -10,11 +10,17 @@
 // Orientação do resultado: o clube visitante tanto pode escrever «casa-fora» como «nós primeiro». Decide-se por
 // esta ordem: nomes das equipas no texto; convenção já aprendida desse clube; coerência com o estado do jogo
 // (o resultado só anda para a frente, e quem publica um «GOLO» é normalmente quem marcou).
+//
+// Stories e posts valem o mesmo: o que chegar primeiro cria o golo (com o seu minuto e marcador) e o outro conta
+// como confirmação, juntando só o que faltava (o nome do marcador, o minuto escrito). Um clube que só publica
+// posts tem os golos pelos posts; o post de resumo no fim («⚽ Tiago Mendes 12', 80'») completa ou, se não houve
+// nada durante o jogo, cria os golos desse clube com os minutos escritos.
 import { lerTexto, posicaoNome } from "./parser.js";
-import { minutoDoGolo, ATRASO_STORY_MS } from "./relogio.js";
+import { minutoDoGolo, atrasoDe } from "./relogio.js";
 
 const MAX_FONTES = 60;
 const MESMO_GOLO_MS = 4 * 60000; // dois stories do mesmo clube com «GOLO» e sem resultado, tão perto, são o mesmo golo
+const MESMO_GOLO_OUTRA_VIA_MS = 20 * 60000; // story e post do mesmo golo podem sair bem mais afastados
 const MODO_PARTE = { futebol: [45, 47], futsal: [20, 38] };
 
 export function novoJogoEstado(base) {
@@ -61,8 +67,12 @@ function orientar(jogo, ev, L) {
 }
 
 function minutoDaProva(jogo, ev, L) {
+  // com uma lista de vários golos, o primeiro minuto do texto não é o do último golo: a lista trata disso
+  if ((L.listaGolos || []).length > 1) return { min: null, extra: 0, fonte: "desconhecido", confianca: "baixa" };
   if (L.minuto) return { min: L.minuto.min, extra: L.minuto.extra, fonte: "explicito", confianca: "alta" };
-  const m = minutoDoGolo(jogo, ev.ts, jogo.mod);
+  // uma publicação de fim de jogo («Resultado final 3-1») não diz quando foram os golos que ainda faltavam
+  if (L.eventos.includes("final")) return { min: null, extra: 0, fonte: "desconhecido", confianca: "baixa" };
+  const m = minutoDoGolo(jogo, ev.ts, jogo.mod, atrasoDe(ev.tipo));
   return m ? { min: m.min, extra: m.extra, fonte: "estimado", confianca: m.confianca } : { min: null, extra: 0, fonte: "desconhecido", confianca: "baixa" };
 }
 
@@ -72,7 +82,7 @@ function ancorarRelogio(jogo, ev, L) {
   const [parte, real] = MODO_PARTE[jogo.mod] || MODO_PARTE.futebol;
   const r = (jogo.relogio ||= {});
   const msPorMin = (real / parte) * 60000;
-  const t = ev.ts - ATRASO_STORY_MS;
+  const t = ev.ts - atrasoDe(ev.tipo);
   if (L.minuto.min <= parte && !r.inicio && !L.minuto.extra) r.inicio = Math.round(t - (L.minuto.min - 1) * msPorMin), r.inicioInferido = true;
   else if (L.minuto.min > parte && L.minuto.min <= parte * 2 && !r.recomeco) r.recomeco = Math.round(t - (L.minuto.min - parte - 1) * msPorMin), r.recomecoInferido = true;
 }
@@ -84,13 +94,50 @@ function criaGolo(jogo, lado, ev, L, { ultimo }) {
   return {
     id: `${jogo.id}:g${n}`,
     lado,
-    marcador: ultimo && mesmoLado ? L.marcadores[0] || null : null,
+    marcador: ultimo && mesmoLado && (L.listaGolos || []).length <= 1 ? L.marcadores[0] || null : null,
     min: min.min, extra: min.extra, minFonte: min.fonte, minConfianca: min.confianca,
     penalti: ultimo && L.eventos.includes("penalti") ? true : undefined,
     autogolo: ultimo && L.eventos.includes("autogolo") ? true : undefined,
     ts: ev.ts,
+    via: ev.tipo || null, // story ou post: o que chegou primeiro e criou o golo
     fontes: [ev.conta || ev.tipo],
   };
+}
+
+// lista de golos com minuto (post de resumo): completa os golos do clube que publica, pela ordem; se o clube
+// ainda não tinha golos registados e a lista bate com o resultado, cria-os com os minutos escritos
+function aplicarLista(jogo, ev, L) {
+  const lista = L.listaGolos || [];
+  if (!lista.length || !ev.lado) return { mudou: false, criados: [] };
+  const lado = ev.lado;
+  const doLado = jogo.golos.filter((g) => g.lado === lado);
+  const marcados = lado === "h" ? jogo.hs : jogo.as;
+  const quem = ev.conta || ev.tipo;
+  let mudou = false;
+  const criados = [];
+  if (doLado.length === 0 && lista.length === marcados) {
+    lista.forEach((x, i) => {
+      const g = {
+        id: `${jogo.id}:g${jogo.golos.length + 1}`, lado, marcador: x.nome, min: x.min, extra: x.extra, minFonte: "explicito", minConfianca: "alta",
+        ts: ev.ts + i, via: ev.tipo || null, fontes: [quem],
+      };
+      jogo.golos.push(g);
+      criados.push(g);
+    });
+    mudou = true;
+  } else if (doLado.length === lista.length) {
+    doLado.forEach((g, i) => {
+      const x = lista[i];
+      if (!g.marcador) { g.marcador = x.nome; mudou = true; }
+      if (g.minFonte !== "explicito") { g.min = x.min; g.extra = x.extra; g.minFonte = "explicito"; g.minConfianca = "alta"; mudou = true; }
+      if (!g.fontes.includes(quem)) g.fontes.push(quem);
+    });
+  }
+  if (mudou) {
+    const n = (l) => jogo.golos.filter((g) => g.lado === l).length;
+    if (jogo.oficial) jogo.golosIncompletos = n("h") !== jogo.hs || n("a") !== jogo.as;
+  }
+  return { mudou, criados };
 }
 
 // junta o nome do marcador ou o minuto escrito a um golo que já existia (o segundo story do mesmo golo)
@@ -99,7 +146,7 @@ function completarGolo(jogo, lado, ev, L) {
   if (!g) return false;
   let mudou = false;
   if (!g.marcador && L.marcadores[0] && (ev.lado === lado || !ev.lado)) { g.marcador = L.marcadores[0]; mudou = true; }
-  if (L.minuto && g.minFonte !== "explicito") { g.min = L.minuto.min; g.extra = L.minuto.extra; g.minFonte = "explicito"; g.minConfianca = "alta"; mudou = true; }
+  if (L.minuto && (L.listaGolos || []).length <= 1 && g.minFonte !== "explicito") { g.min = L.minuto.min; g.extra = L.minuto.extra; g.minFonte = "explicito"; g.minConfianca = "alta"; mudou = true; }
   const quem = ev.conta || ev.tipo;
   if (!g.fontes.includes(quem)) { g.fontes.push(quem); mudou = true; }
   return mudou;
@@ -118,9 +165,10 @@ export function aplicar(jogo, ev) {
     return { decisao, feed, orientacao: extra.orientacao || null };
   };
 
-  // depois do resultado oficial, os stories só ficam como registo
+  // depois do resultado oficial, os stories e posts só ficam como registo (e o post de resumo dá os marcadores)
   if (jogo.oficial && jogo.estado === "final") {
     const ok = L.placar && (orientar(jogo, ev, L).hs === jogo.hs);
+    if (ok) aplicarLista(jogo, ev, L);
     return regista(ok ? "confirmacao" : "historico");
   }
   if (eventos.has("agenda") && !L.placar && !eventos.has("golo") && !eventos.has("final") && !eventos.has("intervalo")) return regista("ignorado");
@@ -135,7 +183,7 @@ export function aplicar(jogo, ev) {
     return regista("relogio");
   }
   if (eventos.has("inicio") && !eventos.has("final")) {
-    if (!r.inicio || r.inicioInferido || ev.ts - ATRASO_STORY_MS < r.inicio) { r.inicio = ev.ts - ATRASO_STORY_MS; delete r.inicioInferido; mexeuRelogio = true; }
+    if (!r.inicio || r.inicioInferido || ev.ts - atrasoDe(ev.tipo) < r.inicio) { r.inicio = ev.ts - atrasoDe(ev.tipo); delete r.inicioInferido; mexeuRelogio = true; }
     if (jogo.estado === "agendado") { jogo.estado = "direto"; feed.push({ tipo: "inicio" }); if (jogo.hs == null) { jogo.hs = 0; jogo.as = 0; } }
   }
   if (eventos.has("intervalo") && !eventos.has("final")) {
@@ -143,7 +191,7 @@ export function aplicar(jogo, ev) {
     if (jogo.estado !== "intervalo" && jogo.estado !== "final") { jogo.estado = "intervalo"; feed.push({ tipo: "intervalo" }); }
   }
   if (eventos.has("recomeco")) {
-    if (!r.recomeco || r.recomecoInferido) { r.recomeco = ev.ts - ATRASO_STORY_MS; delete r.recomecoInferido; mexeuRelogio = true; }
+    if (!r.recomeco || r.recomecoInferido) { r.recomeco = ev.ts - atrasoDe(ev.tipo); delete r.recomecoInferido; mexeuRelogio = true; }
     if (jogo.estado === "intervalo" || jogo.estado === "agendado") jogo.estado = "direto";
   }
   if (!eventos.has("intervalo") && !eventos.has("final")) ancorarRelogio(jogo, ev, L);
@@ -159,7 +207,11 @@ export function aplicar(jogo, ev) {
     if ((eventos.has("golo") || eventos.has("golo_sofrido")) && ev.lado && !eventos.has("anulado")) {
       const lado = eventos.has("golo_sofrido") ? ladoOposto(ev.lado) : ev.lado;
       const recente = [...jogo.golos].reverse().find((g) => g.lado === lado);
-      if (recente && Math.abs(ev.ts - recente.ts) < MESMO_GOLO_MS) {
+      // o mesmo golo: muito perto, pela mesma via; ou o post de um golo que já veio por story (e vice-versa),
+      // do mesmo clube e sem um marcador diferente
+      const outraVia = recente && recente.via && ev.tipo && recente.via !== ev.tipo && recente.fontes.includes(ev.conta || ev.tipo)
+        && !(L.marcadores[0] && recente.marcador && L.marcadores[0] !== recente.marcador);
+      if (recente && Math.abs(ev.ts - recente.ts) < (outraVia ? MESMO_GOLO_OUTRA_VIA_MS : MESMO_GOLO_MS)) {
         completarGolo(jogo, lado, ev, L);
         fim();
         return regista("confirmacao");
@@ -189,6 +241,8 @@ export function aplicar(jogo, ev) {
     const ladoGolo = ev.lado ? (eventos.has("golo_sofrido") ? ladoOposto(ev.lado) : ev.lado) : jogo.golos.at(-1)?.lado;
     if ((eventos.has("golo") || eventos.has("golo_sofrido") || L.marcadores.length || L.minuto) && ladoGolo) completarGolo(jogo, ladoGolo, ev, L);
     else if (jogo.golos.length) { const g = jogo.golos.at(-1); const q = ev.conta || ev.tipo; if (!g.fontes.includes(q)) g.fontes.push(q); }
+    const ls = aplicarLista(jogo, ev, L);
+    for (const g of ls.criados) feed.push({ tipo: "golo", golo: g });
     fim();
     return regista("confirmacao", apr("igual"));
   }
@@ -240,6 +294,7 @@ export function aplicar(jogo, ev) {
     feed.push({ tipo: "golo", golo: g });
   });
   jogo.hs = alvo.hs; jogo.as = alvo.as;
+  aplicarLista(jogo, ev, L); // o post de resumo dá o marcador e o minuto de cada golo
   jogo.conflito = null;
   if (ev.lado) jogo.confirmado = { h: false, a: false, [ev.lado]: true };
   if (jogo.estado === "agendado") jogo.estado = "direto";

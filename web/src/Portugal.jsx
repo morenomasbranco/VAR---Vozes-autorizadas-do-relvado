@@ -92,7 +92,7 @@ function Jogo({ j, agora, mostrarComp = false, onComp, form }) {
       {(golos.length > 0 || j.conflito || j.local) && (
         <span className="ptg">
           {golos.map((g, i) => (
-            <span key={i} className={`gl ${g.lado}`} title={g.minFonte === "estimado" ? "Minuto estimado pela hora do story" : g.minFonte === "desconhecido" ? "Minuto desconhecido (story em falta)" : undefined}>
+            <span key={i} className={`gl ${g.lado}`} title={[g.via === "post" ? "Golo dado por uma publicação do clube" : g.via === "story" ? "Golo dado por um story do clube" : null, g.minFonte === "estimado" ? `Minuto estimado pela hora ${g.via === "post" ? "da publicação" : "do story"}` : g.minFonte === "desconhecido" ? "Minuto desconhecido" : null].filter(Boolean).join(" · ") || undefined}>
               ⚽ {minutoGolo(g)} {g.marcador || (g.lado === "h" ? j.casa : j.fora)}{g.penalti ? " (g.p.)" : ""}{g.autogolo ? " (p.b.)" : ""}
             </span>
           ))}
@@ -141,6 +141,30 @@ function Tabela({ linhas, compacta = false, destaque = null }) {
   );
 }
 
+// o que o servidor está a fazer enquanto lê as competições (e porque é que pode não aparecer nada)
+function Progresso({ p, agora, curto = false }) {
+  if (!p) return <p className="empty">A ligar ao servidor…</p>;
+  const min = (ms) => Math.max(1, Math.round(ms / 60000));
+  const listas = p.listas;
+  const erros = Object.entries(listas?.erros || {});
+  const fpfErro = p.fpf?.ultimoErro && (!p.fpf.ultimoOk || p.fpf.ultimoErro.ts > p.fpf.ultimoOk) ? p.fpf.ultimoErro : null;
+  const fila = (p.filas?.alta || 0) + (p.filas?.normal || 0) + (p.filas?.baixa || 0);
+  return (
+    <div className={`ptprog ${curto ? "curto" : ""}`} role="status">
+      {!curto && <p className="ptprogt">A ler os campeonatos no resultados.fpf.pt…</p>}
+      <p className="muted">
+        {listas ? `Associações lidas: ${listas.lidas} de ${listas.total}` : `À espera da primeira leitura (o servidor arrancou há ${min(agora - (p.arranque || agora))} min)`}
+        {p.total ? ` · competições: ${p.lidas} de ${p.total} lidas` : ""}
+        {p.jogos ? ` · ${p.jogos} jogos` : ""}
+        {fila ? ` · ${fila} páginas na fila` : ""}
+      </p>
+      {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}</p>}
+      {erros.length > 0 && !curto && <p className="muted small">Sem lista de competições: {erros.map(([k]) => k).join(", ")}</p>}
+      {!curto && <p className="muted small">Na primeira vez (ou depois de o servidor recomeçar sem os dados guardados), as competições vão aparecendo ao longo de uns minutos e as jornadas todas em uma a duas horas.</p>}
+    </div>
+  );
+}
+
 export default function Portugal({ API = "", now }) {
   const [modo, setModo] = useState(() => ler("var-pt-modo", "jornada"));
   const [cat, setCat] = useState({ orgs: [], competicoes: [] });
@@ -170,8 +194,10 @@ export default function Portugal({ API = "", now }) {
   useEffect(() => grava("var-pt", f), [f]);
   useEffect(() => grava("var-pt-modo", modo), [modo]);
 
-  const lerCatalogo = () => fetch(`${API}/api/pt/competicoes`).then((r) => r.json()).then((d) => d?.competicoes && setCat(d)).catch(() => setErro("Sem ligação ao servidor"));
-  useEffect(() => { lerCatalogo(); const t = setInterval(lerCatalogo, 5 * 60e3); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const lerCatalogo = () => fetch(`${API}/api/pt/competicoes`).then((r) => r.json()).then((d) => { if (d?.competicoes) { setCat(d); setErro(null); } }).catch(() => setErro("Sem ligação ao servidor"));
+  // enquanto o servidor ainda está a ler as competições, o catálogo relê-se de 15 em 15 s (depois, de 5 em 5 min)
+  const aLer = !cat.competicoes.length || (cat.progresso && cat.progresso.lidas < cat.progresso.total);
+  useEffect(() => { lerCatalogo(); const t = setInterval(lerCatalogo, aLer ? 15e3 : 5 * 60e3); return () => clearInterval(t); }, [aLer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const comps = useMemo(() => cat.competicoes.filter((c) => (f.nivel === "todos" || c.nivel === f.nivel) && (!f.mod || c.mod === f.mod) && (!f.org || c.org === f.org)), [cat, f.nivel, f.mod, f.org]);
   const orgsComComps = useMemo(() => {
@@ -253,17 +279,18 @@ export default function Portugal({ API = "", now }) {
   );
 
   if (!cat.competicoes.length) {
-    return <div className="ptv">{filtros}<p className="empty">{erro || "A carregar os campeonatos… (na primeira vez o servidor demora a ler as competições de todas as associações)"}</p></div>;
+    return <div className="ptv">{filtros}{erro ? <p className="empty">{erro}</p> : <Progresso p={cat.progresso} agora={agora} />}</div>;
   }
 
   return (
     <div className="ptv">
+      {aLer && <Progresso p={cat.progresso} agora={agora} curto />}
       {filtros}
       {modo === "jornada" && (
         <>
           <div className="ptcsel">
             <select className="ptsel grande" value={comp?.id || ""} onChange={(e) => muda({ comp: e.target.value, serie: "" })} aria-label="Competição">
-              {comps.map((c) => <option key={c.id} value={c.id}>{f.org ? "" : `${c.orgNome} · `}{c.nome}{c.fem ? " (fem.)" : ""}{c.aoVivo ? ` · ${c.aoVivo} em direto` : ""}</option>)}
+              {comps.map((c) => <option key={c.id} value={c.id}>{f.org ? "" : `${c.orgNome} · `}{c.nome}{c.fem ? " (fem.)" : ""}{c.aoVivo ? ` · ${c.aoVivo} em direto` : ""}{c.lida === false ? " · a ler…" : ""}</option>)}
             </select>
             {comp?.series?.length > 1 && (
               <div className="seg series" role="group" aria-label="Série">
@@ -449,6 +476,10 @@ export const PT_CSS = `
 .apito .ptgrupo{margin-bottom:16px}
 .apito .ptgh{font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:4px;margin:0 0 6px;text-align:left}
 .apito .ptres{font-size:13px;margin:0 0 10px}
+.apito .ptprog{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0 0 14px;background:var(--raise)}
+.apito .ptprog.curto{padding:6px 12px;font-size:12.5px}
+.apito .ptprog p{margin:2px 0}
+.apito .ptprogt{font-weight:700}
 @media(max-width:620px){
   .apito .ptj{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:2px 8px}
   .apito .ptj .ptst{grid-column:1/-1;text-align:center;order:-1;font-size:12px}
