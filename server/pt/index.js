@@ -703,6 +703,26 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       }
       res.json(out);
     });
+    // a jornada atual (ou a próxima) de todas as competições, com os jogos, haja ou não jogos a decorrer
+    app.get("/api/pt/jornadas", (req, res) => {
+      const out = [];
+      const agora = Date.now();
+      for (const c of Object.values(st.comps).sort((a, b) => a.ordem - b.ordem)) {
+        if (req.query.org && c.org !== req.query.org) continue;
+        if (req.query.mod && c.mod !== req.query.mod) continue;
+        if (req.query.nivel && req.query.nivel !== "todos" && c.nivel !== req.query.nivel) continue;
+        for (const s of Object.values(c.series || {})) {
+          const n = jornadaAtual(c, s, agora);
+          const jr = n != null ? s.jornadas[n] : null;
+          if (!jr) continue;
+          const jogos = jr.jogos.map((id) => st.jogos[id]).filter(Boolean).sort((a, b) => (a.inicio || 0) - (b.inicio || 0)).map((j) => compacto(j, agora));
+          if (!jogos.length) continue;
+          const ts = jogos.map((j) => j.inicio).filter(Boolean);
+          out.push({ comp: c.id, compNome: c.nome, org: c.org, mod: c.mod, nivel: c.nivel, tipo: c.tipo, serie: s.id, serieNome: s.nome, jornada: n, nome: jr.nome, de: ts.length ? Math.min(...ts) : null, ate: ts.length ? Math.max(...ts) : null, jogos });
+        }
+      }
+      res.json(out);
+    });
     app.get("/api/pt/aovivo", (req, res) => {
       const agora = Date.now();
       const hoje = diaLisboa(agora);

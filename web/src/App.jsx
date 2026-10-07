@@ -985,6 +985,7 @@ const CSS = `
 @keyframes apl{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live) 55%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
 .apito .pulse.off{color:var(--muted)} .apito .pulse.off i{background:var(--muted);animation:none}
 .apito .muted{color:var(--muted)}
+.apito .chip.efclaude{color:#C15F3C;border-color:currentColor}
 .apito .ctrls{display:flex;align-items:center;justify-content:flex-end;gap:8px;justify-self:end}
 .apito .barl .status{display:block;max-width:100%}
 @media(max-width:480px){.apito .brand b{font-size:26px} .apito .brandbtn{gap:6px} .apito .tagline{font-size:11.5px;margin-right:0;letter-spacing:-.01em} .apito .brand .logo{width:28px;height:28px}
@@ -1487,7 +1488,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
-                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}</p>
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title="Encontrado pela pesquisa do Claude na web">pesquisa Claude</span></>}</p>
                     )}
                   </div>
                   {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}

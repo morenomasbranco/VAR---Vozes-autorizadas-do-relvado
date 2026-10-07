@@ -149,6 +149,7 @@ export default function Portugal({ API = "", now }) {
   const [dados, setDados] = useState(null);
   const [hoje, setHoje] = useState([]);
   const [tabelas, setTabelas] = useState([]);
+  const [jornadas, setJornadas] = useState(null); // jornada atual (ou próxima) de todas as competições
   const [busca, setBusca] = useState("");
   const [erro, setErro] = useState(null);
   const [aberto, setAberto] = useState(null); // jogo com o formulário «Enviar resultado» aberto
@@ -194,6 +195,8 @@ export default function Portugal({ API = "", now }) {
   useEffect(() => { if (modo === "jornada") lerJornada(); }, [modo, comp?.id, serie?.id, jornada]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (modo === "hoje") lerHoje(); }, [modo, f.org]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (modo === "tabelas") lerTabelas(); }, [modo, f.org, f.mod]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lerJornadas = () => fetch(`${API}/api/pt/jornadas?${new URLSearchParams({ ...(f.org ? { org: f.org } : {}), ...(f.mod ? { mod: f.mod } : {}), nivel: f.nivel })}`).then((r) => r.json()).then((l) => Array.isArray(l) && setJornadas(l)).catch(() => {});
+  useEffect(() => { if (modo === "semana") { setJornadas(null); lerJornadas(); } }, [modo, f.org, f.mod, f.nivel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // mudanças em tempo real: o jogo que mudou entra logo na lista; a tabela relê-se (com calma) a seguir
   const atraso = useRef(null);
@@ -205,6 +208,7 @@ export default function Portugal({ API = "", now }) {
       if (!j) return;
       setHoje((l) => (l.some((x) => x.id === j.id) ? l.map((x) => (x.id === j.id ? j : x)) : diaKey(j.inicio || 0) === diaKey(Date.now()) ? [...l, j] : l));
       setDados((d) => (d && d.jogos?.some((x) => x.id === j.id) ? { ...d, jogos: d.jogos.map((x) => (x.id === j.id ? j : x)) } : d));
+      setJornadas((l) => (l && l.some((g) => g.jogos.some((x) => x.id === j.id)) ? l.map((g) => ({ ...g, jogos: g.jogos.map((x) => (x.id === j.id ? j : x)) })) : l));
       const { modo: m, comp: c } = atual.current;
       if (m === "jornada" && c && j.comp === c.id && !atraso.current) {
         atraso.current = setTimeout(() => { atraso.current = null; atual.current.lerJornada(); }, 2500);
@@ -230,7 +234,7 @@ export default function Portugal({ API = "", now }) {
   const filtros = (
     <div className="ptfil">
       <div className="seg" role="group" aria-label="Vista">
-        {[["jornada", "Jornada"], ["hoje", "Jogos de hoje"], ["tabelas", "Todas as tabelas"]].map(([k, n]) => <button key={k} aria-pressed={modo === k} onClick={() => setModo(k)}>{n}</button>)}
+        {[["jornada", "Competição"], ["semana", "Jornadas da semana"], ["hoje", "Jogos de hoje"], ["tabelas", "Todas as tabelas"]].map(([k, n]) => <button key={k} aria-pressed={modo === k} onClick={() => setModo(k)}>{n}</button>)}
       </div>
       <div className="seg" role="group" aria-label="Modalidade">
         {[["futebol", "Futebol"], ["futsal", "Futsal"]].map(([k, n]) => <button key={k} aria-pressed={f.mod === k} onClick={() => muda({ mod: k, comp: "", serie: "" })}>{n}</button>)}
@@ -293,6 +297,23 @@ export default function Portugal({ API = "", now }) {
           ) : <p className="muted">A carregar…</p>}
         </>
       )}
+      {modo === "semana" && (() => {
+        if (!jornadas) return <p className="muted">A carregar…</p>;
+        const lista = jornadas.filter((g) => !q || semAcentos(`${g.compNome} ${g.serieNome}`).includes(q) || g.jogos.some(filtroJogo));
+        return lista.length === 0 ? <p className="empty">Sem jornadas com estes filtros.</p> : (
+          <>
+            <p className="muted ptres">Jornada desta semana de cada competição (ou a próxima, numa semana de pausa) · {lista.length} competições/séries</p>
+            {lista.map((g) => (
+              <section key={`${g.comp}|${g.serie}`} className="ptgrupo">
+                <button className="ptgh" onClick={() => irPara({ comp: g.comp, serie: g.serie, org: g.org, mod: g.mod, jornada: g.jornada })}>
+                  {g.compNome}{g.serieNome ? ` · ${g.serieNome}` : ""} · {g.jornada}.ª jornada{g.de ? ` · ${intervaloDatas(g.de, g.ate)}` : ""} <ChevronRight size={14} />
+                </button>
+                <ul className="ptlist">{g.jogos.filter((j) => !q || filtroJogo(j) || semAcentos(g.compNome).includes(q)).map((j) => <Jogo key={j.id} j={j} agora={agora} form={form} />)}</ul>
+              </section>
+            ))}
+          </>
+        );
+      })()}
       {modo === "hoje" && (() => {
         const lista = hoje.filter((j) => (!f.mod || j.mod === f.mod) && (f.nivel === "todos" || j.nivel === f.nivel)).filter(filtroJogo);
         const grupos = new Map();
@@ -302,7 +323,7 @@ export default function Portugal({ API = "", now }) {
           grupos.get(k).push(j);
         }
         const nVivos = lista.filter(vivo).length;
-        return lista.length === 0 ? <p className="empty">Não há jogos hoje com estes filtros.</p> : (
+        return lista.length === 0 ? <p className="empty">Não há jogos hoje com estes filtros. <button className="textbtn" onClick={() => setModo("semana")}>Ver as jornadas da semana</button></p> : (
           <>
             <p className="muted ptres">{lista.length} jogos hoje{nVivos ? <> · <span className="pulse"><i />{nVivos} a decorrer</span></> : null}</p>
             {[...grupos.values()].map((js) => (

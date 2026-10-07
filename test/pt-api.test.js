@@ -45,6 +45,12 @@ test("API: competições, jornada da semana com tabela, jogos de hoje, evidênci
   const j = pt._registarJogo(comp, serie, 3, { fpfId: "777", casa: "UD Polvoreira", fora: "SC Ucha", inicio: agora - 10 * 60000 }, "fpf");
   pt._registarJogo(comp, serie, 2, { fpfId: "776", casa: "SC Ucha", fora: "UD Polvoreira", inicio: agora - 7 * 86400e3, hs: 0, as: 2 }, "fpf");
 
+  // jornada da semana de todas as competições, mesmo sem jogos a decorrer
+  pt._registarJogo(comp, serie, 4, { fpfId: "778", casa: "SC Ucha", fora: "UD Polvoreira", inicio: agora + 6 * 86400e3 }, "fpf");
+  const js = chamar("get", "/api/pt/jornadas?org=af-braga").json;
+  assert.equal(js.length, 1);
+  assert.equal(js[0].jornada, 3);
+  assert.equal(js[0].jogos[0].casa, "UD Polvoreira");
   const c = chamar("get", "/api/pt/competicoes").json;
   assert.ok(c.competicoes.some((x) => x.id === "fpf-api"));
   assert.ok(c.orgs.some((o) => o.key === "af-braga"));

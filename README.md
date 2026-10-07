@@ -146,6 +146,10 @@ O servidor entrega o site e a API na porta 3001. Tem de estar sempre ligado, por
 
 O que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo), há 1, 2, 3, 4, 5, 10, 15… 100 anos: acontecimentos, nascimentos e mortes da Wikipédia (pela API «Neste dia» e, se ela falhar, pela página de cada dia), desportistas e acontecimentos de futebol, futsal, basquetebol e hóquei em patins do Wikidata, e jogos de futebol e de basquetebol da ESPN. A lista é refeita quando a semana muda e revista de meia em meia hora. O estado está em `/api/efemerides/estado`.
 
+**Pesquisa do Claude.** Com `ANTHROPIC_API_KEY` no `.env`, o servidor faz, para cada dia da semana, um pedido ao Claude (Claude Opus 5.5, com a ferramenta de pesquisa na web da Anthropic): que acontecimentos desportivos, portugueses e internacionais, marcaram esse dia em cada um daqueles anos. O Claude confirma cada facto na web, dá até três por ano (pelo menos um português quando houver), com título, descrição e a fonte, e devolve tudo numa lista estruturada. São sete pedidos por semana, feitos quando a semana muda, hoje primeiro; um dia que falhe é repetido na revisão seguinte. Estes acontecimentos aparecem primeiro em cada ano, com a etiqueta «pesquisa Claude» e a ligação para a fonte. Ficam em `data/efemerides-claude.json`; o estado está em `/api/efemerides/estado`, no campo `claude`.
+
+Ao contrário do resto do site, isto tem custo: cada dia é um pedido ao Claude Opus 5.5 mais as pesquisas na web que ele fizer (no máximo `EFEMERIDES_CLAUDE_PESQUISAS`, 15 por dia), aos preços da Anthropic. O modelo, o esforço (`EFEMERIDES_CLAUDE_ESFORCO`, `medium` por omissão) e o número de pesquisas acertam-se no `.env`. Sem a chave, a secção continua a funcionar com as fontes gratuitas.
+
 ## Notícias e comunicados oficiais
 
 Por baixo das notícias do Feed há uma secção com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (e uma para as associações), com um filtro Todos · Notícias · Comunicados.
@@ -156,9 +160,10 @@ Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta
 
 Na secção Resultados, a vista **Portugal** tem todos os campeonatos seniores de futebol e de futsal do país — Liga Portugal, FPF e as 22 associações distritais e regionais — e o campeonato nacional de sub-23. Ficam de fora a formação, os sub-22/sub-23 e esperanças distritais, os veteranos, o futebol de praia, o futebol de 7/9 e o INATEL (regras em `server/pt/catalogo.js`). Tudo é gratuito.
 
-Há três vistas, com filtros de modalidade (futebol, futsal), nível (nacionais, distritais) e associação:
+Há quatro vistas, com filtros de modalidade (futebol, futsal), nível (nacionais, distritais) e associação. Todas funcionam haja ou não jogos a decorrer:
 
-- **Jornada**: a jornada da semana de cada competição e série, com setas para as anteriores e as seguintes, e a classificação ao vivo ao lado. A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
+- **Competição**: a jornada da semana de uma competição e série, com setas para as anteriores e as seguintes, e a classificação ao lado (ao vivo quando há jogos). A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
+- **Jornadas da semana**: a jornada atual (ou a próxima) de todas as competições ao mesmo tempo, com os jogos, as horas e os resultados que já houver.
 - **Jogos de hoje**: todos os jogos do dia, agrupados por competição, os que estão a decorrer primeiro.
 - **Todas as tabelas**: as classificações de todos os campeonatos, com pesquisa por equipa.
 
@@ -226,5 +231,6 @@ As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incl
 | `FPF_EPOCA` | época no resultados.fpf.pt (106 = 2026/27) |
 | `FPF_INTERVALO_MS`, `FPF_DIRETO_SEGUNDOS`, `FPF_ESTRUTURA_HORAS` | ritmo das leituras da FPF (1200 ms, 240 s, 20 h) |
 | `PT_RESULTADOS=0` | desliga tudo isto |
+| `ANTHROPIC_API_KEY`, `EFEMERIDES_CLAUDE_MODEL`, `EFEMERIDES_CLAUDE_ESFORCO`, `EFEMERIDES_CLAUDE_PESQUISAS` | pesquisa do Claude para o «Nesta semana» (modelo `claude-opus-5-5`, esforço `medium`, 15 pesquisas por dia) |
 
 Os dados ficam em `data/pt.json` (competições e jogos), `data/pt-eventos.json` (acontecimentos) e `data/pt-clubes.json` (o que se aprendeu de cada clube). Os testes correm com `npm test`.
