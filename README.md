@@ -76,6 +76,8 @@ A primeira coluna da página inicial é um feed automático de vídeos de futebo
 
 - **VSPORTS** (vsports.pt), o site oficial de vídeos da Liga Portugal: cada golo da Liga Portugal Betclic, da Liga 2 e das taças, publicado poucos minutos depois, e os resumos de cada jogo. Lido a cada 20 segundos (`VSPORTS_SEGUNDOS`). É a fonte principal nos jogos portugueses e não depende do Reddit.
 - **Reddit** (r/Evangelista_TV e r/soccer), lidos num só pedido. Sem conta, o servidor lê o JSON público a cada 8 segundos e, se o Reddit o recusar, passa para o RSS. Com uma app gratuita do Reddit (`REDDIT_CLIENT_ID` e `REDDIT_CLIENT_SECRET` no `.env`) usa a API oficial e lê a cada 3 segundos.
+- **Sport TV** (sporttv.pt/videos), lida a cada 20 segundos (`SPORTTV_SEGUNDOS`): golos e resumos dos jogos que a Sport TV transmite. Os vídeos estão na Kaltura; o servidor procura o ficheiro no manifesto público da Kaltura e, se a Kaltura o recusar, usa o leitor da Kaltura com o `SPORTTV_UICONF` (se não o encontrar sozinho no site). Sem nenhum dos dois, o cartão mostra a miniatura e o vídeo abre no site da Sport TV.
+- **Streamain** (streamain.com), lido a cada 30 segundos (`STREAMAIN_SEGUNDOS`): só entram os vídeos com título de desporto, e tocam no site pelo leitor do próprio Streamain.
 - **Telegram** (t.me/twclipshdeuropa e t.me/footballlivegoals), lidos pela página pública de cada canal, sem conta, a cada 10 segundos. O Telegram não bloqueia servidores, por isso é a fonte mais fiável em tempo real.
 
 **Tempo real no Reddit.** Desde maio de 2026, o Reddit recusa o JSON público a servidores de alojamento (como o Northflank) e deixa o RSS a cerca de um pedido por minuto, quando o deixa; a API oficial passou a exigir aprovação prévia. Por isso há um retransmissor, que corre num computador de casa, onde o Reddit responde:
@@ -143,3 +145,9 @@ O servidor entrega o site e a API na porta 3001. Tem de estar sempre ligado, por
 ## Nesta semana
 
 O que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo), há 1, 2, 3, 4, 5, 10, 15… 100 anos: acontecimentos, nascimentos e mortes da Wikipédia (pela API «Neste dia» e, se ela falhar, pela página de cada dia), desportistas e acontecimentos de futebol, futsal, basquetebol e hóquei em patins do Wikidata, e jogos de futebol e de basquetebol da ESPN. A lista é refeita quando a semana muda e revista de meia em meia hora. O estado está em `/api/efemerides/estado`.
+
+## Notícias e comunicados oficiais
+
+Por baixo das notícias do Feed há uma secção com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (e uma para as associações), com um filtro Todos · Notícias · Comunicados.
+
+Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta que o site oferece: o feed RSS (Bundesliga, CONMEBOL, AF Algarve, AF Lisboa), o sitemap de notícias (Ligue 1, DFB, UEFA), a API pública que a própria página usa (Premier League, FIFA) ou a página da lista (as restantes). As notícias da FPF são numeradas e o servidor vai experimentando o número seguinte. Se um site deixar de responder, ou for montado no browser com JavaScript, a fonte passa para o Google News (com alguns minutos de atraso) e o servidor volta a tentar o site de meia em meia hora. Os títulos que não estão em português são traduzidos pelo Google Tradutor; ao passar o rato fica o título original. O estado de cada fonte está em `/api/oficiais/estado`.

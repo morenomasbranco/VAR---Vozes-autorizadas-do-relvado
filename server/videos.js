@@ -132,6 +132,8 @@ export function chaveVideo(url) {
   if (/(^|\.)(x|twitter)\.com$/.test(host)) { const id = path.match(/status\/(\d+)/)?.[1]; return id ? `x:${id}` : null; }
   if (host === "t.me") return `tg:${path.slice(1).toLowerCase()}`;
   if (/(^|\.)instagram\.com$/.test(host)) { const id = path.match(/\/(p|reels?|tv)\/([\w-]+)/)?.[2]; return id ? `ig:${id}` : null; }
+  if (host === "sporttv.pt") { const id = path.match(/\/video\/(\d_[a-z0-9]{8})/i)?.[1]; if (id) return `stv:${id}`; }
+  if (host === "streamain.com") { const id = path.match(/\/(?:embed|[a-z]{2})\/([A-Za-z0-9]{15})(?:\/watch)?$/)?.[1]; if (id) return `sm:${id}`; }
   return `${host}${path}`.toLowerCase();
 }
 // como o site pode reproduzir o vídeo sem sair da página
@@ -140,6 +142,8 @@ export function embedDe(v) {
   if (k.startsWith("yt:")) return { tipo: "iframe", src: `https://www.youtube-nocookie.com/embed/${k.slice(3)}?autoplay=1` };
   if (k.startsWith("st:")) return { tipo: "iframe", src: `https://streamable.com/e/${k.slice(3)}?autoplay=1` };
   if (v.hls) return { tipo: "hls", src: v.hls, mp4: v.mp4 || null };
+  // leitor do próprio alojamento (Streamain, Kaltura da Sport TV), quando não há ficheiro direto
+  if (!v.mp4 && v.iframe) return { tipo: "iframe", src: v.iframe };
   if (v.mp4) return { tipo: /\.m3u8(\?|$)/i.test(v.mp4) ? "hls" : "mp4", src: v.mp4 };
   // Instagram sem ficheiro direto (conteúdo com direitos): o leitor oficial do Instagram, dentro do cartão
   if (k.startsWith("ig:")) return { tipo: "iframe", src: `https://www.instagram.com/p/${k.slice(3)}/embed/` };
@@ -220,7 +224,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
       source: p.fonte, subreddit: p.subreddit || null, canal: p.canal || null, author: p.author,
       title: p.title, reddit_url: p.reddit_url, video_url: p.video_url,
       thumbnail: p.thumbnail || v.sources.find((x) => x.thumbnail)?.thumbnail || v.thumbnail || miniaturaDe(p) || null,
-      hls: p.hls || null, mp4: p.mp4 || null, height: p.height || null, created_time: p.created_time,
+      hls: p.hls || null, mp4: p.mp4 || null, iframe: p.iframe || null, height: p.height || null, created_time: p.created_time,
     });
     v.embed = embedDe(v);
   }
@@ -286,7 +290,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
 
   // Alojamentos de vídeo (streamin, streamff, dubz…) que só dão uma página: vai-se buscar o ficheiro de vídeo
   // que a página indica (og:video, <video>, <source>), para o vídeo tocar sozinho no site, mesmo em miniatura.
-  const SEM_PAGINA = /^(yt|st|x|tg|vr|ig):/;
+  const SEM_PAGINA = /^(yt|st|x|tg|vr|ig|stv|sm):/;
   const resolvidos = new Map(); // chave do vídeo → endereço do ficheiro (ou null)
   const imagensDaPagina = new Map(); // chave do vídeo → imagem indicada pela página
   async function ficheiroDaPagina(url) {

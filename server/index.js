@@ -20,12 +20,16 @@ import { createVideos } from "./videos.js";
 import { startReddit } from "./sources/reddit.js";
 import { startTgVideos } from "./sources/tgvideos.js";
 import { startVsports } from "./sources/vsports.js";
+import { startSportTv } from "./sources/sporttv.js";
+import { startStreamain } from "./sources/streamain.js";
 import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
+import { createOficiais } from "./sources/oficiais.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
 const LIGAS = readJson(new URL("../ligas.json", import.meta.url), []);
+const OFICIAIS = readJson(new URL("../oficiais.json", import.meta.url), {});
 const PORT = Number(process.env.PORT) || 3001;
 const log = (...a) => console.log(...a);
 
@@ -284,7 +288,7 @@ function onPost(post) {
 
 // Feed de vídeos (golos, resumos, defesas, VAR, expulsões): Reddit e canais públicos do Telegram
 const VIDEOS_CFG = FONTES.videos || {};
-const ESTADO_VIDEOS = { reddit: {}, telegram: {}, vsports: {} };
+const ESTADO_VIDEOS = { reddit: {}, telegram: {}, vsports: {}, sporttv: {}, streamain: {} };
 const videos = createVideos({
   broadcast: (e, d) => broadcast(e, d),
   log,
@@ -297,6 +301,9 @@ const capas = createCapas({ log, broadcast: (e, d) => broadcast(e, d) });
 
 // «Nesta semana»: o que aconteceu no desporto no dia de hoje, há 1, 2, 3, 4, 5, 10, 15… 100 anos
 const efemerides = createEfemerides({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS });
+
+// Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed)
+const oficiais = createOficiais({ log, broadcast: (e, d) => broadcast(e, d), config: OFICIAIS });
 
 const app = express();
 const ORIGINS = (process.env.ALLOWED_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);
@@ -377,7 +384,7 @@ app.get(["/api/videos/latest", "/videos/latest"], (req, res) => {
     video_id: v.video_id, title: v.title, thumbnail: v.thumbnail, video_url: v.video_url, reddit_url: v.reddit_url,
     category: v.category, teams: v.teams, home_team: v.home_team, away_team: v.away_team, score: v.score, scorer_side: v.scorer_side,
     player: v.player, minute: v.minute, opponent: v.opponent, competition: v.competition, liga: v.liga, paisTema: v.paisTema, equipas: v.equipas,
-    source: v.subreddit ? `r/${v.subreddit}` : v.canal === "vsports" ? "VSPORTS" : /^ig:/.test(v.canal || "") ? `@${v.canal.slice(3)}` : v.canal ? `t.me/${v.canal}` : v.source, subreddit: v.subreddit, author: v.author,
+    source: v.subreddit ? `r/${v.subreddit}` : v.canal === "vsports" ? "VSPORTS" : v.canal === "sporttv" ? "Sport TV" : v.canal === "streamain" ? "Streamain" : /^ig:/.test(v.canal || "") ? `@${v.canal.slice(3)}` : v.canal ? `t.me/${v.canal}` : v.source, subreddit: v.subreddit, author: v.author,
     sources: v.sources.map((x) => ({ fonte: x.fonte, subreddit: x.subreddit || null, canal: x.canal || null, url: x.reddit_url, created_time: x.created_time })),
     embed: v.embed, created_time: v.created_time, first_seen: v.first_seen, portugues: !!v.portugues,
   })));
@@ -442,6 +449,8 @@ app.get("/api/capas/img/:id", async (req, res) => {
 });
 app.get("/api/efemerides", (req, res) => res.json(efemerides.para(String(req.query.lang || "pt"))));
 app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
+app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
+app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
@@ -470,8 +479,11 @@ zapping.start();
 startReddit(VIDEOS_CFG.reddit || [], (p) => videos.add(p), log, ESTADO_VIDEOS.reddit, { relayAtivo: () => Date.now() - (ESTADO_VIDEOS.relay?.ultimo || 0) < 3 * 60e3 });
 startTgVideos(VIDEOS_CFG.telegram || [], (p) => videos.add(p), log, ESTADO_VIDEOS.telegram);
 startVsports((p) => videos.add(p), log, ESTADO_VIDEOS.vsports);
+startSportTv((p) => videos.add(p), log, ESTADO_VIDEOS.sporttv);
+startStreamain((p) => videos.add(p), log, ESTADO_VIDEOS.streamain);
 // capas.start(); — as capas saíram do site, o servidor já não as vai buscar
 efemerides.start();
+oficiais.start();
 startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear

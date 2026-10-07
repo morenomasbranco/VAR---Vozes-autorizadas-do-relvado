@@ -58,6 +58,12 @@ const PREMIO = /bola de ouro|ballon d'?or|bal[oó]n de oro|pallone d'oro|goldene
 const MERCADO_FORTE = /here we go|\btransfer[eê]ncia|\btransfers?\b|contrata[cç][aã]o|\bcontratad[oa]|\brefor[cç]o\b|empr[eé]stimo|\bloan\b|fichaj|\bsigns?\b|\bsigned\b|\bsigning\b|assinou|renov(ou|a[cç][aã]o)|rescis|exames m[eé]dicos|\bmedical\b|acordo (total|verbal|para a (sa[ií]da|transfer))|deal (agreed|done)|mercado de (transfer|inverno|ver[aã]o)|janela de transfer|novo treinador|new (head )?coach|despedid|\bsacked\b/i;
 const foraDoMercado = (t) => PREMIO.test(t) && !MERCADO_FORTE.test(t);
 
+// texto sem acentos e em minúsculas, para a pesquisa
+const semAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// secções onde não aparece, à direita de cada notícia, a etiqueta com o nome da secção
+const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
+
 const inSection = (it, s) => {
   if (s === "historias" || s === "favoritos" || s === "capas" || s === "efemerides") return false;
   if (s === "resultados") return !!it.score;
@@ -75,6 +81,7 @@ const UI = {
     autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
     otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos", pickGame: "Carrega num jogo para ver os vídeos dele.", videoHighlights: "Destaques",
     videoHighlightsNote: "Os vídeos de maior interesse das últimas 24 horas",
+    oficiais: "Notícias e comunicados oficiais", ofTodos: "Todos", ofNoticias: "Notícias", ofComunicados: "Comunicados", ofNoticia: "Notícia", ofComunicado: "Comunicado",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -562,7 +569,7 @@ const VTXT = {
   it: { title: "Video", watch: "Guarda il video", close: "Chiudi", empty: "Gol e momenti migliori compaiono qui appena vengono pubblicati.", more: "Mostra altri", also: (n) => `anche su ${n}`, src: "Fonte" },
   de: { title: "Videos", watch: "Video ansehen", close: "Schließen", empty: "Tore und Highlights erscheinen hier, sobald sie veröffentlicht werden.", more: "Mehr anzeigen", also: (n) => `auch auf ${n}`, src: "Quelle" },
 };
-const vFonte = (s) => (s.subreddit ? `r/${s.subreddit}` : s.canal === "vsports" ? "VSPORTS" : /^ig:/.test(s.canal || "") ? `@${s.canal.slice(3)}` : s.canal ? `t.me/${s.canal}` : s.fonte);
+const vFonte = (s) => (s.subreddit ? `r/${s.subreddit}` : s.canal === "vsports" ? "VSPORTS" : s.canal === "sporttv" ? "Sport TV" : s.canal === "streamain" ? "Streamain" : /^ig:/.test(s.canal || "") ? `@${s.canal.slice(3)}` : s.canal ? `t.me/${s.canal}` : s.fonte);
 
 // os vídeos do Reddit vêm em HLS (com som); o Safari toca-os diretamente, os outros browsers com o hls.js,
 // que só é descarregado quando alguém carrega em «Ver vídeo»
@@ -606,6 +613,7 @@ const comAutoplay = (src) => {
     const u = new URL(src);
     if (/youtube/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("mute", "1"); u.searchParams.set("controls", "0"); u.searchParams.set("loop", "1"); u.searchParams.set("playsinline", "1"); }
     if (/streamable/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("muted", "1"); u.searchParams.set("loop", "1"); u.searchParams.set("nocontrols", "1"); }
+    if (/streamain/.test(u.hostname)) { u.searchParams.set("autoplay", "1"); u.searchParams.set("muted", "1"); u.searchParams.set("loop", "1"); }
     return u.href;
   } catch { return src; }
 };
@@ -1279,6 +1287,20 @@ const CSS = `
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
 .apito .vdest .vrow .vcard.mini{flex:0 0 240px}
+.apito .vdest .vrow{scroll-snap-type:none}
+/* notícias e comunicados oficiais das ligas e federações */
+.apito .ofic{margin:26px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.apito .ofic .livehead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-bottom:10px}
+.apito .ofic .seg{margin:0}
+.apito .ocols{scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding-bottom:6px}
+.apito .ocols::-webkit-scrollbar{display:block;height:7px}
+.apito .ocols::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .oitem .ctitle a{color:inherit;text-decoration:none}
+.apito .oitem .ctitle a:hover{text-decoration:underline}
+.apito .otipo{font-size:10px;padding:1px 6px}
+.apito .otipo.comunicado{background:var(--accent);color:#1B1B1B;border-color:transparent}
+.apito .opdf{font-size:10px;padding:1px 5px}
+.apito .omais{margin:8px 0 0} /* a faixa desliza sozinha: sem encaixe, que a puxava de volta */
 @media(max-width:560px){.apito .vdest .vrow .vcard.mini{flex-basis:62vw}}
 .apito .lmin.pausa{color:var(--accent)}
 .apito .lmin.et{color:var(--hist)}
@@ -1547,8 +1569,17 @@ export default function App() {
       </button>
     );
   };
+  // notícias e comunicados oficiais das ligas e federações (por baixo das notícias do Feed)
+  const [ofic, setOfic] = useState({ grupos: [], itens: [] });
+  const [ofTipo, setOfTipo] = useState("todos");
+  const [ofN, setOfN] = useState({}); // entradas mostradas por coluna, antes de «Ver mais»
+  const lerOfic = () => fetch(`${API}/api/oficiais`).then((r) => r.json()).then((d) => d && Array.isArray(d.itens) && setOfic(d)).catch(() => {});
+  const ofEntra = (x) => setOfic((o) => ({ ...o, itens: [x, ...o.itens.filter((y) => y.id !== x.id)].sort((a, b) => b.ts - a.ts).slice(0, 2500) }));
   const [efem, setEfem] = useState(null); // «Nesta semana»: o que aconteceu no desporto neste dia, há 1, 2… 100 anos
   const vRef = useRef(null); // faixa horizontal dos vídeos
+  // Destaques: a faixa desliza sozinha da esquerda para a direita e pára enquanto o cursor (ou o dedo) está por cima
+  const vPausa = useRef(false);
+  const vEspera = useRef(0); // depois das setas, de um toque ou de chegar ao fim, espera um pouco antes de continuar
   const [modFilter, setModFilter] = useState("todas");
   const [favs, setFavs] = useState(() => {
     try { const v = JSON.parse(localStorage.getItem("var-favoritos")); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -1614,6 +1645,7 @@ export default function App() {
     const onBack = () => {
       if (document.visibilityState !== "visible") return;
       leItems();
+      lerOfic();
       // e os vídeos que saíram entretanto (o telemóvel corta a ligação em segundo plano)
       fetch(`${API}/api/videos/latest?limit=150`).then((r) => r.json()).then((l) => Array.isArray(l) && setVideos((cur) => {
         const porId = new Map(cur.map((x) => [x.video_id, x]));
@@ -1713,7 +1745,7 @@ export default function App() {
     // ao (re)ligar, relê o que pode ter mudado enquanto a ligação esteve em baixo
     let abriu = false;
     es.onopen = () => {
-      setConn("ok"); lerCapas(); lerEfem(langRef.current);
+      setConn("ok"); lerCapas(); lerEfem(langRef.current); lerOfic();
       if (abriu) resyncRef.current(); // religou: os resultados que mudaram com a ligação em baixo
       abriu = true;
     };
@@ -1745,6 +1777,8 @@ export default function App() {
     es.addEventListener("capas", () => lerCapas());
     // a lista do «Nesta semana» foi refeita (mudou o dia ou foi revista)
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
+    // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
+    es.addEventListener("oficial", (e) => ofEntra({ ...JSON.parse(e.data), vistoEm: Date.now() }));
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
       setItems((l) => l.filter((x) => x.id !== id));
@@ -2084,7 +2118,39 @@ export default function App() {
     for (const v of videos) { o[v.category] = (o[v.category] || 0) + 1; if (v.category === "red") o.cards = (o.cards || 0) + 1; }
     return o;
   }, [videos]);
-  const rolaVideos = (dir) => { const el = vRef.current; if (el) el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.85), behavior: "smooth" }); };
+  // um vídeo dos Destaques aberto a tocar também segura a faixa, para não sair do ecrã a meio
+  const vToca = useRef(false);
+  vToca.current = !!aTocar && destaquesVid.some((v) => v.video_id === aTocar);
+  useEffect(() => {
+    if (section !== "destaque") return undefined;
+    const VEL = 0.045; // píxeis por milissegundo (cerca de 45 px por segundo)
+    let raf = 0;
+    let ultimo = performance.now();
+    let pos = null;
+    const passo = (t) => {
+      const dt = Math.min(64, t - ultimo);
+      ultimo = t;
+      const el = vRef.current;
+      const max = el ? el.scrollWidth - el.clientWidth : 0;
+      if (el && max > 4 && !vPausa.current && !vToca.current && t >= vEspera.current) {
+        // o leitor mexeu na faixa (setas, roda do rato, dedo): continua a partir de onde ela ficou
+        if (pos == null || Math.abs(el.scrollLeft - pos) > 2) pos = el.scrollLeft;
+        if (pos >= max - 1) {
+          // chegou ao fim: pára um instante e volta ao início
+          vEspera.current = t + 2500;
+          pos = null;
+          setTimeout(() => { const e = vRef.current; if (e && !vPausa.current) e.scrollTo({ left: 0, behavior: "smooth" }); }, 1500);
+        } else {
+          pos = Math.min(max, pos + dt * VEL);
+          el.scrollLeft = pos;
+        }
+      }
+      raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, [section]);
+  const rolaVideos = (dir) => { const el = vRef.current; if (el) { vEspera.current = performance.now() + 1200; el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.85), behavior: "smooth" }); } };
   // volta à página inicial (clicar no nome do site)
   const irInicio = () => { setSection("destaque"); setQuery(""); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
@@ -2465,7 +2531,11 @@ export default function App() {
                         <button className="icon-btn" onClick={() => rolaVideos(1)} aria-label="→"><ChevronRight size={16} /></button>
                       </div>
                     </div>
-                    <ul className="vlist vrow" ref={vRef}>
+                    <ul className="vlist vrow" ref={vRef}
+                      onMouseEnter={() => { vPausa.current = true; }}
+                      onMouseLeave={() => { vPausa.current = false; }}
+                      onTouchStart={() => { vPausa.current = true; }}
+                      onTouchEnd={() => { vPausa.current = false; vEspera.current = performance.now() + 2500; }}>
                       {destaquesVid.map((v) => (
                         <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
                       ))}
@@ -2517,6 +2587,54 @@ export default function App() {
                     </section>
                   ))}
                 </div>
+                {ofic.grupos.length > 0 && (() => {
+                  const q = semAcentos(query).trim();
+                  const lista = ofic.itens.filter((x) => (ofTipo === "todos" || x.tipo === ofTipo) && (!q || semAcentos(`${x.org} ${x.titulo} ${x.titulo_pt || ""}`).includes(q)));
+                  const quando = (x) => (x.soDia ? nomeDia(diaLisboa(x.ts), lang) : agoText(x.ts, now, ui));
+                  return (
+                    <section className="ofic" aria-label={ui.oficiais}>
+                      <div className="livehead">
+                        <h2 className="vdesth">{ui.oficiais}</h2>
+                        <div className="seg lvls" role="group" aria-label={ui.oficiais}>
+                          {[["todos", ui.ofTodos], ["noticia", ui.ofNoticias], ["comunicado", ui.ofComunicados]].map(([k, t]) => (
+                            <button key={k} aria-pressed={ofTipo === k} onClick={() => setOfTipo(k)}>{t}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="cols ocols">
+                        {ofic.grupos.map((g) => {
+                          const daCol = lista.filter((x) => x.grupo === g.id);
+                          const n = ofN[g.id] || 15;
+                          return (
+                            <section key={g.id} className="col">
+                              <h2 className="colh"><Flag code={g.pais} lang={lang} /> {g.nome}</h2>
+                              {daCol.length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
+                                <ul className="clist" aria-live="polite">
+                                  {daCol.slice(0, n).map((x) => (
+                                    <li key={x.id} className={`citem oitem ${now - (x.vistoEm || 0) < 3000 ? "fresh" : ""}`}>
+                                      <div className="cmeta">
+                                        <span className="src">{x.org}</span>
+                                        <span className={`chip otipo ${x.tipo}`}>{x.tipo === "comunicado" ? ui.ofComunicado : ui.ofNoticia}</span>
+                                        {x.pdf && <span className="chip opdf" translate="no">PDF</span>}
+                                        <span className="muted ctime" translate="no" title={new Date(x.ts).toLocaleString(ui.locale)}>{quando(x)}</span>
+                                      </div>
+                                      <h3 className="ctitle">
+                                        <a href={x.url} target="_blank" rel="noreferrer" title={x.titulo_pt ? x.titulo : undefined}>{x.titulo_pt || x.titulo}</a>
+                                      </h3>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {daCol.length > n && (
+                                <button className="textbtn vmais omais" onClick={() => setOfN((o) => ({ ...o, [g.id]: n + 15 }))}>{(VTXT[lang] || VTXT.pt).more} ({daCol.length - n})</button>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })()}
               </>
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
@@ -2575,7 +2693,7 @@ export default function App() {
                             {it.mod && <span className="chip mod">{modName(it.mod, lang) || it.mod}</span>}
                             {it.unread && <span className="chip new">{ui.fresh}</span>}
                             {it.hot && <span className="chip hot">{ui.hot}</span>}
-                            {it.cats.filter((c) => CAT[c]).map((c) => (
+                            {!SEM_ETIQUETA.has(section) && it.cats.filter((c) => CAT[c]).map((c) => (
                               <span key={c} className={`chip ${CAT[c].club ? "club" : ""}`} style={CAT[c].club ? { "--c": `var(--${c})` } : undefined}>
                                 {emLingua(CAT[c], lang)}
                               </span>

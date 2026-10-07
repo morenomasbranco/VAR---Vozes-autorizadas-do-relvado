@@ -1,0 +1,889 @@
+{
+ "_nota": "Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed). leitor: rss (feed), sitemap (sitemap de notícias), premierleague e fifa (API pública do site), html (lê a página e apanha as ligações que batem certo com «link»; «segue» indica a página verdadeira quando a dada só tem uma ligação para ela), sequencial (vai experimentando os números seguintes das notícias). «google»: pesquisa do Google News usada se o site não responder. grupo: coluna (pt, af, en, es, fr, de, it, br, int). tipo: noticia ou comunicado.",
+ "grupos": [
+  {
+   "id": "pt",
+   "nome": "Portugal",
+   "pais": "pt"
+  },
+  {
+   "id": "af",
+   "nome": "Associações de Futebol",
+   "pais": "pt"
+  },
+  {
+   "id": "en",
+   "nome": "Inglaterra",
+   "pais": "gb-eng"
+  },
+  {
+   "id": "es",
+   "nome": "Espanha",
+   "pais": "es"
+  },
+  {
+   "id": "fr",
+   "nome": "França",
+   "pais": "fr"
+  },
+  {
+   "id": "de",
+   "nome": "Alemanha",
+   "pais": "de"
+  },
+  {
+   "id": "it",
+   "nome": "Itália",
+   "pais": "it"
+  },
+  {
+   "id": "br",
+   "nome": "Brasil",
+   "pais": "br"
+  },
+  {
+   "id": "int",
+   "nome": "FIFA · UEFA · CONMEBOL",
+   "pais": "un"
+  }
+ ],
+ "fontes": [
+  {
+   "id": "fpf-noticias",
+   "org": "FPF",
+   "grupo": "pt",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "sequencial",
+   "url": "https://www.fpf.pt/noticias",
+   "artigo": "https://www.fpf.pt/pt/News/Todas-as-notícias/Notícia/news/{id}",
+   "link": "/news/(\\d+)",
+   "google": "site:fpf.pt"
+  },
+  {
+   "id": "fpf-cd-profissional",
+   "org": "FPF",
+   "grupo": "pt",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://www.fpf.pt/Institucional/Disciplina/Secção-Profissional/Comunicados",
+   "link": "(?:DownloadDocument\\.ashx|LinkClick\\.aspx|\\.pdf)[^\\\"]*",
+   "google": "site:fpf.pt comunicado conselho de disciplina"
+  },
+  {
+   "id": "fpf-cd-nao-profissional",
+   "org": "FPF",
+   "grupo": "pt",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://www.fpf.pt/pt/Institucional/Disciplina/Secção-Não-Profissional/Comunicados",
+   "link": "(?:DownloadDocument\\.ashx|LinkClick\\.aspx|\\.pdf)[^\\\"]*"
+  },
+  {
+   "id": "fpf-documentacao",
+   "org": "FPF",
+   "grupo": "pt",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://www.fpf.pt/pt/Institucional/Documentação",
+   "link": "(?:DownloadDocument\\.ashx|LinkClick\\.aspx|\\.pdf)[^\\\"]*"
+  },
+  {
+   "id": "fpf-relatorios",
+   "org": "FPF",
+   "grupo": "pt",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://www.fpf.pt/pt/Institucional/Disciplina/Relatórios",
+   "link": "(?:DownloadDocument\\.ashx|LinkClick\\.aspx|\\.pdf)[^\\\"]*"
+  },
+  {
+   "id": "ligaportugal-noticias",
+   "org": "Liga Portugal",
+   "grupo": "pt",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://www.ligaportugal.pt/noticias",
+   "link": "/news/\\d+/[^\\\"#?]+",
+   "google": "site:ligaportugal.pt"
+  },
+  {
+   "id": "ligaportugal-comunicados",
+   "org": "Liga Portugal",
+   "grupo": "pt",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://www.ligaportugal.pt/statements",
+   "link": "(?:/statements?/[^\\\"#?]+|\\.pdf[^\\\"]*)",
+   "google": "site:ligaportugal.pt \"comunicado oficial\""
+  },
+  {
+   "id": "afalgarve-noticias",
+   "org": "AF Algarve",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "rss",
+   "url": "https://afalgarve.pt/feed/",
+   "pagina": "https://afalgarve.pt/af-algarve/noticias/"
+  },
+  {
+   "id": "afalgarve-comunicados",
+   "org": "AF Algarve",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afalgarve.pt/documentos/comunicados-oficiais/",
+   "link": "/wp-content/uploads/[^\\\"]+\\.pdf"
+  },
+  {
+   "id": "afah-noticias",
+   "org": "AF Angra do Heroísmo",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afah.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afah-comunicados",
+   "org": "AF Angra do Heroísmo",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afah.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afaveiro-noticias",
+   "org": "AF Aveiro",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afaveiro.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afaveiro-comunicados",
+   "org": "AF Aveiro",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afaveiro.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afbeja-noticias",
+   "org": "AF Beja",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afbeja.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afbeja-comunicados",
+   "org": "AF Beja",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afbeja.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afbraga-noticias",
+   "org": "AF Braga",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afbraga.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afbraga-comunicados",
+   "org": "AF Braga",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afbraga.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afbraganca-noticias",
+   "org": "AF Bragança",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afbraganca.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afbraganca-comunicados",
+   "org": "AF Bragança",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afbraganca.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afcastelobranco-noticias",
+   "org": "AF Castelo Branco",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afcastelobranco.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afcastelobranco-comunicados",
+   "org": "AF Castelo Branco",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afcastelobranco.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afcoimbra-noticias",
+   "org": "AF Coimbra",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afcoimbra.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afcoimbra-comunicados",
+   "org": "AF Coimbra",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afcoimbra.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afevora-noticias",
+   "org": "AF Évora",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afevora.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afevora-comunicados",
+   "org": "AF Évora",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afevora.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afguarda-noticias",
+   "org": "AF Guarda",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afguarda.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afguarda-comunicados",
+   "org": "AF Guarda",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afguarda.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afhorta-noticias",
+   "org": "AF Horta",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afhorta.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afhorta-comunicados",
+   "org": "AF Horta",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afhorta.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afleiria-noticias",
+   "org": "AF Leiria",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afleiria.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afleiria-comunicados",
+   "org": "AF Leiria",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afleiria.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afl-noticias",
+   "org": "AF Lisboa",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "rss",
+   "url": "https://afl.pt/feed/",
+   "pagina": "https://afl.pt/noticias/"
+  },
+  {
+   "id": "afl-comunicados",
+   "org": "AF Lisboa",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afl.pt/comunicados/",
+   "link": "/wp-content/uploads/[^\\\"]+\\.pdf"
+  },
+  {
+   "id": "afl-documentos",
+   "org": "AF Lisboa",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afl.pt/documentos/",
+   "link": "/wp-content/uploads/[^\\\"]+\\.pdf"
+  },
+  {
+   "id": "afmadeira-noticias",
+   "org": "AF Madeira",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afmadeira.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afmadeira-comunicados",
+   "org": "AF Madeira",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afmadeira.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afpd-noticias",
+   "org": "AF Ponta Delgada",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afpd.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afpd-comunicados",
+   "org": "AF Ponta Delgada",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afpd.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afportalegre-noticias",
+   "org": "AF Portalegre",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afportalegre.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afportalegre-comunicados",
+   "org": "AF Portalegre",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afportalegre.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afporto-noticias",
+   "org": "AF Porto",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afporto.pt/noticias/",
+   "link": "afporto\\.pt/noticias/(?!page/)[a-z0-9-]{8,}/?"
+  },
+  {
+   "id": "afporto-comunicados",
+   "org": "AF Porto",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afporto.pt/documentacao/comunicados/",
+   "link": "/wp-content/uploads/[^\\\"]+\\.pdf"
+  },
+  {
+   "id": "afporto-documentacao",
+   "org": "AF Porto",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afporto.pt/documentacao/",
+   "link": "/wp-content/uploads/[^\\\"]+\\.pdf"
+  },
+  {
+   "id": "afsantarem-noticias",
+   "org": "AF Santarém",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afsantarem.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afsantarem-comunicados",
+   "org": "AF Santarém",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afsantarem.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afsetubal-noticias",
+   "org": "AF Setúbal",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afsetubal.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afsetubal-comunicados",
+   "org": "AF Setúbal",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afsetubal.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afvianacastelo-noticias",
+   "org": "AF Viana do Castelo",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afvianacastelo.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afvianacastelo-comunicados",
+   "org": "AF Viana do Castelo",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afvianacastelo.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afvr-noticias",
+   "org": "AF Vila Real",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afvr.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afvr-comunicados",
+   "org": "AF Vila Real",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afvr.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "afviseu-noticias",
+   "org": "AF Viseu",
+   "grupo": "af",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afviseu.fpf.pt/Noticias",
+   "link": "/Not[^/\\\"]{0,14}cias?/Not[^/\\\"]{0,14}cia/Id/\\d+"
+  },
+  {
+   "id": "afviseu-comunicados",
+   "org": "AF Viseu",
+   "grupo": "af",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://afviseu.fpf.pt/Associacao/Documentacao/Comunicados-Oficiais",
+   "link": "/DesktopModules/\\w+Documents/DownloadFiles\\.ashx\\?IdDoc=\\d+",
+   "segue": "/Associa[^\\\"/]*/Documenta[^\\\"/]*/Comunicados[^\\\"]*"
+  },
+  {
+   "id": "pl-noticias",
+   "org": "Premier League",
+   "grupo": "en",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "premierleague",
+   "url": "https://www.premierleague.com/en/news",
+   "google": "site:premierleague.com",
+   "exclui": "statement"
+  },
+  {
+   "id": "pl-comunicados",
+   "org": "Premier League",
+   "grupo": "en",
+   "tipo": "comunicado",
+   "lang": "en",
+   "leitor": "premierleague",
+   "url": "https://www.premierleague.com/en/media/statements",
+   "filtro": "statement"
+  },
+  {
+   "id": "fa-noticias",
+   "org": "The FA",
+   "grupo": "en",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://www.thefa.com/news",
+   "link": "/news/\\d{4}/[a-z]{3}/\\d{2}/[^\\\"#?]+",
+   "google": "site:thefa.com"
+  },
+  {
+   "id": "laliga-noticias",
+   "org": "LALIGA",
+   "grupo": "es",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://www.laliga.com/en-GB/news",
+   "link": "/en-GB/news/[a-z0-9-]{8,}",
+   "google": "site:laliga.com",
+   "locale": "es"
+  },
+  {
+   "id": "laliga-comunicados",
+   "org": "LALIGA",
+   "grupo": "es",
+   "tipo": "comunicado",
+   "lang": "es",
+   "leitor": "html",
+   "url": "https://www.laliga.com/en-GB/pressroom/press-releases",
+   "link": "/(?:en-GB/news|noticias|en-GB/pressroom/press-releases)/[a-z0-9-]{8,}"
+  },
+  {
+   "id": "rfef-noticias",
+   "org": "RFEF",
+   "grupo": "es",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://rfef.es/en/noticias",
+   "link": "/en/noticias/[A-Za-z0-9-]{6,}",
+   "google": "site:rfef.es",
+   "locale": "es"
+  },
+  {
+   "id": "ligue1-noticias",
+   "org": "Ligue 1",
+   "grupo": "fr",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "sitemap",
+   "url": "https://ligue1.com/api/sitemap/sitemap-articles-l1-en",
+   "pagina": "https://ligue1.com/en/articles?competition=ligue1mcdonalds",
+   "google": "site:ligue1.com",
+   "locale": "fr"
+  },
+  {
+   "id": "fff-noticias",
+   "org": "FFF",
+   "grupo": "fr",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://uk.fff.fr/voir_plus/dernieres_actualites.html",
+   "link": "/article/\\d+-[^\\\"]+?\\.html",
+   "google": "site:fff.fr",
+   "locale": "fr"
+  },
+  {
+   "id": "bundesliga-noticias",
+   "org": "Bundesliga",
+   "grupo": "de",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "rss",
+   "url": "https://www.bundesliga.com/en/bundesliga/news/rss",
+   "pagina": "https://www.bundesliga.com/en/bundesliga/news",
+   "google": "site:bundesliga.com",
+   "locale": "de"
+  },
+  {
+   "id": "dfb-noticias",
+   "org": "DFB",
+   "grupo": "de",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "sitemap",
+   "url": "https://www.dfb.de/sitemap-news-en.xml",
+   "pagina": "https://www.dfb.de/en/home",
+   "google": "site:dfb.de",
+   "locale": "de"
+  },
+  {
+   "id": "seriea-noticias",
+   "org": "Lega Serie A",
+   "grupo": "it",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://en.legaseriea.it/serie-a/news",
+   "link": "/serie-a/news/[a-z0-9-]{6,}",
+   "google": "site:legaseriea.it",
+   "locale": "it"
+  },
+  {
+   "id": "seriea-comunicados",
+   "org": "Lega Serie A",
+   "grupo": "it",
+   "tipo": "comunicado",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://en.legaseriea.it/lega-serie-a/documentazione",
+   "link": "https?://images\\.legaseriea\\.it/[^\\\"]+\\.pdf"
+  },
+  {
+   "id": "figc-noticias",
+   "org": "FIGC",
+   "grupo": "it",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://www.figc.it/en/news",
+   "link": "/en/[a-z-]+/news/[a-z0-9-]+-[a-z0-9]{8}",
+   "google": "site:figc.it",
+   "locale": "it"
+  },
+  {
+   "id": "cbf-noticias",
+   "org": "CBF",
+   "grupo": "br",
+   "tipo": "noticia",
+   "lang": "pt-br",
+   "leitor": "html",
+   "url": "https://www.cbf.com.br/noticias",
+   "link": "cbf\\.com\\.br/[a-z0-9/-]*noticias/[a-z0-9-]{8,}",
+   "google": "site:cbf.com.br",
+   "locale": "br"
+  },
+  {
+   "id": "cbf-futebol-brasileiro-noticias",
+   "org": "CBF",
+   "grupo": "br",
+   "tipo": "noticia",
+   "lang": "pt-br",
+   "leitor": "html",
+   "url": "https://www.cbf.com.br/futebol-brasileiro/noticias",
+   "link": "cbf\\.com\\.br/[a-z0-9/-]*noticias/[a-z0-9-]{8,}",
+   "google": "site:cbf.com.br",
+   "locale": "br"
+  },
+  {
+   "id": "cbf-selecao-brasileira-noticias",
+   "org": "CBF",
+   "grupo": "br",
+   "tipo": "noticia",
+   "lang": "pt-br",
+   "leitor": "html",
+   "url": "https://www.cbf.com.br/selecao-brasileira/noticias",
+   "link": "cbf\\.com\\.br/[a-z0-9/-]*noticias/[a-z0-9-]{8,}",
+   "google": "site:cbf.com.br",
+   "locale": "br"
+  },
+  {
+   "id": "cbf-media",
+   "org": "CBF",
+   "grupo": "br",
+   "tipo": "noticia",
+   "lang": "pt-br",
+   "leitor": "html",
+   "url": "https://cbf.media",
+   "link": "/p/[a-z0-9-]+-\\d{8}"
+  },
+  {
+   "id": "fifa-noticias-pt",
+   "org": "FIFA",
+   "grupo": "int",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "fifa",
+   "url": "https://www.fifa.com/pt/news",
+   "locale_api": "pt",
+   "google": "site:fifa.com"
+  },
+  {
+   "id": "fifa-noticias-en",
+   "org": "FIFA",
+   "grupo": "int",
+   "tipo": "noticia",
+   "lang": "en",
+   "leitor": "fifa",
+   "url": "https://www.fifa.com/en/news",
+   "locale_api": "en"
+  },
+  {
+   "id": "fifa-comunicados",
+   "org": "FIFA",
+   "grupo": "int",
+   "tipo": "comunicado",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://inside.fifa.com/organisation/media/all-media-releases",
+   "link": "/media-releases/[a-z0-9-]{6,}",
+   "google": "site:inside.fifa.com",
+   "locale": "en"
+  },
+  {
+   "id": "uefa-noticias",
+   "org": "UEFA",
+   "grupo": "int",
+   "tipo": "noticia",
+   "lang": "pt",
+   "leitor": "sitemap",
+   "url": "https://pt.uefa.com/sitemap/news/latest.xml",
+   "pagina": "https://pt.uefa.com/news-media/news/",
+   "google": "site:uefa.com"
+  },
+  {
+   "id": "uefa-comunicados-pt",
+   "org": "UEFA",
+   "grupo": "int",
+   "tipo": "comunicado",
+   "lang": "pt",
+   "leitor": "html",
+   "url": "https://pt.uefa.com/news-media/mediaservices/mediareleases/",
+   "link": "/news-media/(?:news|mediaservices)/[0-9a-f]{4}-[0-9a-f-]+--[a-z0-9-]+/?",
+   "google": "site:uefa.com inurl:news-media"
+  },
+  {
+   "id": "uefa-comunicados-en",
+   "org": "UEFA",
+   "grupo": "int",
+   "tipo": "comunicado",
+   "lang": "en",
+   "leitor": "html",
+   "url": "https://www.uefa.com/news-media/mediaservices/mediareleases/",
+   "link": "/news-media/(?:news|mediaservices)/[0-9a-f]{4}-[0-9a-f-]+--[a-z0-9-]+/?",
+   "google": "site:uefa.com inurl:mediareleases",
+   "locale": "en"
+  },
+  {
+   "id": "conmebol-noticias",
+   "org": "CONMEBOL",
+   "grupo": "int",
+   "tipo": "noticia",
+   "lang": "pt-br",
+   "leitor": "rss",
+   "url": "https://www.conmebol.com/pt-br/feed/",
+   "pagina": "https://www.conmebol.com/pt-br/noticia/",
+   "google": "site:conmebol.com",
+   "locale": "br"
+  },
+  {
+   "id": "conmebol-comunicados",
+   "org": "CONMEBOL",
+   "grupo": "int",
+   "tipo": "comunicado",
+   "lang": "es",
+   "leitor": "html",
+   "url": "https://www.conmebol.com/comunicados/",
+   "link": "conmebol\\.com/noticias/[a-z0-9-]{6,}/?"
+  }
+ ]
+}
