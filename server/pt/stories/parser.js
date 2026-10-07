@@ -88,6 +88,26 @@ export function lerMarcadores(texto) {
   return out;
 }
 
+// lista de golos com minuto, como nos posts de resumo: «⚽ Tiago Mendes 12', Rui Costa 67' (g.p.)»,
+// «12' Tiago Mendes», «Tiago Mendes (12', 80')» → [{ nome, min, extra }] por ordem do minuto
+const MIN_TXT = "(\\d{1,3})(?:\\s*\\+\\s*(\\d{1,2}))?\\s*['’′]";
+export function lerListaGolos(texto) {
+  const t = arrumaOcr(texto);
+  const out = [];
+  const junta = (nome, min, extra) => {
+    nome = String(nome || "").trim().replace(/[.'’,;:-]+$/, "");
+    if (nome.length < 3 || NAO_NOME.test(nome.split(" ")[0]) || /\d/.test(nome) || !min || +min > 130) return;
+    if (!out.some((g) => g.min === +min && g.extra === +(extra || 0))) out.push({ nome, min: +min, extra: +(extra || 0) });
+  };
+  // nome seguido de um ou mais minutos
+  for (const m of t.matchAll(new RegExp(`${NOME}\\s*\\(?\\s*((?:\\d{1,3}(?:\\s*\\+\\s*\\d{1,2})?\\s*['’′]\\s*[,e/]?\\s*)+)`, "g"))) {
+    for (const x of m[2].matchAll(new RegExp(MIN_TXT, "g"))) junta(m[1], x[1], x[2]);
+  }
+  // minuto seguido do nome
+  if (!out.length) for (const m of t.matchAll(new RegExp(`${MIN_TXT}\\s*[-–:]?\\s*${NOME}`, "g"))) junta(m[3], m[1], m[2]);
+  return out.sort((a, b) => a.min - b.min || a.extra - b.extra);
+}
+
 // lê tudo o que interessa num texto
 export function lerTexto(texto) {
   const original = String(texto || "");
@@ -109,7 +129,8 @@ export function lerTexto(texto) {
   if (minuto) confianca += 0.1;
   if (eventos.size) confianca += 0.2;
   if (eventos.has("agenda") && !eventos.has("golo") && !eventos.has("final")) confianca -= 0.3;
-  return { texto: original, eventos: [...eventos], placar: principal, placares, minuto, marcadores, confianca: Math.max(0, Math.min(0.95, confianca)) };
+  const listaGolos = placares.length || eventos.has("final") ? lerListaGolos(original) : [];
+  return { texto: original, eventos: [...eventos], placar: principal, placares, minuto, marcadores, listaGolos, confianca: Math.max(0, Math.min(0.95, confianca)) };
 }
 
 // posição do nome de uma equipa no texto (para saber qual dos números é de quem)

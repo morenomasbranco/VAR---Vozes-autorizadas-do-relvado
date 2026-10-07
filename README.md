@@ -192,12 +192,16 @@ Os clubes não precisam de fazer nada (nem de identificar o site), e **não é p
 
 O texto de cada story vem, por esta ordem: do texto automático que o próprio Instagram gera para as imagens; do **Tesseract** (OCR livre, já instalado na imagem Docker, com português; os vídeos passam pelo ffmpeg, que tira três fotogramas); e, só quando os dois não dão números, do **Gemini** (o mesmo `GEMINI_API_KEY`, no máximo 60 imagens por hora, `STORIES_GEMINI_POR_HORA`).
 
-Cada story é uma **prova**, não uma ordem (`server/pt/stories/evidencia.js`):
+Cada story ou post é uma **prova**, não uma ordem (`server/pt/stories/evidencia.js`):
+
+- **Stories e posts valem o mesmo, e conta o que chegar primeiro.** Muitos clubes, sobretudo nas distritais, dão os golos e o resultado em posts. Se o story chega primeiro, é ele que cria o golo (com o seu minuto) e o post do mesmo golo conta como confirmação; se o post chega primeiro, é ao contrário. O segundo só junta o que faltava: o nome do marcador ou o minuto escrito. Um clube que só publica posts tem os golos pelos posts.
+- **Posts durante o jogo**: leem-se desde o apito inicial, a cada 5 minutos (`IG_POSTS_SEGUNDOS`), e a cada 2 minutos nos clubes que já se viu atualizarem o jogo por post (`IG_POSTS_VIVO_SEGUNDOS`), até 10 clubes por volta (`IG_POSTS_POR_CICLO`) para não gastar os pedidos dos stories. Quando o clube edita a legenda do mesmo post («ATUALIZADO: 2-1»), cada versão conta como uma prova nova.
+- **Post de resumo** («Resultado final 2-1 ⚽ Tiago Mendes 12', 80'»): completa os golos do clube com os marcadores e os minutos escritos, pela ordem; se não houve nada durante o jogo (ou só o resultado oficial), cria esses golos. O minuto de um golo que só aparece num post de fim de jogo, sem minuto escrito, fica desconhecido em vez de estimado pela hora do post.
 
 - O resultado só anda para a frente. Um story com um resultado anterior (publicado com atraso) fica como histórico; um que não bate certo fica «a confirmar» até haver outra prova.
 - **Confirmação pelo outro clube**: quando o adversário publica o mesmo resultado (mesmo escrito ao contrário, «0-1» em vez de «1-0»), não cria outro golo — conta como confirmação, e o golo passa a dizer «confirmado pelos dois clubes».
 - **Quem escreveu o quê**: o visitante tanto escreve «casa-fora» como «nós primeiro». Decide-se pelos nomes das equipas no texto, pela convenção que o sistema vai aprendendo de cada clube (`data/pt-clubes.json`) e pela coerência com o jogo (quem publica «GOLO» costuma ser quem marcou).
-- **Minuto**: o que vem escrito no story («23'»). Sem ele, o minuto é estimado pela hora de publicação do story (menos 1 minuto de atraso, `STORY_ATRASO_SEGUNDOS`), contado a partir do story de início do jogo, do de intervalo ou do de recomeço; sem nenhum, a partir da hora marcada. Os minutos estimados aparecem com «~». O minuto a que vai o jogo é calculado da mesma maneira. No futsal, em que o cronómetro para, a conta é proporcional (20 minutos de jogo em perto de 40 reais).
+- **Minuto**: o que vem escrito no story («23'»). Sem ele, o minuto é estimado pela hora de publicação do story (menos 1 minuto de atraso, `STORY_ATRASO_SEGUNDOS`; num post, 3 minutos, `POST_ATRASO_SEGUNDOS`), contado a partir do story de início do jogo, do de intervalo ou do de recomeço; sem nenhum, a partir da hora marcada. Os minutos estimados aparecem com «~». O minuto a que vai o jogo é calculado da mesma maneira. No futsal, em que o cronómetro para, a conta é proporcional (20 minutos de jogo em perto de 40 reais).
 - **Stories perdidos**: de 0-0 para 2-1 criam-se os golos que faltam, com minuto desconhecido, e só o último leva minuto.
 - **Clubes que não publicam**: o jogo fica com a hora marcada («a decorrer?» e, depois do fim provável, «à espera do resultado») e recebe o resultado quando um dos clubes o puser num post ou quando a associação o publicar no resultados.fpf.pt. O resultado oficial passa sempre por cima do dos stories (o dos stories fica marcado com «*» até lá).
 
@@ -229,7 +233,8 @@ As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incl
 | `STORIES_ANONIMO=0`, `STORIES_FONTES`, `STORIES_ANONIMO_SEGUNDOS`, `STORIES_ANONIMO_PEDIDOS_MINUTO` | modo sem conta: desligar, lista de visualizadores (com `{u}`), ritmo (60 s) e limite de pedidos (30/min) |
 | `PT_LEITOR_DIRETO=1` | os resultados enviados pelos leitores contam sem precisar de uma segunda pessoa |
 | `PT_TOKEN` | chave do retransmissor e da API da redação |
-| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS`, `IG_POSTS_SEGUNDOS` | ritmo da recolha no Instagram com sessão (40/min, 45 s, 60 s, 420 s) |
+| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS` | ritmo da recolha no Instagram com sessão (40/min, 45 s, 60 s) |
+| `IG_POSTS_SEGUNDOS`, `IG_POSTS_VIVO_SEGUNDOS`, `IG_POSTS_POR_CICLO`, `POST_ATRASO_SEGUNDOS` | posts dos clubes durante o jogo: de quanto em quanto tempo (300 s; 120 s nos clubes que atualizam por post), quantos por volta (10) e o atraso de um post para estimar o minuto (180 s) |
 | `STORIES_GEMINI_POR_HORA` | imagens que podem ir ao Gemini por hora (60; 0 desliga) |
 | `STORY_ATRASO_SEGUNDOS` | atraso médio entre o lance e o story (60) |
 | `FPF_EPOCA` | época no resultados.fpf.pt (106 = 2026/27) |

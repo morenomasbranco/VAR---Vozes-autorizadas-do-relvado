@@ -10,6 +10,9 @@ const MODOS = {
   futsal: { parte: 20, real: 38, intervalo: 10, atrasoInicio: 3 },
 };
 export const ATRASO_STORY_MS = (Number(process.env.STORY_ATRASO_SEGUNDOS) || 60) * 1000;
+// um post (fotografia com legenda) demora mais a sair do que um story
+export const ATRASO_POST_MS = (Number(process.env.POST_ATRASO_SEGUNDOS) || 180) * 1000;
+export const atrasoDe = (tipo) => (tipo === "post" || tipo === "facebook" ? ATRASO_POST_MS : ATRASO_STORY_MS);
 
 const minutoDe = (ms, modo) => Math.max(0, ms) / 60000 * (modo.parte / modo.real);
 
@@ -41,9 +44,9 @@ export function minutoEm(jogo, t, mod = "futebol") {
   return parte2(recomeco, conf === "alta" ? "media" : "baixa");
 }
 
-// minuto de um golo publicado num story sem minuto: o instante do story menos o atraso habitual de publicação
-export function minutoDoGolo(jogo, tsStory, mod = "futebol") {
-  const m = minutoEm(jogo, tsStory - ATRASO_STORY_MS, mod);
+// minuto de um golo publicado num story (ou post) sem minuto: o instante da publicação menos o atraso habitual
+export function minutoDoGolo(jogo, tsStory, mod = "futebol", atraso = ATRASO_STORY_MS) {
+  const m = minutoEm(jogo, tsStory - atraso, mod);
   if (!m) return null;
   // um story publicado durante o intervalo fala de um golo da 1.ª parte, perto do fim
   if (m.intervalo) return { ...m, min: (MODOS[mod] || MODOS.futebol).parte, extra: 0, intervalo: false, confianca: "baixa" };

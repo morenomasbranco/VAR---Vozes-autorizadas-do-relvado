@@ -92,7 +92,7 @@ function Jogo({ j, agora, mostrarComp = false, onComp, form }) {
       {(golos.length > 0 || j.conflito || j.local) && (
         <span className="ptg">
           {golos.map((g, i) => (
-            <span key={i} className={`gl ${g.lado}`} title={g.minFonte === "estimado" ? "Minuto estimado pela hora do story" : g.minFonte === "desconhecido" ? "Minuto desconhecido (story em falta)" : undefined}>
+            <span key={i} className={`gl ${g.lado}`} title={[g.via === "post" ? "Golo dado por uma publicação do clube" : g.via === "story" ? "Golo dado por um story do clube" : null, g.minFonte === "estimado" ? `Minuto estimado pela hora ${g.via === "post" ? "da publicação" : "do story"}` : g.minFonte === "desconhecido" ? "Minuto desconhecido" : null].filter(Boolean).join(" · ") || undefined}>
               ⚽ {minutoGolo(g)} {g.marcador || (g.lado === "h" ? j.casa : j.fora)}{g.penalti ? " (g.p.)" : ""}{g.autogolo ? " (p.b.)" : ""}
             </span>
           ))}

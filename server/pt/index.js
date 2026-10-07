@@ -35,6 +35,8 @@ const ESTRUTURA_MS = (Number(process.env.FPF_ESTRUTURA_HORAS) || 20) * 3600e3; /
 const SOFA_VIVO_MS = Math.max(10, Number(process.env.PT_SOFA_SEGUNDOS) || 20) * 1000;
 const MAX_EVENTOS = Number(process.env.PT_EVENTOS_MAX) || 2500;
 const DURACAO = { futebol: 115 * 60000, futsal: 95 * 60000 }; // do apito inicial ao fim provável, com intervalo
+const POSTS_MS = Math.max(120, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000; // posts de cada clube durante o jogo
+const POSTS_VIVO_MS = Math.max(60, Number(process.env.IG_POSTS_VIVO_SEGUNDOS) || 120) * 1000; // clubes que atualizam por post
 const ATIVO = process.env.PT_RESULTADOS !== "0";
 
 // semana de Lisboa (segunda 00:00 → segunda seguinte), para a «jornada da semana»
@@ -484,12 +486,19 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       if (j.origem === "sofa" && j.relogioExterno && agora - j.relogioExterno.ts < 3 * 60e3) continue; // já há minuto ao segundo
       const dur = DURACAO[comp.mod];
       if (!j.inicio || agora < j.inicio - 45 * 60e3 || agora > j.inicio + dur + 60 * 60e3) continue;
-      // prioridade: jogo a decorrer primeiro; depois os clubes que já se viu publicarem stories
+      // prioridade: jogo a decorrer primeiro; depois os clubes que já se viu publicarem stories ou posts
       const aDecorrer = ["direto", "intervalo"].includes(j.estado) || (agora >= j.inicio && agora <= j.inicio + dur);
       for (const [handle, lado] of [[j.igCasa, "h"], [j.igFora, "a"]]) {
         if (!handle || out.has(handle)) continue;
-        const publica = (clubes.info(handle).provas || 0) > 0;
-        out.set(handle, { handle, jogoId: j.id, lado, desde: j.inicio - 60 * 60e3, postsDesde: j.inicio + dur - 20 * 60e3, prioridade: (aDecorrer ? 2 : 0) + (publica ? 1 : 0) });
+        const info = clubes.info(handle);
+        const publica = (info.provas || 0) > 0;
+        // os posts também contam durante o jogo (há clubes que atualizam o resultado e os golos só por post):
+        // leem-se desde o início, a cada 2 min nos clubes que já se viu fazerem isso, a cada 5 nos outros
+        const postsAoVivo = (info.postsAoVivo || 0) > 0;
+        out.set(handle, {
+          handle, jogoId: j.id, lado, desde: j.inicio - 60 * 60e3, postsDesde: j.inicio,
+          postsMs: postsAoVivo ? POSTS_VIVO_MS : POSTS_MS, prioridade: (aDecorrer ? 2 : 0) + (publica ? 1 : 0) + (postsAoVivo ? 1 : 0),
+        });
       }
     }
     return [...out.values()].sort((a, b) => b.prioridade - a.prioridade);
@@ -530,6 +539,11 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     estado.evidencias[r.decisao] = (estado.evidencias[r.decisao] || 0) + 1;
     if (r.orientacao && conta) clubes.aprender(conta, r.orientacao);
     if (conta) clubes.nota(conta, { ultimaProva: p.ts || Date.now(), provas: (clubes.info(conta).provas || 0) + 1 });
+    // clube que atualiza o jogo por posts enquanto se joga: os posts dele passam a ser lidos mais vezes
+    const durJ = DURACAO[st.comps[j.comp]?.mod || "futebol"];
+    if (conta && p.tipo === "post" && ["novo", "confirmacao", "relogio"].includes(r.decisao) && j.inicio && p.ts >= j.inicio && p.ts <= j.inicio + durJ) {
+      clubes.nota(conta, { postsAoVivo: (clubes.info(conta).postsAoVivo || 0) + 1 });
+    }
     for (const f of r.feed) emitir(j, f, { tipo: p.tipo, conta, url: p.url });
     if (r.decisao === "confirmacao" && j.confirmado?.h && j.confirmado?.a) confirmarEvento(j);
     if (r.decisao !== "ignorado" && r.decisao !== "repetido") mudou(j); else marca();

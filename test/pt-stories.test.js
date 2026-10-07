@@ -140,3 +140,59 @@ test("relógio: sem stories usa a hora marcada; futsal anda mais devagar", () =>
   assert.equal(textoMinuto({ min: 45, extra: 2, fonte: "estimado" }), "~45'+2'");
   assert.equal(minutoDoGolo({ ...j, relogio: { inicio: T0, intervalo: min(47) } }, min(52)).min, 45);
 });
+
+const post = (lado, texto, ts, extra = {}) => ({ ...story(lado, texto, ts, extra), id: `p${++n}`, tipo: "post" });
+
+test("story primeiro e post depois: o golo é o do story, o post confirma e dá o marcador", () => {
+  const j = jogo();
+  aplicar(j, story("h", "Começou o jogo!", min(2)));
+  assert.equal(aplicar(j, story("h", "GOLOOO! ⚽", min(20))).decisao, "novo");
+  // o post do mesmo golo sai 9 minutos depois, sem resultado: não é um segundo golo
+  const r = aplicar(j, post("h", "Golo de Tiago Mendes! Vamos Covelo ⚽", min(29)));
+  assert.equal(r.decisao, "confirmacao");
+  assert.equal(j.hs, 1);
+  assert.equal(j.golos.length, 1);
+  assert.equal(j.golos[0].via, "story");
+  assert.equal(j.golos[0].marcador, "Tiago Mendes");
+  // um post com outro marcador é outro golo
+  assert.equal(aplicar(j, post("h", "Golo de Rui Costa!", min(33))).decisao, "novo");
+  assert.equal(j.hs, 2);
+});
+
+test("post primeiro e story depois: o golo é o do post (com o atraso de um post), o story confirma", () => {
+  const j = jogo();
+  aplicar(j, story("h", "Começou o jogo!", min(2)));
+  assert.equal(aplicar(j, post("h", "GOLO! GD Covelo 1-0 SC Rio Tinto", min(30))).decisao, "novo");
+  const g = j.golos[0];
+  assert.equal(g.via, "post");
+  // publicado aos 30 min reais, com 3 min de atraso de um post: golo por volta dos 26'
+  assert.ok(g.min >= 24 && g.min <= 27, `minuto ${g.min}`);
+  const r = aplicar(j, story("h", "1-0 ⚽ Tiago Mendes 26'", min(32)));
+  assert.equal(r.decisao, "confirmacao");
+  assert.equal(j.golos.length, 1);
+  assert.equal(g.min, 26);
+  assert.equal(g.minFonte, "explicito");
+  assert.equal(g.marcador, "Tiago Mendes");
+});
+
+test("só um post no fim: os golos do clube saem do resumo, com os minutos escritos", () => {
+  const j = jogo();
+  const r = aplicar(j, post("h", "RESULTADO FINAL\nGD Covelo 2-1 SC Rio Tinto\n⚽ Tiago Mendes 12', 80'", min(115)));
+  assert.equal(r.decisao, "novo");
+  assert.equal(j.estado, "final");
+  const casa = j.golos.filter((x) => x.lado === "h");
+  assert.deepEqual(casa.map((x) => [x.marcador, x.min, x.minFonte]), [["Tiago Mendes", 12, "explicito"], ["Tiago Mendes", 80, "explicito"]]);
+  // o golo do adversário não tem minuto: um post de fim de jogo não diz quando foi
+  const fora = j.golos.find((x) => x.lado === "a");
+  assert.equal(fora.min, null);
+});
+
+test("resultado oficial primeiro e o post de resumo depois: o post dá os golos que faltavam", () => {
+  const j = jogo();
+  aplicarOficial(j, { hs: 2, as: 0, estado: "final", fonte: "fpf", ts: min(120) });
+  assert.equal(j.golos.length, 0);
+  const r = aplicar(j, post("h", "Vitória! GD Covelo 2-0 SC Rio Tinto. Golos: 34' João Silva, 71' Pedro Sousa", min(130)));
+  assert.equal(r.decisao, "confirmacao");
+  assert.deepEqual(j.golos.map((x) => [x.marcador, x.min]), [["João Silva", 34], ["Pedro Sousa", 71]]);
+  assert.equal(j.golosIncompletos, false);
+});

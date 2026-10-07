@@ -13,12 +13,13 @@
 //     vídeos do Instagram e, quando as há, as datas de publicação.
 // Como estes sites não dizem sempre a hora do story, conta a hora a que o VAR o viu pela primeira vez (com o ciclo
 // de 60 s, fica a menos de um minuto da publicação, o que chega para o relógio do jogo).
-import { sleep } from "../../util.js";
+import { sleep, hash } from "../../util.js";
 import { lerStory } from "./ocr.js";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const CICLO_MS = Math.max(30, Number(process.env.STORIES_ANONIMO_SEGUNDOS) || 60) * 1000;
-const POSTS_MS = Math.max(180, Number(process.env.IG_POSTS_SEGUNDOS) || 420) * 1000;
+const POSTS_MS = Math.max(60, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000;
+const POSTS_POR_CICLO = Math.max(1, Number(process.env.IG_POSTS_POR_CICLO) || 10);
 const POR_MINUTO = Math.max(5, Number(process.env.STORIES_ANONIMO_PEDIDOS_MINUTO) || 30);
 const CASTIGO_MS = 10 * 60e3;
 
@@ -83,6 +84,7 @@ export function createAnonimo({ alvos, entregar, log = () => {} }) {
   const fontes = (fontesDoEnv().length ? fontesDoEnv() : FONTES_PADRAO).map((url) => ({ url, castigoAte: 0, ok: 0, falhas: 0, ultimoErro: null }));
   const estado = { ativo: true, modo: "sem conta (visualizadores anónimos)", fontes, pedidos: 0, stories: 0, posts: 0, alvos: 0, ultimoCiclo: null, postsBloqueadoAte: 0 };
   const vistos = new Map(); // id do story → primeira vez visto
+  const legendas = new Map(); // post → versão da legenda já lida
   const vezes = [];
   const espera = async () => {
     for (;;) {
@@ -115,7 +117,8 @@ export function createAnonimo({ alvos, entregar, log = () => {} }) {
     return null; // nenhuma fonte respondeu
   }
 
-  // posts pelo endereço público do Instagram (sem sessão): poucos pedidos por hora, por isso só no fim do jogo
+  // posts pelo endereço público do Instagram (sem sessão): poucos pedidos por hora, por isso há um limite por volta
+  // e os clubes que costumam dar os golos por post vêm primeiro
   async function postsDe(handle, alvo) {
     if (Date.now() < estado.postsBloqueadoAte) return;
     await espera();
@@ -124,12 +127,15 @@ export function createAnonimo({ alvos, entregar, log = () => {} }) {
     if (!res.ok) return;
     const j = await res.json().catch(() => null);
     for (const { node } of (j?.data?.user?.edge_owner_to_timeline_media?.edges || []).slice(0, 6)) {
-      const id = `ig:post:${node.id}`;
-      if (vistos.has(id)) continue;
-      vistos.set(id, Date.now());
-      const ts = (node.taken_at_timestamp || 0) * 1000;
-      if (alvo.desde && ts < alvo.desde) continue;
       const legenda = node.edge_media_to_caption?.edges?.[0]?.node?.text || "";
+      // cada versão da legenda conta (clubes que vão editando o mesmo post durante o jogo)
+      const id = `ig:post:${node.id}:${hash(legenda)}`;
+      if (vistos.has(id)) continue;
+      const editado = legendas.has(node.id) && legendas.get(node.id) !== id;
+      legendas.set(node.id, id);
+      vistos.set(id, Date.now());
+      const ts = editado ? Date.now() : (node.taken_at_timestamp || 0) * 1000;
+      if (alvo.desde && ts < alvo.desde) continue;
       const texto = await lerStory({ url: /\d\s*[-–x]\s*\d/.test(legenda) ? null : node.display_url, alt: node.accessibility_caption || "", legenda });
       estado.posts++;
       await entregar({ id, tipo: "post", rede: "instagram", conta: handle, ts, texto, url: node.shortcode ? `https://www.instagram.com/p/${node.shortcode}/` : null });
@@ -146,6 +152,11 @@ export function createAnonimo({ alvos, entregar, log = () => {} }) {
       estado.alvos = lista.length;
       estado.ultimoCiclo = Date.now();
       volta++;
+      // posts desta volta: os devidos, por prioridade e os mais atrasados primeiro, até POSTS_POR_CICLO
+      const postsDaVolta = new Set(lista
+        .filter((a) => Date.now() >= (a.postsDesde || 0) && Date.now() - (ultimoPost.get(a.handle) || 0) >= (a.postsMs || POSTS_MS))
+        .sort((x, y) => (y.prioridade || 0) - (x.prioridade || 0) || (ultimoPost.get(x.handle) || 0) - (ultimoPost.get(y.handle) || 0))
+        .slice(0, POSTS_POR_CICLO).map((a) => a.handle));
       for (const a of lista) {
         if (parar) break;
         // jogos que ainda não começaram (ou acabaram) de clubes que nunca publicaram: uma volta em cada três
@@ -164,12 +175,12 @@ export function createAnonimo({ alvos, entregar, log = () => {} }) {
             await entregar({ id, tipo: "story", rede: "instagram", conta: a.handle, ts, texto, url: `https://www.instagram.com/stories/${a.handle}/` });
           } catch (e) { log(`[Instagram] story de @${a.handle}: ${e.message}`); }
         }
-        if (Date.now() >= (a.postsDesde || 0) && Date.now() - (ultimoPost.get(a.handle) || 0) > POSTS_MS) {
+        if (postsDaVolta.has(a.handle)) {
           ultimoPost.set(a.handle, Date.now());
           await postsDe(a.handle, a).catch(() => {});
         }
       }
-      if (vistos.size > 50000) vistos.clear();
+      if (vistos.size > 50000) { vistos.clear(); legendas.clear(); }
       await sleep(lista.length ? CICLO_MS : 60e3);
     }
   })();
