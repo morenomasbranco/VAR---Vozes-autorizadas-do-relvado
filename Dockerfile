@@ -8,8 +8,9 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine
 WORKDIR /app
-# ffmpeg: tira um fotograma dos vídeos que chegam sem imagem
-RUN apk add --no-cache ffmpeg
+# ffmpeg: tira um fotograma dos vídeos que chegam sem imagem (e dos stories em vídeo)
+# tesseract-ocr: lê o texto dos stories dos clubes (resultados, minutos, marcadores), em português
+RUN apk add --no-cache ffmpeg tesseract-ocr tesseract-ocr-data-por
 ENV NODE_ENV=production PORT=3001 NODE_OPTIONS=--max-old-space-size=384
 COPY --from=build /app /app
 EXPOSE 3001

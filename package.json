@@ -10,7 +10,12 @@
     "verificar-fontes": "node scripts/verificar-fontes.js",
     "ligas": "node scripts/ligas.js",
     "reddit-relay": "node scripts/reddit-relay.js",
-    "arrumar-fontes": "node scripts/verificar-fontes.js --corrigir"
+    "arrumar-fontes": "node scripts/verificar-fontes.js --corrigir",
+    "test": "node --test test/*.test.js",
+    "instagram-relay": "node scripts/instagram-relay.js",
+    "procurar-redes": "node scripts/procurar-redes.js",
+    "fpf-sonda": "node scripts/fpf-sonda.js",
+    "importar-clubes": "python3 scripts/importar_clubes.py"
   },
   "engines": {
     "node": ">=20"

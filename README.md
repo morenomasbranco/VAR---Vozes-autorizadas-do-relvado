@@ -146,8 +146,93 @@ O servidor entrega o site e a API na porta 3001. Tem de estar sempre ligado, por
 
 O que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo), há 1, 2, 3, 4, 5, 10, 15… 100 anos: acontecimentos, nascimentos e mortes da Wikipédia (pela API «Neste dia» e, se ela falhar, pela página de cada dia), desportistas e acontecimentos de futebol, futsal, basquetebol e hóquei em patins do Wikidata, e jogos de futebol e de basquetebol da ESPN. A lista é refeita quando a semana muda e revista de meia em meia hora. O estado está em `/api/efemerides/estado`.
 
-## Notícias e comunicados oficiais
+**Pesquisa do Claude.** Com `ANTHROPIC_API_KEY` no `.env`, o servidor faz, para cada dia da semana, um pedido ao Claude (Claude Opus 5.5, com a ferramenta de pesquisa na web da Anthropic): que acontecimentos desportivos, portugueses e internacionais, marcaram esse dia em cada um daqueles anos. O Claude confirma cada facto na web, dá até três por ano (pelo menos um português quando houver), com título, descrição e a fonte, e devolve tudo numa lista estruturada. São sete pedidos por semana, feitos quando a semana muda, hoje primeiro; um dia que falhe é repetido na revisão seguinte. Estes acontecimentos aparecem primeiro em cada ano, com a etiqueta «pesquisa Claude» e a ligação para a fonte. Ficam em `data/efemerides-claude.json`; o estado está em `/api/efemerides/estado`, no campo `claude`.
 
-Por baixo das notícias do Feed há uma secção com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (e uma para as associações), com um filtro Todos · Notícias · Comunicados.
+Ao contrário do resto do site, isto tem custo: cada dia é um pedido ao Claude Opus 5.5 mais as pesquisas na web que ele fizer (no máximo `EFEMERIDES_CLAUDE_PESQUISAS`, 15 por dia), aos preços da Anthropic. O modelo, o esforço (`EFEMERIDES_CLAUDE_ESFORCO`, `medium` por omissão) e o número de pesquisas acertam-se no `.env`. Sem a chave, a secção continua a funcionar com as fontes gratuitas.
+
+## Ligas e Federações (notícias e comunicados oficiais)
+
+No Feed, por baixo dos Destaques, vem a «Ronda pela atualidade» (as colunas de notícias) e, a seguir, a secção «Ligas e Federações», com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (a de Portugal chama-se «Futebol profissional»; as associações têm a sua), com um filtro Todos · Notícias · Comunicados.
 
 Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta que o site oferece: o feed RSS (Bundesliga, CONMEBOL, AF Algarve, AF Lisboa), o sitemap de notícias (Ligue 1, DFB, UEFA), a API pública que a própria página usa (Premier League, FIFA) ou a página da lista (as restantes). As notícias da FPF são numeradas e o servidor vai experimentando o número seguinte. Se um site deixar de responder, ou for montado no browser com JavaScript, a fonte passa para o Google News (com alguns minutos de atraso) e o servidor volta a tentar o site de meia em meia hora. Os títulos que não estão em português são traduzidos pelo Google Tradutor; ao passar o rato fica o título original. O estado de cada fonte está em `/api/oficiais/estado`.
+
+As páginas montadas no browser (como a da Lega Serie A) também se leem pela lista que vem em JSON dentro da própria página; cada fonte pode ter páginas alternativas (`alternativas`, por exemplo a versão italiana) e várias pesquisas do Google News, experimentadas por ordem. As horas escritas sem fuso são lidas no fuso do país da fonte (Roma, Madrid, Paris, Berlim, Londres, São Paulo), e quando a lista só dá o dia, ou não dá data nenhuma, o servidor abre a notícia para ler a hora exata da publicação. As entradas gravadas antes desta correção são datadas de novo, devagar, quando o servidor arranca.
+
+## Resultados de Portugal (nacionais e distritais)
+
+Na secção Resultados, a vista **Portugal** tem todos os campeonatos seniores de futebol e de futsal do país — Liga Portugal, FPF e as 22 associações distritais e regionais — e o campeonato nacional de sub-23. Ficam de fora a formação, os sub-22/sub-23 e esperanças distritais, os veteranos, o futebol de praia, o futebol de 7/9 e o INATEL (regras em `server/pt/catalogo.js`). Tudo é gratuito.
+
+Há quatro vistas, com filtros de modalidade (futebol, futsal), nível (nacionais, distritais) e associação. Todas funcionam haja ou não jogos a decorrer:
+
+- **Competição**: a jornada da semana de uma competição e série, com setas para as anteriores e as seguintes, e a classificação ao lado (ao vivo quando há jogos). A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
+- **Jornadas da semana**: a jornada atual (ou a próxima) de todas as competições ao mesmo tempo, com os jogos, as horas e os resultados que já houver.
+- **Jogos de hoje**: todos os jogos do dia, agrupados por competição, os que estão a decorrer primeiro.
+- **Todas as tabelas**: as classificações de todos os campeonatos, nacionais e distritais, agrupadas por organizador (FPF, Liga Portugal e cada associação, com atalhos para saltar para cada uma) e com pesquisa por equipa. Uma série que ainda não tem resultados nem tabela oficial aparece com as equipas do calendário a zero.
+
+Os golos, intervalos e finais destes jogos entram nos Acontecimentos (o feed da secção Resultados) e no quadro de resultados, com um filtro por organizador no botão «Escolher ligas» («Portugal · AF Porto», etc.).
+
+### De onde vêm os dados
+
+- **resultados.fpf.pt**: competições de cada associação (os endereços `GetCompetitionsByAssociation?associationId=…&seasonId=106`) e da FPF, séries, jornadas, datas e horas, resultados oficiais e classificações oficiais. O servidor lê tudo uma vez por dia, um pedido de cada vez (1,2 s entre pedidos, `FPF_INTERVALO_MS`). Na primeira vez pode demorar uma a duas horas a ter todas as jornadas de todas as competições; a jornada da semana de cada uma chega primeiro. Durante os jogos, a jornada é relida de 4 em 4 minutos (`FPF_DIRETO_SEGUNDOS`) para apanhar o resultado final assim que a associação o publica; nos três dias seguintes, de 2 em 2 horas.
+- **Sofascore**: as competições da Liga Portugal (que não estão no resultados.fpf.pt), e o minuto ao segundo e os marcadores dos jogos nacionais que o Sofascore acompanha.
+- **ESPN/Sofascore do `ligas.json`**: os jogos da Liga Betclic, Liga 2, Liga 3, Next Gen, Liga BPI e Taça de Portugal continuam a dar as notícias como antes; aqui alimentam as tabelas ao vivo.
+- **Stories e posts dos clubes no Instagram**: o tempo real dos jogos sem transmissão, sobretudo as distritais (ver abaixo).
+
+O `npm run fpf-sonda -- <endereço>` mostra o que o leitor tira de uma página da FPF e grava-a em `data/fpf-sonda/`. O leitor procura padrões que não dependem do aspeto da página (endereços com `competitionId`, `fixtureId` e `matchId`, listas «Jornada N», tabelas com J/V/E/D/GM/GS/P); se a FPF mudar o site e deixarem de aparecer jogos, é por aí que se vê o que mudou. Os endereços das jornadas que o site carrega à parte podem ser trocados no `.env` (`FPF_URL_JORNADA`, com `{id}`). O estado de tudo está em `/api/pt/estado`.
+
+### Tempo real pelos stories
+
+Os clubes não precisam de fazer nada (nem de identificar o site), e **não é preciso criar uma conta para seguir os clubes**. Há três maneiras de os stories e posts chegarem, que se podem usar ao mesmo tempo:
+
+1. **Sem conta nenhuma (o que acontece por omissão).** O Instagram só mostra stories a quem tem sessão iniciada, por isso o VAR pergunta aos «visualizadores anónimos» públicos (imginn, anonyig, storiesig, fastdl…), sites gratuitos que vão buscar os stories de contas públicas. Só se pergunta pelos clubes que estão a jogar, primeiro os jogos a decorrer e os clubes que já se viu publicarem. Há várias fontes experimentadas por ordem; uma que falhe fica de lado 10 minutos e passa-se à seguinte. A lista está em `STORIES_FONTES` no `.env` (endereços com `{u}` no lugar do nome da conta), para se trocar quando um destes sites mudar ou fechar, sem mexer no código. Os posts («Resultado final…») vêm do endereço público do Instagram, que responde sem sessão a um número limitado de pedidos por hora. Estes sites não são oficiais e vão mudando: o estado de cada um está em `/api/pt/estado`, em `instagram.fontes`.
+2. **Com a sessão de uma conta qualquer, sem seguir ninguém** (mais rápido e mais fiável). Põe no `.env` o `IG_SESSIONID` de uma conta de Instagram (pode ser uma que já tenhas): no browser, com a sessão iniciada, ferramentas de programador › Armazenamento/Application › Cookies de instagram.com › `sessionid`. Os stories das contas públicas leem-se diretamente, 20 clubes por pedido, só dos que estão a jogar, de minuto a minuto (`IG_DIRETO_SEGUNDOS`). Seguir os clubes é opcional: se a conta os seguir, um pedido à barra dos stories diz logo quem publicou e poupam-se pedidos. Usa uma conta que não te faça falta: a API é a interna do Instagram e uma conta com pedidos a mais pode ser travada (há um limite de 40 por minuto, `IG_PEDIDOS_MINUTO`, e pausas automáticas).
+3. **Quem está no campo.** Na vista Portugal, cada jogo sem resultado oficial tem «Enviar resultado»: qualquer pessoa pode mandar o resultado, o minuto, o marcador ou uma captura do story do clube (lida pelo OCR). Não precisa de conta. Para evitar brincadeiras, um envio só conta quando outra pessoa manda o mesmo resultado nos 20 minutos seguintes, ou quando bate com o que os stories ou a FPF já disseram; com `PT_LEITOR_DIRETO=1`, basta um envio (se só pessoas de confiança usarem o formulário). Há um limite de 12 envios por pessoa em 10 minutos.
+
+O texto de cada story vem, por esta ordem: do texto automático que o próprio Instagram gera para as imagens; do **Tesseract** (OCR livre, já instalado na imagem Docker, com português; os vídeos passam pelo ffmpeg, que tira três fotogramas); e, só quando os dois não dão números, do **Gemini** (o mesmo `GEMINI_API_KEY`, no máximo 60 imagens por hora, `STORIES_GEMINI_POR_HORA`).
+
+Cada story é uma **prova**, não uma ordem (`server/pt/stories/evidencia.js`):
+
+- O resultado só anda para a frente. Um story com um resultado anterior (publicado com atraso) fica como histórico; um que não bate certo fica «a confirmar» até haver outra prova.
+- **Confirmação pelo outro clube**: quando o adversário publica o mesmo resultado (mesmo escrito ao contrário, «0-1» em vez de «1-0»), não cria outro golo — conta como confirmação, e o golo passa a dizer «confirmado pelos dois clubes».
+- **Quem escreveu o quê**: o visitante tanto escreve «casa-fora» como «nós primeiro». Decide-se pelos nomes das equipas no texto, pela convenção que o sistema vai aprendendo de cada clube (`data/pt-clubes.json`) e pela coerência com o jogo (quem publica «GOLO» costuma ser quem marcou).
+- **Minuto**: o que vem escrito no story («23'»). Sem ele, o minuto é estimado pela hora de publicação do story (menos 1 minuto de atraso, `STORY_ATRASO_SEGUNDOS`), contado a partir do story de início do jogo, do de intervalo ou do de recomeço; sem nenhum, a partir da hora marcada. Os minutos estimados aparecem com «~». O minuto a que vai o jogo é calculado da mesma maneira. No futsal, em que o cronómetro para, a conta é proporcional (20 minutos de jogo em perto de 40 reais).
+- **Stories perdidos**: de 0-0 para 2-1 criam-se os golos que faltam, com minuto desconhecido, e só o último leva minuto.
+- **Clubes que não publicam**: o jogo fica com a hora marcada («a decorrer?» e, depois do fim provável, «à espera do resultado») e recebe o resultado quando um dos clubes o puser num post ou quando a associação o publicar no resultados.fpf.pt. O resultado oficial passa sempre por cima do dos stories (o dos stories fica marcado com «*» até lá).
+
+**Retransmissor**: o Instagram e os visualizadores anónimos desconfiam de pedidos vindos de servidores de alojamento. O `npm run instagram-relay` faz a mesma recolha num computador de casa (com ou sem `IG_SESSIONID`) e envia o texto para o site:
+
+```
+VAR_URL=https://o-teu-site PT_TOKEN=uma-chave-tua npm run instagram-relay
+```
+
+No servidor põe-se a mesma `PT_TOKEN` e, se a recolha for só em casa, `STORIES_ANONIMO=0`. Com o Tesseract instalado em casa (`brew install tesseract tesseract-lang` ou `sudo apt install tesseract-ocr tesseract-ocr-por`) o OCR corre aí.
+
+A mesma chave dá acesso à API da redação: `POST /api/pt/evidencia` (texto de um story ou post, por exemplo do Facebook, com `conta` ou `jogoId`) e `POST /api/pt/jogo/<id>` (corrigir um resultado à mão). O Facebook não tem forma gratuita e fiável de ser lido de forma automática; os posts do Facebook podem entrar por esta API.
+
+Nenhuma destas vias é uma API oficial do Instagram (a oficial não dá stories de contas de terceiros): os visualizadores anónimos podem deixar de funcionar de um dia para o outro, e uma conta usada para ler stories pode ser travada pelo Instagram. Por isso as três vias coexistem, e o resultado oficial da FPF fecha sempre cada jogo.
+
+### Clubes e redes sociais
+
+O `pt/clubes.json` é feito a partir do Excel `pt/clubes_redes_sociais.xlsx` (a versão com os links encontrados preenchidos, a amarelo e laranja, e a folha «Sem redes» é o `pt/clubes_redes_sociais_atualizado.xlsx`) com `npm run importar-clubes` (precisa de `pip install openpyxl`). Os links que faltavam no Excel e foram encontrados por pesquisa estão em `pt/redes-encontradas.json` (com `alta` ou `media` de confiança) e entram no `clubes.json` só onde o Excel estava vazio. O `pt/clubes-sem-redes.csv` lista os clubes a quem ainda falta o Instagram ou o Facebook (depois de duas pesquisas cada), com as ligações de pesquisa, para se completar à mão. Para os que ainda faltam, o `npm run procurar-redes` faz o que se faria à mão — pesquisa «site:instagram.com "Clube" terra futebol» e fica com o primeiro perfil que tenha o nome do clube — e marca-os como «Pesquisa automática» para serem revistos (`-- --limite 50` para ir aos poucos, `-- --assoc "AF Porto"` para uma associação).
+
+### Classificações
+
+As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incluídos (setas de subida e descida e o resultado ao vivo ao lado da equipa). Desempates: pontos; pontos, diferença de golos e golos marcados nos jogos entre as equipas empatadas; diferença de golos geral; golos marcados. Os castigos e os jogos que o leitor não tenha apanhado são acertados com a tabela oficial: a diferença entre a oficial e a calculada fica guardada e soma-se sempre.
+
+### Variáveis do `.env` (todas opcionais)
+
+| Variável | Para quê |
+| --- | --- |
+| `IG_SESSIONID` (ou `IG_COOKIE`) | sessão de uma conta de Instagram (opcional; não precisa de seguir os clubes) |
+| `STORIES_ANONIMO=0`, `STORIES_FONTES`, `STORIES_ANONIMO_SEGUNDOS`, `STORIES_ANONIMO_PEDIDOS_MINUTO` | modo sem conta: desligar, lista de visualizadores (com `{u}`), ritmo (60 s) e limite de pedidos (30/min) |
+| `PT_LEITOR_DIRETO=1` | os resultados enviados pelos leitores contam sem precisar de uma segunda pessoa |
+| `PT_TOKEN` | chave do retransmissor e da API da redação |
+| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS`, `IG_POSTS_SEGUNDOS` | ritmo da recolha no Instagram com sessão (40/min, 45 s, 60 s, 420 s) |
+| `STORIES_GEMINI_POR_HORA` | imagens que podem ir ao Gemini por hora (60; 0 desliga) |
+| `STORY_ATRASO_SEGUNDOS` | atraso médio entre o lance e o story (60) |
+| `FPF_EPOCA` | época no resultados.fpf.pt (106 = 2026/27) |
+| `FPF_INTERVALO_MS`, `FPF_DIRETO_SEGUNDOS`, `FPF_ESTRUTURA_HORAS` | ritmo das leituras da FPF (1200 ms, 240 s, 20 h) |
+| `PT_RESULTADOS=0` | desliga tudo isto |
+| `ANTHROPIC_API_KEY`, `EFEMERIDES_CLAUDE_MODEL`, `EFEMERIDES_CLAUDE_ESFORCO`, `EFEMERIDES_CLAUDE_PESQUISAS` | pesquisa do Claude para o «Nesta semana» (modelo `claude-opus-5-5`, esforço `medium`, 15 pesquisas por dia) |
+
+Os dados ficam em `data/pt.json` (competições e jogos), `data/pt-eventos.json` (acontecimentos) e `data/pt-clubes.json` (o que se aprendeu de cada clube). Os testes correm com `npm test`.

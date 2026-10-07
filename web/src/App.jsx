@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import Portugal, { PT_CSS } from "./Portugal.jsx";
 import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
@@ -81,7 +82,7 @@ const UI = {
     autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
     otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos", pickGame: "Carrega num jogo para ver os vídeos dele.", videoHighlights: "Destaques",
     videoHighlightsNote: "Os vídeos de maior interesse das últimas 24 horas",
-    oficiais: "Notícias e comunicados oficiais", ofTodos: "Todos", ofNoticias: "Notícias", ofComunicados: "Comunicados", ofNoticia: "Notícia", ofComunicado: "Comunicado",
+    oficiais: "Ligas e Federações", ronda: "Ronda pela atualidade", ofTodos: "Todos", ofNoticias: "Notícias", ofComunicados: "Comunicados", ofNoticia: "Notícia", ofComunicado: "Comunicado",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -99,7 +100,7 @@ const UI = {
     all: "Todas", none: "Nenhuma", sources: "Fontes", hot: "Destaque", fresh: "Novo", ft: "Final",
     toLight: "Mudar para modo claro", toDark: "Mudar para modo escuro", locale: "pt-PT",
     tagline: "Verified Action Reports",
-    docTitle: "VAR — Verified Action Reports", langLabel: "Idioma", sectionsLabel: "Secções", resultsSource: "Resultados em direto",
+    docTitle: "VAR | Verified Action Reports", langLabel: "Idioma", sectionsLabel: "Secções", resultsSource: "Resultados em direto",
     save: "Guardar", saved: "Guardado", noFavs: "Ainda não guardaste notícias. Carrega em «Guardar» numa notícia para a encontrares aqui.",
     now: "agora", noResults: "Ainda não há resultados das fontes ativas.",
     noPost: "Esta notícia não tem link para a fonte.", viewSrc: "Ver na fonte",
@@ -141,7 +142,7 @@ const UI = {
     all: "All", none: "None", sources: "Sources", hot: "Top story", fresh: "New", ft: "FT",
     toLight: "Switch to light mode", toDark: "Switch to dark mode", locale: "en-GB",
     tagline: "Verified Action Reports",
-    docTitle: "VAR — Verified Action Reports", langLabel: "Language", sectionsLabel: "Sections", resultsSource: "Live results",
+    docTitle: "VAR | Verified Action Reports", langLabel: "Language", sectionsLabel: "Sections", resultsSource: "Live results",
     save: "Save", saved: "Saved", noFavs: "No saved stories yet. Tap «Save» on a story to find it here.",
     now: "now", noResults: "No results from the active sources yet.",
     noPost: "This story has no link to its source.", viewSrc: "View source",
@@ -183,7 +184,7 @@ const UI = {
     all: "Todas", none: "Ninguna", sources: "Fuentes", hot: "Destacada", fresh: "Nueva", ft: "Final",
     toLight: "Cambiar a modo claro", toDark: "Cambiar a modo oscuro", locale: "es-ES",
     tagline: "Verified Action Reports",
-    docTitle: "VAR — Verified Action Reports", langLabel: "Idioma", sectionsLabel: "Secciones", resultsSource: "Resultados en directo",
+    docTitle: "VAR | Verified Action Reports", langLabel: "Idioma", sectionsLabel: "Secciones", resultsSource: "Resultados en directo",
     save: "Guardar", saved: "Guardado", noFavs: "Todavía no has guardado noticias. Pulsa «Guardar» en una noticia para encontrarla aquí.",
     now: "ahora", noResults: "Todavía no hay resultados de las fuentes activas.",
     noPost: "Esta noticia no tiene enlace a la fuente.", viewSrc: "Ver en la fuente",
@@ -225,7 +226,7 @@ const UI = {
     all: "Toutes", none: "Aucune", sources: "Sources", hot: "À la une", fresh: "Nouveau", ft: "Terminé",
     toLight: "Passer en mode clair", toDark: "Passer en mode sombre", locale: "fr-FR",
     tagline: "Verified Action Reports",
-    docTitle: "VAR — Verified Action Reports", langLabel: "Langue", sectionsLabel: "Rubriques", resultsSource: "Résultats en direct",
+    docTitle: "VAR | Verified Action Reports", langLabel: "Langue", sectionsLabel: "Rubriques", resultsSource: "Résultats en direct",
     save: "Enregistrer", saved: "Enregistré", noFavs: "Aucune actualité enregistrée. Appuie sur « Enregistrer » sur une actualité pour la retrouver ici.",
     now: "maintenant", noResults: "Pas encore de résultats des sources actives.",
     noPost: "Cette actualité n'a pas de lien vers sa source.", viewSrc: "Voir la source",
@@ -267,7 +268,7 @@ const UI = {
     all: "Tutte", none: "Nessuna", sources: "Fonti", hot: "In evidenza", fresh: "Nuova", ft: "Finale",
     toLight: "Passa alla modalità chiara", toDark: "Passa alla modalità scura", locale: "it-IT",
     tagline: "Verified Action Reports",
-    docTitle: "VAR — Verified Action Reports", langLabel: "Lingua", sectionsLabel: "Sezioni", resultsSource: "Risultati in diretta",
+    docTitle: "VAR | Verified Action Reports", langLabel: "Lingua", sectionsLabel: "Sezioni", resultsSource: "Risultati in diretta",
     save: "Salva", saved: "Salvata", noFavs: "Non hai ancora salvato notizie. Premi «Salva» su una notizia per ritrovarla qui.",
     now: "ora", noResults: "Ancora nessun risultato dalle fonti attive.",
     noPost: "Questa notizia non ha un link alla fonte.", viewSrc: "Vedi sulla fonte",
@@ -309,7 +310,7 @@ const UI = {
     all: "Alle", none: "Keine", sources: "Quellen", hot: "Top-Nachricht", fresh: "Neu", ft: "Endstand",
     toLight: "Zum hellen Modus wechseln", toDark: "Zum dunklen Modus wechseln", locale: "de-DE",
     tagline: "Verified Action Reports",
-    docTitle: "VAR — Verified Action Reports", langLabel: "Sprache", sectionsLabel: "Rubriken", resultsSource: "Live-Ergebnisse",
+    docTitle: "VAR | Verified Action Reports", langLabel: "Sprache", sectionsLabel: "Rubriken", resultsSource: "Live-Ergebnisse",
     save: "Speichern", saved: "Gespeichert", noFavs: "Noch keine Nachrichten gespeichert. Tippe bei einer Nachricht auf «Speichern», um sie hier zu finden.",
     now: "jetzt", noResults: "Noch keine Ergebnisse von den aktiven Quellen.",
     noPost: "Diese Nachricht hat keinen Link zur Quelle.", viewSrc: "Bei der Quelle ansehen",
@@ -984,6 +985,7 @@ const CSS = `
 @keyframes apl{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live) 55%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
 .apito .pulse.off{color:var(--muted)} .apito .pulse.off i{background:var(--muted);animation:none}
 .apito .muted{color:var(--muted)}
+.apito .chip.efclaude{color:#C15F3C;border-color:currentColor}
 .apito .ctrls{display:flex;align-items:center;justify-content:flex-end;gap:8px;justify-self:end}
 .apito .barl .status{display:block;max-width:100%}
 @media(max-width:480px){.apito .brand b{font-size:26px} .apito .brandbtn{gap:6px} .apito .tagline{font-size:11.5px;margin-right:0;letter-spacing:-.01em} .apito .brand .logo{width:28px;height:28px}
@@ -1283,6 +1285,7 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
+.apito .livehead.ronda{margin:4px 0 10px}
 /* título dos Destaques igual ao «Feed» */
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
@@ -1486,7 +1489,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
-                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}</p>
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title="Encontrado pela pesquisa do Claude na web">pesquisa Claude</span></>}</p>
                     )}
                   </div>
                   {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}
@@ -1537,6 +1540,9 @@ export default function App() {
     try { const v = JSON.parse(localStorage.getItem("var-ligas")); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
   });
   const [showLeagues, setShowLeagues] = useState(false);
+  // secção Resultados: «Portugal» (todos os campeonatos, jornadas e tabelas) ou «Em direto» (o quadro de todas as ligas)
+  const [resVista, setResVista] = useState(() => { try { return localStorage.getItem("var-res-vista") || "portugal"; } catch { return "portugal"; } });
+  useEffect(() => { try { localStorage.setItem("var-res-vista", resVista); } catch { /* */ } }, [resVista]);
   const [stories, setStories] = useState([]);
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
   const [diag, setDiag] = useState({}); // estado de cada fonte: por onde é lida, se responde, última notícia
@@ -1569,7 +1575,7 @@ export default function App() {
       </button>
     );
   };
-  // notícias e comunicados oficiais das ligas e federações (por baixo das notícias do Feed)
+  // «Ligas e Federações»: notícias e comunicados oficiais (por baixo das notícias do Feed)
   const [ofic, setOfic] = useState({ grupos: [], itens: [] });
   const [ofTipo, setOfTipo] = useState("todos");
   const [ofN, setOfN] = useState({}); // entradas mostradas por coluna, antes de «Ver mais»
@@ -1741,6 +1747,18 @@ export default function App() {
       })
       .catch(() => setConn("offline"));
 
+    // resultados de Portugal (campeonatos nacionais e distritais): golos, intervalos e finais para os Acontecimentos
+    fetch(`${API}/api/pt/eventos?limit=400`)
+      .then((r) => r.json())
+      .then((list) => {
+        if (stop || !Array.isArray(list)) return;
+        setItems((cur) => {
+          const ids = new Set(cur.map((x) => x.id));
+          return [...cur, ...list.filter((x) => !ids.has(x.id)).map((x) => prep(x, false))].sort(byTime).slice(0, MAX_ITEMS);
+        });
+      })
+      .catch(() => {});
+
     const es = new EventSource(`${API}/api/stream`);
     // ao (re)ligar, relê o que pode ter mudado enquanto a ligação esteve em baixo
     let abriu = false;
@@ -1778,7 +1796,15 @@ export default function App() {
     // a lista do «Nesta semana» foi refeita (mudou o dia ou foi revista)
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
-    es.addEventListener("oficial", (e) => ofEntra({ ...JSON.parse(e.data), vistoEm: Date.now() }));
+    // «corrigido»: a mesma entrada com a hora certa (não pisca como nova)
+    es.addEventListener("oficial", (e) => { const x = JSON.parse(e.data); ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() }); });
+    // Portugal: o jogo que mudou segue para a vista de Portugal; o acontecimento (golo, final…) entra no feed
+    es.addEventListener("pt-jogo", (e) => window.dispatchEvent(new CustomEvent("pt-jogo", { detail: JSON.parse(e.data) })));
+    es.addEventListener("pt-evento", (e) => {
+      const it = prep(JSON.parse(e.data), true);
+      setItems((l) => (l.some((x) => x.id === it.id) ? l.map((x) => (x.id === it.id ? { ...x, ...it, unread: x.unread, fresh: x.fresh } : x)) : [it, ...l].sort(byTime).slice(0, MAX_ITEMS)));
+      unfresh([it.id]);
+    });
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
       setItems((l) => l.filter((x) => x.id !== id));
@@ -2345,7 +2371,7 @@ export default function App() {
 
   return (
     <div className="apito" data-theme={theme}>
-      <style>{CSS}</style>
+      <style>{CSS + PT_CSS}</style>
 
       <header className="hdr">
         <div className="wrap">
@@ -2415,7 +2441,13 @@ export default function App() {
           <main>
             <div className="feedhead">
               <h1 className={section === "historias" ? "hist" : ""}>{emLingua(CAT[section], lang)}</h1>
-              {section === "resultados" && leagues.length > 0 && (
+              {section === "resultados" && (
+                <div className="seg" role="group" aria-label="Vista dos resultados">
+                  <button aria-pressed={resVista === "portugal"} onClick={() => setResVista("portugal")}>Portugal</button>
+                  <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto · todas as ligas</button>
+                </div>
+              )}
+              {section === "resultados" && resVista === "direto" && leagues.length > 0 && (
                 <button className="textbtn" onClick={() => setShowLeagues((v) => !v)} aria-expanded={showLeagues}><ListFilter size={15} />{ui.pickLeagues}</button>
               )}
             </div>
@@ -2542,6 +2574,9 @@ export default function App() {
                     </ul>
                   </section>
                 )}
+                <div className="livehead ronda">
+                  <h2 className="vdesth">{ui.ronda || "Ronda pela atualidade"}</h2>
+                </div>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
@@ -2640,6 +2675,11 @@ export default function App() {
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "historias" ? (
               <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+            ) : section === "resultados" && resVista === "portugal" ? (
+              <>
+              <Portugal API={API} now={now} />
+              <div className="mobevents">{eventsPanel}</div>
+              </>
             ) : section === "resultados" ? (
               <>
               {games.length === 0 ? <p className="empty">{ui.noResults}</p> : (

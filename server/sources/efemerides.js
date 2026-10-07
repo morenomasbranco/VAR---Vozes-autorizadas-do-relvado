@@ -9,10 +9,13 @@
 //   competições de clubes e de seleções (um pedido por liga e por ano, com a semana inteira).
 // - Wikidata: acontecimentos de futebol, futsal, basquetebol e hóquei em patins com data exata nesses dias
 //   (finais, jogos marcantes, início e fim de competições), portugueses e internacionais.
+// - Claude (com ANTHROPIC_API_KEY): para cada dia da semana, uma pesquisa na web pelos acontecimentos desportivos
+//   portugueses e internacionais que marcaram esse dia em cada um dos anos (efemerides-claude.js).
 // A lista é refeita quando a semana muda (segunda-feira, meia-noite de Lisboa) e revista de meia em meia hora.
 // Cada fonte é publicada assim que chega, e o site recebe o aviso na hora, sem esperar pelas outras.
 import fs from "node:fs";
 import { sleep, norm } from "../util.js";
+import { createEfemeridesClaude } from "./efemerides-claude.js";
 
 export const ANOS = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 export const LINGUAS = ["pt", "en", "es", "fr", "it", "de"];
@@ -409,6 +412,7 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
   const estado = { at: null, semana: dados?.semana || null, erros: {}, contagem: {} };
   const cacheJogos = { semana: dados?.semana || null, lista: dados?.jogos || [] };
   let aCorrer = false;
+  const claude = createEfemeridesClaude({ log });
 
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* só em memória */ } };
 
@@ -440,6 +444,10 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       if (!aviso) aviso = setTimeout(() => { aviso = null; broadcast("efemerides", { semana: sem.id, at: novo.at }); }, 1200);
     };
     if (!mesma) publicar(); // o site passa logo para a semana nova, a mostrar «a preparar»
+    // 5) Claude: uma pesquisa por dia da semana (só os dias que ainda não a têm), à parte das outras fontes porque
+    // leva minutos; cada dia que chega avisa o site (o «para» lê os itens do Claude diretamente)
+    claude.semana(sem, (d) => alvoDia.get(d.iso) || [], () => broadcast("efemerides", { semana: sem.id, at: Date.now() }))
+      .catch((e) => log(`[Nesta semana] Claude: ${e.message}`));
     try {
       await Promise.all([
         // 1) Wikipédia, dia a dia (hoje primeiro), as seis línguas ao mesmo tempo; o que chega é logo publicado
@@ -567,6 +575,8 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       });
     }
     for (const j of dados.jogos || []) itens.push({ ...j, anos: anosDe(j), peso: pesoJogo(j) });
+    // acontecimentos pesquisados pelo Claude (em português; aparecem primeiro em cada ano)
+    itens.push(...claude.itens(sem));
     // por aniversário (há 1 ano, há 2…), depois pelo dia da semana, depois pelo peso
     itens.sort((a, b) => a.anos - b.anos || String(a.dia).localeCompare(String(b.dia)) || (b.peso || 0) - (a.peso || 0));
     return {
@@ -586,5 +596,5 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     }
   }
 
-  return { start, para, estado: () => estado };
+  return { start, para, estado: () => ({ ...estado, claude: claude.estado() }) };
 }

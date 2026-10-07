@@ -25,6 +25,7 @@ import { startStreamain } from "./sources/streamain.js";
 import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
+import { createPortugal } from "./pt/index.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
@@ -305,6 +306,10 @@ const efemerides = createEfemerides({ log, broadcast: (e, d) => broadcast(e, d),
 // Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed)
 const oficiais = createOficiais({ log, broadcast: (e, d) => broadcast(e, d), config: OFICIAIS });
 
+// Resultados de Portugal: todos os campeonatos seniores (nacionais e distritais), jornadas, tabelas ao vivo e
+// tempo real pelos stories dos clubes (server/pt/)
+const portugal = createPortugal({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS });
+
 const app = express();
 const ORIGINS = (process.env.ALLOWED_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);
 app.use((req, res, next) => {
@@ -343,7 +348,11 @@ app.get("/api/fontes", (req, res) => {
     };
   }));
 });
-app.get("/api/leagues", (req, res) => res.json(LIGAS.filter((l) => l.espn || l.sofascore || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira, mod: l.mod, nova: !!l.nova }))));
+app.get("/api/leagues", (req, res) => res.json([
+  ...LIGAS.filter((l) => l.espn || l.sofascore || process.env.GOAL_API_KEY).map((l) => ({ key: slug(l.nome), nome: l.nome, nome_en: l.nome_en || l.nome, pais: l.bandeira, mod: l.mod, nova: !!l.nova })),
+  ...portugal.ligasSite(), // um filtro por organizador: Liga, FPF e cada associação distrital
+]));
+portugal.rotas(app, express);
 app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/zapping", (req, res) => res.json(zapping.all())); // grelha de transmissões (canal de cada jogo)
 app.get("/api/zapping/estado", (req, res) => res.json(zapping.estado()));
@@ -488,7 +497,7 @@ startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear
 const goal = startResults(LIGAS.filter((l) => !l.espn && !l.sofascore), publish, log, { upsert, remove: removeItem });
-const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal });
+const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal, onJogo: portugal.externo });
 // Liga 2, Liga 3, Next Gen, Liga BPI e supertaças portuguesas: Sofascore, com a GOAL API como reserva
 startSofascore(LIGAS.filter((l) => l.sofascore && !l.espn), { alimentar: espnLeagues.alimentar, log, onBlocked: (ls) => goal.add(ls) });
 stories.watch(espnLeagues);
@@ -506,3 +515,4 @@ teams.load(espnLeagues).then(() => {
   if (n) { store.touch(); log(`[Emblemas] país acrescentado a ${n} clubes de notícias guardadas`); }
 }).catch((e) => log(`[Emblemas] ${e.message}`));
 setTimeout(() => stories.backfill(espnLeagues), 15000); // depois de as fontes arrancarem
+portugal.start();
