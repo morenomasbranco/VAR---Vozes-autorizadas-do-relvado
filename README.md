@@ -150,11 +150,13 @@ O que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo)
 
 Ao contrário do resto do site, isto tem custo: cada dia é um pedido ao Claude Opus 5.5 mais as pesquisas na web que ele fizer (no máximo `EFEMERIDES_CLAUDE_PESQUISAS`, 15 por dia), aos preços da Anthropic. O modelo, o esforço (`EFEMERIDES_CLAUDE_ESFORCO`, `medium` por omissão) e o número de pesquisas acertam-se no `.env`. Sem a chave, a secção continua a funcionar com as fontes gratuitas.
 
-## Notícias e comunicados oficiais
+## Ligas e Federações (notícias e comunicados oficiais)
 
-Por baixo das notícias do Feed há uma secção com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (e uma para as associações), com um filtro Todos · Notícias · Comunicados.
+No Feed, por baixo dos Destaques, vem a «Ronda pela atualidade» (as colunas de notícias) e, a seguir, a secção «Ligas e Federações», com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (a de Portugal chama-se «Futebol profissional»; as associações têm a sua), com um filtro Todos · Notícias · Comunicados.
 
 Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta que o site oferece: o feed RSS (Bundesliga, CONMEBOL, AF Algarve, AF Lisboa), o sitemap de notícias (Ligue 1, DFB, UEFA), a API pública que a própria página usa (Premier League, FIFA) ou a página da lista (as restantes). As notícias da FPF são numeradas e o servidor vai experimentando o número seguinte. Se um site deixar de responder, ou for montado no browser com JavaScript, a fonte passa para o Google News (com alguns minutos de atraso) e o servidor volta a tentar o site de meia em meia hora. Os títulos que não estão em português são traduzidos pelo Google Tradutor; ao passar o rato fica o título original. O estado de cada fonte está em `/api/oficiais/estado`.
+
+As páginas montadas no browser (como a da Lega Serie A) também se leem pela lista que vem em JSON dentro da própria página; cada fonte pode ter páginas alternativas (`alternativas`, por exemplo a versão italiana) e várias pesquisas do Google News, experimentadas por ordem. As horas escritas sem fuso são lidas no fuso do país da fonte (Roma, Madrid, Paris, Berlim, Londres, São Paulo), e quando a lista só dá o dia, ou não dá data nenhuma, o servidor abre a notícia para ler a hora exata da publicação. As entradas gravadas antes desta correção são datadas de novo, devagar, quando o servidor arranca.
 
 ## Resultados de Portugal (nacionais e distritais)
 
@@ -165,7 +167,7 @@ Há quatro vistas, com filtros de modalidade (futebol, futsal), nível (nacionai
 - **Competição**: a jornada da semana de uma competição e série, com setas para as anteriores e as seguintes, e a classificação ao lado (ao vivo quando há jogos). A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
 - **Jornadas da semana**: a jornada atual (ou a próxima) de todas as competições ao mesmo tempo, com os jogos, as horas e os resultados que já houver.
 - **Jogos de hoje**: todos os jogos do dia, agrupados por competição, os que estão a decorrer primeiro.
-- **Todas as tabelas**: as classificações de todos os campeonatos, com pesquisa por equipa.
+- **Todas as tabelas**: as classificações de todos os campeonatos, nacionais e distritais, agrupadas por organizador (FPF, Liga Portugal e cada associação, com atalhos para saltar para cada uma) e com pesquisa por equipa. Uma série que ainda não tem resultados nem tabela oficial aparece com as equipas do calendário a zero.
 
 Os golos, intervalos e finais destes jogos entram nos Acontecimentos (o feed da secção Resultados) e no quadro de resultados, com um filtro por organizador no botão «Escolher ligas» («Portugal · AF Porto», etc.).
 

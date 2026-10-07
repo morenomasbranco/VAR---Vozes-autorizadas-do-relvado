@@ -82,7 +82,7 @@ const UI = {
     autoOn: "Reprodução automática", autoOff: "Reprodução automática desligada", noGameVideos: "Ainda sem vídeos deste jogo.",
     otherVideos: "Outros vídeos", moreGames: "Ver mais jogos", allGames: "Todos os jogos", pickGame: "Carrega num jogo para ver os vídeos dele.", videoHighlights: "Destaques",
     videoHighlightsNote: "Os vídeos de maior interesse das últimas 24 horas",
-    oficiais: "Notícias e comunicados oficiais", ofTodos: "Todos", ofNoticias: "Notícias", ofComunicados: "Comunicados", ofNoticia: "Notícia", ofComunicado: "Comunicado",
+    oficiais: "Ligas e Federações", ronda: "Ronda pela atualidade", ofTodos: "Todos", ofNoticias: "Notícias", ofComunicados: "Comunicados", ofNoticia: "Notícia", ofComunicado: "Comunicado",
     live: "Ao vivo", paused: "Em pausa", nSources: (n) => `${n} fontes`, markRead: "Marcar tudo como lido",
     pause: "Pausar", resume: "Retomar", search: "Pesquisar notícias", copy: "Copiar", copied: "Copiado",
     share: "Partilhar", viewX: "Ver no X", trFrom: { pt: "Traduzido do português", en: "Traduzido do inglês", fr: "Traduzido do francês", es: "Traduzido do espanhol", it: "Traduzido do italiano", de: "Traduzido do alemão", tr: "Traduzido do turco", nl: "Traduzido do neerlandês", pl: "Traduzido do polaco" },
@@ -1285,6 +1285,7 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
+.apito .livehead.ronda{margin:4px 0 10px}
 /* título dos Destaques igual ao «Feed» */
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
@@ -1574,7 +1575,7 @@ export default function App() {
       </button>
     );
   };
-  // notícias e comunicados oficiais das ligas e federações (por baixo das notícias do Feed)
+  // «Ligas e Federações»: notícias e comunicados oficiais (por baixo das notícias do Feed)
   const [ofic, setOfic] = useState({ grupos: [], itens: [] });
   const [ofTipo, setOfTipo] = useState("todos");
   const [ofN, setOfN] = useState({}); // entradas mostradas por coluna, antes de «Ver mais»
@@ -1795,7 +1796,8 @@ export default function App() {
     // a lista do «Nesta semana» foi refeita (mudou o dia ou foi revista)
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
-    es.addEventListener("oficial", (e) => ofEntra({ ...JSON.parse(e.data), vistoEm: Date.now() }));
+    // «corrigido»: a mesma entrada com a hora certa (não pisca como nova)
+    es.addEventListener("oficial", (e) => { const x = JSON.parse(e.data); ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() }); });
     // Portugal: o jogo que mudou segue para a vista de Portugal; o acontecimento (golo, final…) entra no feed
     es.addEventListener("pt-jogo", (e) => window.dispatchEvent(new CustomEvent("pt-jogo", { detail: JSON.parse(e.data) })));
     es.addEventListener("pt-evento", (e) => {
@@ -2572,6 +2574,9 @@ export default function App() {
                     </ul>
                   </section>
                 )}
+                <div className="livehead ronda">
+                  <h2 className="vdesth">{ui.ronda || "Ronda pela atualidade"}</h2>
+                </div>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>

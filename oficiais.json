@@ -1,9 +1,9 @@
 {
- "_nota": "Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed). leitor: rss (feed), sitemap (sitemap de notícias), premierleague e fifa (API pública do site), html (lê a página e apanha as ligações que batem certo com «link»; «segue» indica a página verdadeira quando a dada só tem uma ligação para ela), sequencial (vai experimentando os números seguintes das notícias). «google»: pesquisa do Google News usada se o site não responder. grupo: coluna (pt, af, en, es, fr, de, it, br, int). tipo: noticia ou comunicado.",
+ "_nota": "Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed). leitor: rss (feed), sitemap (sitemap de notícias), premierleague e fifa (API pública do site), html (lê a página e apanha as ligações que batem certo com «link»; «segue» indica a página verdadeira quando a dada só tem uma ligação para ela), sequencial (vai experimentando os números seguintes das notícias). «alternativas»: outras páginas da mesma lista, experimentadas se a principal não trouxer nada. «google»: pesquisa do Google News (ou lista de pesquisas, por ordem) usada se o site não responder; leitor google: a fonte é lida só pelo Google News. «tz»: fuso das horas escritas no site (por omissão, o do grupo). grupo: coluna (pt, af, en, es, fr, de, it, br, int). tipo: noticia ou comunicado.",
  "grupos": [
   {
    "id": "pt",
-   "nome": "Portugal",
+   "nome": "Futebol profissional",
    "pais": "pt"
   },
   {
@@ -725,8 +725,16 @@
    "leitor": "html",
    "url": "https://en.legaseriea.it/serie-a/news",
    "link": "/serie-a/news/[a-z0-9-]{6,}",
-   "google": "site:legaseriea.it",
-   "locale": "it"
+   "google": [
+    "site:legaseriea.it",
+    "site:en.legaseriea.it"
+   ],
+   "locale": "it",
+   "alternativas": [
+    "https://www.legaseriea.it/it/serie-a/news",
+    "https://www.legaseriea.it/serie-a/news",
+    "https://en.legaseriea.it/en/serie-a/news"
+   ]
   },
   {
    "id": "seriea-comunicados",
@@ -736,7 +744,16 @@
    "lang": "en",
    "leitor": "html",
    "url": "https://en.legaseriea.it/lega-serie-a/documentazione",
-   "link": "https?://images\\.legaseriea\\.it/[^\\\"]+\\.pdf"
+   "link": "https?://images\\.legaseriea\\.it/[^\\\"]+\\.pdf",
+   "alternativas": [
+    "https://www.legaseriea.it/it/lega-serie-a/documentazione",
+    "https://www.legaseriea.it/lega-serie-a/documentazione"
+   ],
+   "google": [
+    "site:legaseriea.it comunicato ufficiale",
+    "site:legaseriea.it comunicati"
+   ],
+   "locale": "it"
   },
   {
    "id": "figc-noticias",
@@ -746,8 +763,29 @@
    "lang": "en",
    "leitor": "html",
    "url": "https://www.figc.it/en/news",
-   "link": "/en/[a-z-]+/news/[a-z0-9-]+-[a-z0-9]{8}",
-   "google": "site:figc.it",
+   "link": "/(?:it|en)/[a-z-]+/news/[a-z0-9-]{8,}",
+   "google": [
+    "site:figc.it"
+   ],
+   "locale": "it",
+   "alternativas": [
+    "https://www.figc.it/it/federazione/news/",
+    "https://www.figc.it/en/figc/news/",
+    "https://www.figc.it/it/nazionali/news/"
+   ]
+  },
+  {
+   "id": "figc-comunicados",
+   "org": "FIGC",
+   "grupo": "it",
+   "tipo": "comunicado",
+   "lang": "it",
+   "leitor": "google",
+   "url": "https://www.figc.it",
+   "google": [
+    "site:figc.it comunicato ufficiale",
+    "site:files.figc.it"
+   ],
    "locale": "it"
   },
   {

@@ -88,3 +88,17 @@ test("API: competições, jornada da semana com tabela, jogos de hoje, evidênci
   const est = chamar("get", "/api/pt/estado").json;
   assert.ok(est.evidencias.novo >= 1);
 });
+
+test("API: tabela de uma distrital sem resultados aparece com as equipas a zero", () => {
+  const pt = createPortugal({ log: () => {} });
+  const { app, chamar } = falsoApp();
+  pt.rotas(app, { json: () => null });
+  const comp = pt._upsertComp("fpf-zero", { org: "af-porto", nome: "Divisão de Elite", mod: "futebol", fem: false, sub23: false, tipo: "liga", nivel: "distrital", fonte: "fpf", lidoEm: Date.now() });
+  const serie = pt._serieDe(comp, "serie-1", "Série 1");
+  pt._registarJogo(comp, serie, 1, { fpfId: "901", casa: "FC Infesta", fora: "SC Rio Tinto", inicio: Date.now() + 3 * 86400e3 }, "fpf");
+  const t = chamar("get", "/api/pt/tabelas?org=af-porto").json;
+  assert.equal(t.length, 1);
+  assert.equal(t[0].nivel, "distrital");
+  assert.equal(t[0].linhas.length, 2);
+  assert.ok(t[0].linhas.every((l) => l.semJogos && l.pts === 0 && l.j === 0));
+});

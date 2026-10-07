@@ -43,18 +43,38 @@ const MESES = {
   dez: 12, dezembro: 12, dec: 12, december: 12, diciembre: 12, dicembre: 12, "décembre": 12, decembre: 12, dezember: 12, dic: 12, "déc": 12,
 };
 const NOMES_MES = Object.keys(MESES).sort((a, b) => b.length - a.length).join("|");
-// instante de um dia e hora de Lisboa
-function lisboa(y, m, d, h = 12, mi = 0) {
+// instante de um dia e hora no fuso da fonte: as horas sem fuso que um site italiano escreve são horas de Roma,
+// não de Lisboa (era isto que punha as notícias de Itália, Espanha, França e Alemanha uma hora ao lado)
+const LISBOA = "Europe/Lisbon";
+function local(y, m, d, h = 12, mi = 0, tz = LISBOA) {
   const palpite = Date.UTC(y, m - 1, d, h, mi);
-  const f = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Lisbon", timeZoneName: "longOffset" }).format(new Date(palpite));
-  const o = f.match(/GMT([+-])(\d{2}):(\d{2})/);
-  return palpite - (o ? (o[1] === "-" ? -1 : 1) * (+o[2] * 60 + +o[3]) * 60000 : 0);
+  const desvio = (t) => {
+    const f = new Intl.DateTimeFormat("en-GB", { timeZone: tz, timeZoneName: "longOffset" }).format(new Date(t));
+    const o = f.match(/GMT([+-])(\d{2}):(\d{2})/);
+    return o ? (o[1] === "-" ? -1 : 1) * (+o[2] * 60 + +o[3]) * 60000 : 0;
+  };
+  const t = palpite - desvio(palpite);
+  return palpite - desvio(t); // segunda volta: acerta nas horas perto da mudança da hora
+}
+// fuso de cada grupo de fontes (o campo «tz» de uma fonte sobrepõe-se)
+const FUSOS = { pt: LISBOA, af: LISBOA, en: "Europe/London", es: "Europe/Madrid", fr: "Europe/Paris", de: "Europe/Berlin", it: "Europe/Rome", br: "America/Sao_Paulo", int: "Europe/Zurich" };
+export const fusoDe = (s) => s?.tz || FUSOS[s?.grupo] || LISBOA;
+// um valor de data vindo de JSON ou XML: número (segundos ou milissegundos), texto ISO com fuso, ou texto sem fuso
+export function instante(v, tz = LISBOA) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number" || /^\d{10,13}$/.test(String(v))) { const n = +v; return n < 1e12 ? n * 1000 : n; }
+  const t = String(v).trim();
+  const so = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (so) return local(+so[1], +so[2], +so[3], 12, 0, tz);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(t) || /\b(GMT|UTC|[+-]\d{4})\b/.test(t)) return Date.parse(t.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")) || null;
+  return dataDe(t, tz)?.ts || Date.parse(t) || null;
 }
 const diaDe = (ts) => new Date(ts).toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" });
 const plausivel = (y, m, d) => y >= 2000 && y <= new Date().getFullYear() + 1 && m >= 1 && m <= 12 && d >= 1 && d <= 31;
 // devolve { ts, dia (true se só se sabe o dia), txt (o pedaço do texto que era a data) } ou null
-export function dataDe(texto) {
+export function dataDe(texto, tz = LISBOA) {
   const t = String(texto || "");
+  const lisboa = (y, m, d, h, mi) => local(y, m, d, h, mi, tz);
   let m = t.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?/);
   if (m) {
     const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00${m[6] ? (m[6] === "Z" ? "Z" : m[6].replace(/(\d{2})(\d{2})$/, "$1:$2")) : ""}`;
@@ -79,19 +99,31 @@ export function dataDe(texto) {
     const comHora = h != null && mi != null;
     return { ts: lisboa(y, mo, d, comHora ? +h : 12, comHora ? +mi : 0), dia: !comHora, txt: m[0] };
   }
-  // «há 3 horas», «3 hours ago», «hace 2 horas»
-  m = t.match(/\b(?:h[aá]|hace|il y a|vor)\s+(\d+|um|uma|una?|un)\s+(min|hora|hour|heure|stunde|dia|día|day|jour|tag)/i)
-    || t.match(/\b(\d+|an?|one)\s+(min|hour|day)s?\s+ago\b/i);
+  // «há 3 horas», «3 hours ago», «5 minutes ago», «hace 2 horas», «3 ore fa», «vor 2 Stunden»
+  m = t.match(/(?:^|[^\p{L}])(?:h[aá]|hace|il y a|vor)\s+(\d+|um|uma|una?|un|einer?)\s+(min|hora|hour|heure|stunde|dia|día|day|jour|tag)/iu)
+    || t.match(/\b(\d+|an?|one)\s+(min(?:ute)?|hour|day)s?\s+ago\b/i)
+    || t.match(/\b(\d+|un|una)\s+(minut|or[ae]|giorn)[a-z]*\s+fa\b/i);
   if (m) {
     const n = /^\d+$/.test(m[1]) ? +m[1] : 1;
-    const un = /^min/i.test(m[2]) ? 60e3 : /^(hora|hour|heure|stunde)/i.test(m[2]) ? 3600e3 : 86400e3;
+    const un = /^min/i.test(m[2]) ? 60e3 : /^(hora|hour|heure|stunde|or[ae])/i.test(m[2]) ? 3600e3 : 86400e3;
     return { ts: Date.now() - n * un, dia: un === 86400e3, txt: m[0] };
+  }
+  // «ontem», «yesterday», «ieri», «ayer», «hier», «gestern» (com hora, se a houver)
+  m = t.match(/(?:^|[^\p{L}])(ontem|yesterday|ieri|ayer|hier|gestern|hoje|today|oggi|hoy|aujourd'hui|heute)(?:,?\s*(?:às|at|alle|a las|à|um)?\s*(\d{1,2})[:h](\d{2}))?/iu);
+  // (sem hora, só conta num texto curto, como a etiqueta de um cartão: num título, «hoje» não é uma data)
+  if (m && (m[2] != null || t.trim().length <= 30)) {
+    const ontem = /^(ontem|yesterday|ieri|ayer|hier|gestern)$/i.test(m[1]);
+    const [y, mo, d] = new Date(Date.now() - (ontem ? 86400e3 : 0)).toLocaleDateString("en-CA", { timeZone: tz }).split("-").map(Number);
+    const comHora = m[2] != null;
+    return { ts: lisboa(y, mo, d, comHora ? +m[2] : 12, comHora ? +m[3] : 0), dia: !comHora, txt: m[0].trim() };
   }
   return null;
 }
 // a data que o próprio endereço traz: /2026/10/07/, /2026/oct/05/, -07102026, /uploads/2026/10/
-export function dataDoUrl(u) {
-  const s = decodeURIComponent(String(u || ""));
+export function dataDoUrl(u, tz = LISBOA) {
+  let s = String(u || "");
+  try { s = decodeURIComponent(s); } catch { /* endereço com % solto */ }
+  const lisboa = (y, m, d) => local(y, m, d, 12, 0, tz);
   let m = s.match(/\/(20\d{2})\/(\d{2})\/(\d{2})\//);
   if (m && plausivel(+m[1], +m[2], +m[3])) return { ts: lisboa(+m[1], +m[2], +m[3]), dia: true };
   m = s.match(new RegExp(`/(20\\d{2})/(${NOMES_MES})/(\\d{2})/`, "i"));
@@ -122,7 +154,7 @@ const limpaTitulo = (t) => String(t || "")
 
 // Ligações de uma página que batem certo com o padrão: cada endereço aparece uma vez, com o melhor título
 // (o texto mais longo das ligações para lá, ou o cabeçalho do cartão) e a data mais próxima no cartão.
-export function lerLista(html, base, link) {
+export function lerLista(html, base, link, tz = LISBOA) {
   const src = String(html || "");
   const re = new RegExp(link, "i");
   const achados = [];
@@ -165,18 +197,49 @@ export function lerLista(html, base, link) {
     }
     if (!titulo || titulo.length < 6) return;
     // data: no próprio título (documentos da FPF: «CO_105 07 outubro 2026 Calendário…»), no cartão, antes dele ou no endereço
-    let data = dataDe(titulo);
+    let data = dataDe(titulo, tz);
     if (data && titulo.replace(data.txt, " ").replace(/\s+/g, " ").trim().length >= 6) titulo = titulo.replace(data.txt, " ").replace(/\s+/g, " ").trim();
     const daTag = cartao.match(/<time[^>]+datetime=["']([^"']+)["']/i)?.[1];
-    data = data || (daTag && dataDe(daTag)) || dataDe(limpa(cartao)) || dataDe(limpa(antes).slice(-200)) || dataDoUrl(url);
+    data = data || (daTag && dataDe(daTag, tz)) || dataDe(limpa(cartao), tz) || dataDe(limpa(antes).slice(-200), tz) || dataDoUrl(url, tz);
     out.push({ titulo: titulo.slice(0, 300), url, ts: data?.ts || null, dia: !!data?.dia });
   });
   return out.slice(0, 40);
 }
 
+// Páginas feitas no browser (Next.js, Nuxt…): a lista de notícias vem num JSON dentro da própria página
+// (__NEXT_DATA__, __NUXT_DATA__, JSON-LD). Procura objetos com título, endereço (ou «slug») e data.
+const CAMPO_TITULO = ["title", "headline", "name", "titolo", "titulo"];
+const CAMPO_URL = ["url", "link", "href", "permalink", "path", "canonicalUrl", "slug"];
+const CAMPO_DATA = ["datePublished", "publishedAt", "published_at", "publishDate", "publish_date", "publicationDate", "publishedDate", "firstPublished", "date", "createdAt", "created_at", "data"];
+export function lerEmbutido(html, base, link, tz = LISBOA) {
+  const src = String(html || "");
+  const re = link ? new RegExp(link, "i") : null;
+  const blocos = [...src.matchAll(/<script\b[^>]*(?:id=["']__NEXT_DATA__["']|type=["']application\/(?:ld\+)?json["'])[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
+  const out = new Map();
+  const pasta = String(base).replace(/[#?].*$/, "").replace(/\/$/, "");
+  const anda = (o, prof = 0) => {
+    if (!o || typeof o !== "object" || prof > 40) return;
+    if (Array.isArray(o)) { for (const x of o) anda(x, prof + 1); return; }
+    const titulo = CAMPO_TITULO.map((k) => o[k]).find((v) => typeof v === "string" && v.trim().length >= 12);
+    let href = CAMPO_URL.map((k) => (typeof o[k] === "string" ? o[k] : o[k]?.current || o[k]?.url)).find((v) => typeof v === "string" && v.length > 2);
+    if (titulo && href) {
+      if (!/^(https?:)?\/\//.test(href) && !href.startsWith("/")) href = `${pasta}/${href}`; // só o «slug»
+      const url = abs(href, base);
+      const data = CAMPO_DATA.map((k) => o[k]).find((v) => v != null && v !== "");
+      if (url && url.replace(/\/$/, "") !== pasta && (!re || re.test(url) || re.test(decodeURI(url))) && !out.has(url)) {
+        const ts = instante(typeof data === "object" ? data?.value || data?.date : data, tz);
+        out.set(url, { titulo: limpaTitulo(limpa(titulo)).slice(0, 300), url, ts: ts || null, dia: !!ts && typeof data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data) });
+      }
+    }
+    for (const v of Object.values(o)) if (v && typeof v === "object") anda(v, prof + 1);
+  };
+  for (const b of blocos) { try { anda(JSON.parse(b.trim())); } catch { /* bloco que não é JSON */ } }
+  return [...out.values()].filter((x) => x.titulo.length >= 6).slice(0, 40);
+}
+
 // a data de uma notícia aberta: meta article:published_time, JSON-LD datePublished, <time>, ou a data depois do título
 const datadas = new Map();
-export async function datarArtigo(url, lang) {
+export async function datarArtigo(url, lang, tz = LISBOA) {
   if (datadas.has(url)) return datadas.get(url);
   datadas.set(url, null);
   if (datadas.size > 5000) datadas.delete(datadas.keys().next().value);
@@ -186,10 +249,10 @@ export async function datarArtigo(url, lang) {
       || texto.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name|itemprop)=["'](?:article:published_time|datePublished)["']/i)?.[1]
       || texto.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1]
       || texto.match(/<time[^>]+datetime=["']([^"']+)["']/i)?.[1];
-    let d = meta ? dataDe(meta) : null;
+    let d = meta ? dataDe(meta, tz) : null;
     if (!d) {
       const i = texto.search(/<h1\b/i);
-      if (i >= 0) d = dataDe(limpa(texto.slice(i, i + 6000)).slice(0, 1500));
+      if (i >= 0) d = dataDe(limpa(texto.slice(i, i + 6000)).slice(0, 1500), tz);
     }
     datadas.set(url, d);
     return d;
@@ -218,7 +281,7 @@ const LEITORES = {
         const url = o.loc || o.url || o.link;
         const titulo = o.title || o["news:title"] || o.news?.title;
         const data = o.publication_date || o["news:publication_date"] || o.news?.publication_date || o.lastmod || o.date;
-        if (typeof url === "string" && titulo) out.push({ titulo: limpa(titulo), url, ts: Date.parse(data || "") || null, dia: false });
+        if (typeof url === "string" && titulo) out.push({ titulo: limpa(titulo), url, ts: instante(data, fusoDe(s)), dia: false });
         Object.values(o).forEach(anda);
       };
       anda(JSON.parse(t));
@@ -230,7 +293,7 @@ const LEITORES = {
         const data = tag("news:publication_date") || tag("video:publication_date") || tag("lastmod");
         if (!url || !titulo) continue;
         const soDia = /^\d{4}-\d{2}-\d{2}$/.test(data);
-        out.push({ titulo: limpa(titulo), url, ts: soDia ? dataDe(data.split("-").reverse().join("/"))?.ts || null : Date.parse(data) || null, dia: soDia });
+        out.push({ titulo: limpa(titulo), url, ts: soDia ? dataDe(data.split("-").reverse().join("/"), fusoDe(s))?.ts || null : instante(data, fusoDe(s)), dia: soDia });
       }
     }
     const vistos = new Set();
@@ -273,19 +336,30 @@ const LEITORES = {
     return out;
   },
   async html(s, est) {
-    let { r, texto } = await pedir(est.pagina || s.url, { lang: s.lang });
-    let lista = lerLista(texto, r.url, s.link);
-    // a página dada só tem uma ligação para a verdadeira lista (comunicados das associações): segue-a uma vez
-    if (!lista.length && s.segue && !est.pagina) {
-      const destino = [...texto.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map((x) => x[1]).find((h) => new RegExp(s.segue, "i").test(entidades(h)) || new RegExp(s.segue, "i").test(decodeURI(abs(h, r.url) || "")));
-      if (destino) {
-        est.pagina = abs(destino, r.url);
-        ({ r, texto } = await pedir(est.pagina, { lang: s.lang }));
-        lista = lerLista(texto, r.url, s.link);
-      }
+    const tz = fusoDe(s);
+    // as ligações da página e, se não houver, a lista que vem no JSON embutido (páginas feitas no browser)
+    const ler = (texto, url) => { const l = lerLista(texto, url, s.link, tz); return l.length ? l : lerEmbutido(texto, url, s.link, tz); };
+    // a página que funcionou da última vez, a da fonte e as alternativas (outra língua, outro endereço da mesma lista)
+    const paginas = [...new Set([est.pagina, s.url, ...(s.alternativas || [])].filter(Boolean))];
+    let erro = null;
+    for (const pagina of paginas) {
+      try {
+        let { r, texto } = await pedir(pagina, { lang: s.lang });
+        let lista = ler(texto, r.url);
+        // a página dada só tem uma ligação para a verdadeira lista (comunicados das associações): segue-a uma vez
+        if (!lista.length && s.segue && pagina === s.url) {
+          const destino = [...texto.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map((x) => x[1]).find((h) => new RegExp(s.segue, "i").test(entidades(h)) || new RegExp(s.segue, "i").test(decodeURI(abs(h, r.url) || "")));
+          if (destino) {
+            ({ r, texto } = await pedir(abs(destino, r.url), { lang: s.lang }));
+            lista = ler(texto, r.url);
+            if (lista.length) { est.pagina = r.url; return lista; }
+          }
+        }
+        if (lista.length) { est.pagina = pagina === s.url ? undefined : pagina; return lista; }
+      } catch (e) { erro = e; }
     }
-    if (!lista.length) throw Object.assign(new Error("a página não trouxe nenhuma entrada (pode ser feita no browser, com JavaScript)"), { vazio: true });
-    return lista;
+    if (erro && paginas.length === 1) throw erro;
+    throw Object.assign(new Error(`${paginas.length > 1 ? `nenhuma das ${paginas.length} páginas` : "a página"} trouxe entradas (pode ser feita no browser, com JavaScript)${erro ? `; ${erro.message}` : ""}`), { vazio: true, status: erro?.status });
   },
   // notícias numeradas (FPF): parte do número mais alto que a página mostra e experimenta os seguintes
   async sequencial(s, est) {
@@ -311,7 +385,7 @@ const LEITORES = {
         if (!re.test(decodeURI(r.url))) { falhas++; continue; }
         const titulo = limpa(texto.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] || texto.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "");
         const i = texto.search(/<h1\b/i);
-        const data = dataDe(limpa(texto.slice(Math.max(0, i), Math.max(0, i) + 6000)).slice(0, 1500));
+        const data = dataDe(limpa(texto.slice(Math.max(0, i), Math.max(0, i) + 6000)).slice(0, 1500), fusoDe(s));
         if (!titulo || titulo.length < 6 || !data) { falhas++; continue; }
         out.push({ titulo: titulo.replace(/\s*[|–-]\s*(FPF|Federação Portuguesa de Futebol)\s*$/i, ""), url, ts: data.ts, dia: data.dia });
         est.ultimoId = Math.max(est.ultimoId, id);
@@ -321,12 +395,21 @@ const LEITORES = {
     est.inicio = null;
     return out;
   },
+  // Google News: uma pesquisa ou várias (lista), experimentadas por ordem até uma trazer resultados
   async google(s) {
     const loc = LOCALES[s.locale] || LOCALES[s.lang === "pt-br" ? "br" : s.lang] || LOCALES.pt;
-    const feed = await readFeed(`${GOOGLE_BASE}?q=${encodeURIComponent(`${s.google} when:7d`)}&${loc}`, {});
-    return (feed?.items || []).slice(0, 30).map((it) => ({
-      titulo: limpa(it.title).replace(/\s+-\s+[^-]+$/, ""), url: it.link, ts: Date.parse(it.isoDate || it.pubDate || "") || null, dia: false,
-    }));
+    let erro = null;
+    for (const q of [].concat(s.google || [])) {
+      try {
+        const feed = await readFeed(`${GOOGLE_BASE}?q=${encodeURIComponent(`${q} when:7d`)}&${loc}`, {});
+        const lista = (feed?.items || []).slice(0, 30).map((it) => ({
+          titulo: limpa(it.title).replace(/\s+-\s+[^-]+$/, ""), url: it.link, ts: Date.parse(it.isoDate || it.pubDate || "") || null, dia: false,
+        }));
+        if (lista.length) return lista;
+      } catch (e) { erro = e; }
+    }
+    if (erro) throw erro;
+    return [];
   },
 };
 
@@ -361,6 +444,27 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
   }, 30000).unref();
 
   const porUrl = new Set(itens.map((x) => canon(x.url)));
+
+  // As entradas gravadas antes da correção das horas (sem «v: 2») voltam a ser datadas pela própria notícia,
+  // devagar (uma a cada poucos segundos), e o site recebe a hora corrigida.
+  const fonteDe = new Map((config.fontes || []).map((s) => [s.id, s]));
+  async function redatar() {
+    const fila = itens.filter((x) => x.v !== 2);
+    for (const x of fila) {
+      x.v = 2;
+      sujo = true;
+      if (x.pdf || x.via || !x.url) continue;
+      const s = fonteDe.get(x.fonte);
+      const d = await datarArtigo(x.url, s?.lang || x.lang, fusoDe(s || { grupo: x.grupo }));
+      if (d && !d.dia && Math.abs(d.ts - x.ts) > 5 * 60e3 && Math.abs(d.ts - x.ts) < 3 * 86400e3 && d.ts <= Date.now() + 2 * 60e3) {
+        x.ts = Math.min(d.ts, Date.now());
+        delete x.soDia;
+        broadcast("oficial", { ...x, corrigido: true });
+      }
+      await sleep(3000);
+    }
+    if (fila.length) itens.sort((a, b) => b.ts - a.ts);
+  }
   const mesmoTitulo = (org, titulo, ts) => itens.some((x) => x.org === org && Math.abs(x.ts - ts) < 3 * 86400e3 && norm(x.titulo) === norm(titulo));
 
   async function traduzir(novos) {
@@ -375,6 +479,7 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
   }
 
   async function processa(s, lista, est, via) {
+    const tz = fusoDe(s);
     // o que se viu pelo site e pelo Google News fica em separado: cada um tem a sua primeira leitura
     const chave = via === "google" ? `${s.id}#google` : s.id;
     const v = new Set(vistos[chave] || []);
@@ -390,10 +495,12 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       const k = canon(x.url);
       if (v.has(k)) continue;
       let { ts, dia } = x;
-      if (!ts && primeira && !ePdf(x.url) && datadasAgora < 12) {
+      // sem data, ou só com o dia: abre-se a notícia para ler a hora exata em que foi publicada
+      // (antes, uma entrada sem data ficava com a hora a que apareceu na lista, e as datadas só pelo dia com o meio-dia)
+      if ((!ts || dia) && via !== "google" && !ePdf(x.url) && datadasAgora < (primeira ? 12 : 8)) {
         datadasAgora++;
-        const d = await datarArtigo(x.url, s.lang);
-        if (d) ({ ts, dia } = d);
+        const d = await datarArtigo(x.url, s.lang, tz);
+        if (d && (!ts || !d.dia) && (!ts || diaDe(d.ts) === diaDe(ts))) ({ ts, dia } = d);
       }
       v.add(k);
       if (!ts) {
@@ -409,7 +516,7 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       if (porUrl.has(k) || mesmoTitulo(s.org, x.titulo, ts)) continue;
       const item = {
         id: `${s.id}:${hash(k)}`, fonte: s.id, org: s.org, grupo: s.grupo, tipo: s.tipo, lang: s.lang,
-        titulo: x.titulo, url: x.url, ts, soDia: dia || undefined, pdf: ePdf(x.url) || undefined, via: via === "google" ? "Google News" : undefined,
+        titulo: x.titulo, url: x.url, ts, soDia: dia || undefined, pdf: ePdf(x.url) || undefined, via: via === "google" ? "Google News" : undefined, v: 2,
       };
       porUrl.add(k);
       itens.push(item);
@@ -467,6 +574,7 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       if (process.env.OFICIAIS === "0") return;
       log(`[Oficiais] ${FONTES.length} fontes de ligas e federações, a cada ${RITMO / 1000} s`);
       for (const s of FONTES) ciclo(s);
+      setTimeout(() => redatar().catch((e) => log(`[Oficiais] correção das horas: ${e.message}`)), 60e3).unref();
       setInterval(() => { const n = itens.length; itens = itens.filter((x) => Date.now() - x.ts < IDADE_MAX); if (itens.length !== n) sujo = true; }, 3600e3).unref();
     },
     lista: (limit = 1500) => itens.slice(0, limit),

@@ -338,17 +338,43 @@ export default function Portugal({ API = "", now }) {
       {modo === "tabelas" && (() => {
         const lista = tabelas.filter((t) => f.nivel === "todos" || t.nivel === f.nivel)
           .filter((t) => !q || semAcentos(`${t.compNome} ${t.serieNome}`).includes(q) || t.linhas.some((l) => semAcentos(l.equipa).includes(q)));
-        return lista.length === 0 ? <p className="empty">Sem tabelas com estes filtros.</p> : (
-          <div className="pttabs">
-            {lista.map((t) => (
-              <section key={`${t.comp}|${t.serie}`} className="ptcard">
-                <button className="ptgh" onClick={() => irPara({ comp: t.comp, serie: t.serie, org: t.org, mod: t.mod, jornada: null })}>
-                  {t.compNome}{t.serieNome ? ` · ${t.serieNome}` : ""} {t.linhas.some((l) => l.aoVivo) && <span className="pulse"><i /></span>}<ChevronRight size={14} />
-                </button>
-                <Tabela linhas={t.linhas} compacta destaque={q || null} />
+        if (lista.length === 0) return <p className="empty">Sem tabelas com estes filtros.</p>;
+        // agrupadas pelo organizador: primeiro as nacionais (FPF e Liga), depois cada associação distrital
+        const ordemOrg = new Map(cat.orgs.map((o, i) => [o.key, i]));
+        const nomeOrg = new Map(cat.orgs.map((o) => [o.key, o.nome]));
+        const grupos = [];
+        for (const t of lista) {
+          let g = grupos.find((x) => x.org === t.org);
+          if (!g) grupos.push((g = { org: t.org, nome: nomeOrg.get(t.org) || t.org, tabs: [] }));
+          g.tabs.push(t);
+        }
+        grupos.sort((a, b) => (ordemOrg.get(a.org) ?? 999) - (ordemOrg.get(b.org) ?? 999));
+        const nDist = lista.filter((t) => t.nivel === "distrital").length;
+        return (
+          <>
+            <p className="muted ptres">{lista.length} tabelas · {lista.length - nDist} nacionais · {nDist} distritais ({grupos.filter((g) => g.tabs.some((t) => t.nivel === "distrital")).length} associações)</p>
+            {grupos.length > 1 && (
+              <nav className="ptsalta" aria-label="Ir para o organizador">
+                {grupos.map((g) => <button key={g.org} onClick={() => document.getElementById(`pt-org-${g.org}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{g.nome} <span className="muted">{g.tabs.length}</span></button>)}
+              </nav>
+            )}
+            {grupos.map((g) => (
+              <section key={g.org} id={`pt-org-${g.org}`} className="ptorg">
+                <h3 className="ptth">{g.nome} <span className="muted small">{g.tabs.length} {g.tabs.length === 1 ? "tabela" : "tabelas"}</span></h3>
+                <div className="pttabs">
+                  {g.tabs.map((t) => (
+                    <section key={`${t.comp}|${t.serie}`} className="ptcard">
+                      <button className="ptgh" onClick={() => irPara({ comp: t.comp, serie: t.serie, org: t.org, mod: t.mod, jornada: null })}>
+                        {t.compNome}{t.serieNome ? ` · ${t.serieNome}` : ""} {t.linhas.some((l) => l.aoVivo) && <span className="pulse"><i /></span>}<ChevronRight size={14} />
+                      </button>
+                      {t.linhas.every((l) => l.semJogos) && <p className="muted ptnota">Ainda sem resultados: as equipas aparecem a zero até ao primeiro jogo.</p>}
+                      <Tabela linhas={t.linhas} compacta destaque={q || null} />
+                    </section>
+                  ))}
+                </div>
               </section>
             ))}
-          </div>
+          </>
         );
       })()}
     </div>
@@ -416,6 +442,10 @@ export const PT_CSS = `
 .apito .pttab.mini{font-size:12.5px} .apito .pttab.mini .eq{max-width:160px}
 .apito .pttabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
 .apito .ptcard,.apito .ptgrupo{min-width:0}
+.apito .ptorg{margin:0 0 26px;scroll-margin-top:80px}
+.apito .ptorg>.ptth{border-bottom:1px solid var(--line);padding-bottom:6px}
+.apito .ptsalta{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
+.apito .ptsalta button{font-size:12px;font-weight:600;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:2px 9px;background:var(--raise)}
 .apito .ptgrupo{margin-bottom:16px}
 .apito .ptgh{font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:4px;margin:0 0 6px;text-align:left}
 .apito .ptres{font-size:13px;margin:0 0 10px}

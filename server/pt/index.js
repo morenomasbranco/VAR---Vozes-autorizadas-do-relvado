@@ -567,9 +567,15 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const jogos = jogosDaSerie(comp.id, serie.id);
     const equipas = [...new Set([...serie.equipas, ...(serie.oficial?.linhas || []).map((l) => l.equipa)])];
     // sem jogos nossos, a oficial tal como está
-    const linhas = jogos.some((j) => j.hs != null)
+    let linhas = jogos.some((j) => j.hs != null)
       ? tabelaAoVivo({ equipas: serie.equipas.length ? serie.equipas : equipas, jogos, oficial: serie.oficial?.linhas, antesDe: serie.oficial ? serie.oficial.ts - DURACAO[comp.mod] : null })
       : (serie.oficial?.linhas || []).map((l) => ({ ...l, forma: [], aoVivo: null }));
+    // nem resultados nem tabela oficial (início da época, ou uma distrital cuja tabela a FPF não deu): as equipas
+    // do calendário a zero, para a classificação aparecer na mesma e começar a mexer com o primeiro resultado
+    if (!linhas.length) {
+      const doCalendario = [...new Set([...equipas, ...jogos.flatMap((j) => [j.casa, j.fora])].filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt"));
+      if (doCalendario.length >= 2) linhas = tabelaAoVivo({ equipas: doCalendario, jogos: [] }).map((l) => ({ ...l, semJogos: true }));
+    }
     tabelasCache.set(k, { ts: Date.now(), linhas });
     return linhas;
   }
