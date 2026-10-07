@@ -100,6 +100,7 @@ function criaGolo(jogo, lado, ev, L, { ultimo }) {
     autogolo: ultimo && L.eventos.includes("autogolo") ? true : undefined,
     ts: ev.ts,
     via: ev.tipo || null, // story ou post: o que chegou primeiro e criou o golo
+    ladoFonte: ev.lado || null, // o clube que o deu (o mesmo clube pode chegar pelo Instagram e pelo Facebook)
     fontes: [ev.conta || ev.tipo],
   };
 }
@@ -209,7 +210,7 @@ export function aplicar(jogo, ev) {
       const recente = [...jogo.golos].reverse().find((g) => g.lado === lado);
       // o mesmo golo: muito perto, pela mesma via; ou o post de um golo que já veio por story (e vice-versa),
       // do mesmo clube e sem um marcador diferente
-      const outraVia = recente && recente.via && ev.tipo && recente.via !== ev.tipo && recente.fontes.includes(ev.conta || ev.tipo)
+      const outraVia = recente && recente.via && ev.tipo && recente.via !== ev.tipo && (recente.fontes.includes(ev.conta || ev.tipo) || (ev.lado && recente.ladoFonte === ev.lado))
         && !(L.marcadores[0] && recente.marcador && L.marcadores[0] !== recente.marcador);
       if (recente && Math.abs(ev.ts - recente.ts) < (outraVia ? MESMO_GOLO_OUTRA_VIA_MS : MESMO_GOLO_MS)) {
         completarGolo(jogo, lado, ev, L);

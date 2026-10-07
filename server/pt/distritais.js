@@ -8,10 +8,13 @@
 //     12 s (DISTRITAIS_SEGUNDOS), e se o Instagram recusar, pela página pública do perfil num visualizador anónimo;
 //   - os perfis que a recolha dos jogos já leu (clubes a jogar) entram aqui também, sem pedido a mais.
 // As imagens do Instagram não abrem noutros sites, por isso passam pelo servidor (/api/distritais/img).
+// As páginas de Facebook dos clubes são lidas ao mesmo tempo, pelo plugin público de página do Facebook (facebook.js),
+// e os posts juntam-se na coluna da associação.
 // Tudo fica em data/pt-distritais.json; cada post novo segue para o site no mesmo instante (evento «distrital»).
 import fs from "node:fs";
 import { sleep } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
+import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
 
 const FICHEIRO = new URL("../../data/pt-distritais.json", import.meta.url);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -21,6 +24,27 @@ const IDADE_MAX = (Number(process.env.DISTRITAIS_DIAS) || 21) * 86400e3;
 const ATIVO_MS = 45 * 60e3; // clube que publicou nos últimos 3 dias
 const CALMO_MS = 4 * 3600e3;
 const CDN = /^https:\/\/[^/]*(cdninstagram\.com|fbcdn\.net)\//;
+
+// O mesmo post publicado no Instagram e no Facebook do clube (muitos clubes partilham para as duas redes): o mesmo
+// clube, com poucas horas de diferença e quase o mesmo texto. Fica um só, o primeiro a sair, com a ligação do outro.
+const palavrasDe = (t) => new Set(String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/https?:\/\/\S+|#\S+|@\S+/g, " ").match(/[a-z0-9]{2,}/g) || []);
+export function mesmoPost(a, b) {
+  if (a.rede === b.rede || a.clube !== b.clube || Math.abs(a.ts - b.ts) > 6 * 3600e3) return false;
+  const pa = palavrasDe(a.legenda), pb = palavrasDe(b.legenda);
+  if (pa.size < 3 || pb.size < 3) return false; // sem texto que chegue para comparar
+  let comuns = 0;
+  for (const w of pa) if (pb.has(w)) comuns++;
+  return comuns / Math.min(pa.size, pb.size) >= 0.8;
+}
+export function semRepetidos(posts) {
+  const out = [];
+  for (const p of [...posts].sort((a, b) => a.ts - b.ts)) {
+    const igual = out.find((q) => mesmoPost(q, p));
+    if (igual) { (igual.tambem ||= []).push({ rede: p.rede, url: p.url }); if (!igual.img && p.img) igual.img = p.img; continue; }
+    out.push({ ...p });
+  }
+  return out.sort((a, b) => b.ts - a.ts);
+}
 
 // o que interessa de um post do Instagram (formato do web_profile_info)
 export function dePost(node, clube) {
@@ -70,20 +94,27 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); sujo = false; } catch (e) { log(`[Distritais] não consegui gravar: ${e.message}`); }
   }, 30e3).unref();
 
+  // Facebook: as páginas dos clubes (chave: o nome da página ou o id do perfil)
+  const listaFb = clubes.clubes.filter((c) => c.facebook && c.org && c.org.startsWith("af-")).map((c) => ({ ...c, fb: paginaFacebook(c.facebook)?.chave })).filter((c) => c.fb);
+  const porFb = new Map(listaFb.map((c) => [c.fb, c]));
+  dados.fb = { posts: {}, lido: {}, ...(dados.fb || {}) };
+
   // junta os posts lidos de um clube; os novos seguem para o site
-  function juntar(handle, posts, { lido = true } = {}) {
-    const clube = porHandle.get(handle);
-    if (!clube) return 0;
-    const antes = dados.posts[handle] || [];
-    const jaLido = !!dados.lido[handle]?.ts && !dados.lido[handle]?.naoExiste;
+  function juntar(handle, posts, opcoes = {}) {
+    if (!porHandle.get(handle)) return 0;
+    return juntarEm(dados, handle, posts.map((p) => p && { rede: "instagram", ...p }), opcoes);
+  }
+  function juntarEm(t, handle, posts, { lido = true } = {}) {
+    const antes = t.posts[handle] || [];
+    const jaLido = !!t.lido[handle]?.ts && !t.lido[handle]?.naoExiste;
     const agora = Date.now();
     const lidos = new Map(posts.filter(Boolean).map((p) => [p.id, p]));
     // os que já se conheciam ficam com a hora e a imagem/legenda mais recentes (legendas editadas)
     const conhecidos = antes.map((p) => (lidos.has(p.id) ? { ...p, ...lidos.get(p.id), ts: p.ts, vistoEm: p.vistoEm } : p));
     const ids = new Set(antes.map((p) => p.id));
     const novos = [...lidos.values()].filter((p) => !ids.has(p.id)).map((p) => ({ ...p, ts: p.ts || agora, vistoEm: agora }));
-    dados.posts[handle] = [...conhecidos, ...novos].filter((p) => agora - p.ts < IDADE_MAX).sort((a, b) => b.ts - a.ts).slice(0, POR_CLUBE);
-    if (lido) dados.lido[handle] = { ts: agora, ativo: dados.posts[handle].some((p) => agora - p.ts < 3 * 86400e3), falhas: 0 };
+    t.posts[handle] = [...conhecidos, ...novos].filter((p) => agora - p.ts < IDADE_MAX).sort((a, b) => b.ts - a.ts).slice(0, POR_CLUBE);
+    if (lido) t.lido[handle] = { ts: agora, ativo: t.posts[handle].some((p) => agora - p.ts < 3 * 86400e3), falhas: 0, ok: true };
     sujo = true;
     // na primeira leitura de um clube não se anuncia nada (eram posts antigos); depois, cada post novo
     if (jaLido) for (const p of novos) if (agora - p.ts < 6 * 3600e3) broadcast("distrital", p);
@@ -132,17 +163,18 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   // cedo); depois o que está há mais tempo à espera do seu intervalo. «ocupados»: os que outra via está a ler.
   const ocupados = new Set();
   let vez = 0;
-  function proximo(agora = Date.now()) {
-    const porLer = lista.filter((c) => !dados.lido[c.instagram] && !ocupados.has(c.instagram));
+  const proximo = (agora = Date.now()) => proximoEm(lista, dados.lido, (c) => c.instagram, agora);
+  function proximoEm(lst, lidos, chave, agora = Date.now()) {
+    const porLer = lst.filter((c) => !lidos[chave(c)] && !ocupados.has(chave(c)));
     if (porLer.length) {
       const orgs = [...new Set(porLer.map((c) => c.org))];
       const org = orgs[vez++ % orgs.length];
       return porLer.find((c) => c.org === org);
     }
     let melhor = null, atraso = -Infinity;
-    for (const c of lista) {
-      if (ocupados.has(c.instagram)) continue;
-      const l = dados.lido[c.instagram];
+    for (const c of lst) {
+      if (ocupados.has(chave(c))) continue;
+      const l = lidos[chave(c)];
       const devido = l.ts + (l.naoExiste ? 7 * 86400e3 : l.ativo ? ATIVO_MS : CALMO_MS) * (1 + Math.min(4, l.falhas || 0));
       if (agora - devido > atraso) { atraso = agora - devido; melhor = c; }
     }
@@ -189,9 +221,43 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       await sleep(gap);
     }
   }
+  // Facebook: uma página a cada 8 s (DISTRITAIS_FB_SEGUNDOS); se o Facebook recusar, pausa de meia hora
+  const GAP_FB = Math.max(2, Number(process.env.DISTRITAIS_FB_SEGUNDOS) || 8) * 1000;
+  estado.vias.facebook = { ok: 0, erros: 0, pausaAte: 0, paginas: listaFb.length };
+  async function viaFacebook() {
+    const v = estado.vias.facebook;
+    while (!parar) {
+      if (Date.now() < v.pausaAte) { await sleep(Math.min(60e3, v.pausaAte - Date.now())); continue; }
+      const c = proximoEm(listaFb, dados.fb.lido, (x) => x.fb);
+      if (!c) { await sleep(30e3); continue; }
+      ocupados.add(c.fb);
+      estado.pedidos++;
+      try {
+        const r = await lerPaginaFacebook(c);
+        juntarEm(dados.fb, c.fb, r.posts.map((p) => ({ ...p, handle: `fb:${c.fb}` })));
+        v.ok++;
+        sujo = true;
+      } catch (e) {
+        v.erros++;
+        v.ultimoErro = e.message;
+        if ([401, 403, 429].includes(e.status)) v.pausaAte = Date.now() + 30 * 60e3;
+        else {
+          const l = dados.fb.lido[c.fb] || {};
+          dados.fb.lido[c.fb] = { ...l, ts: l.ok ? Date.now() : Date.now() - CALMO_MS + 10 * 60e3, falhas: (l.falhas || 0) + 1, ok: l.ok };
+        }
+      } finally { ocupados.delete(c.fb); }
+      await sleep(GAP_FB);
+    }
+  }
+
   async function correr() {
     log(`[Distritais] ${lista.length} clubes das associações com Instagram; pelo Instagram (um a cada ${GAP_IG / 1000} s) e pelos visualizadores anónimos (um a cada ${GAP_ANON / 1000} s)`);
-    await Promise.all([via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)]);
+    const vias = [via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)];
+    if (process.env.DISTRITAIS_FACEBOOK !== "0" && listaFb.length) {
+      log(`[Distritais] ${listaFb.length} páginas de Facebook dos clubes, uma a cada ${GAP_FB / 1000} s`);
+      vias.push(viaFacebook());
+    }
+    await Promise.all(vias);
   }
 
   // retransmissor de casa (npm run instagram-relay): pede clubes para ler e devolve os posts
@@ -238,11 +304,18 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       if (!c || (org && c.org !== org)) continue;
       for (const p of posts) (porOrg[c.org] ||= []).push(p);
     }
-    for (const k of Object.keys(porOrg)) porOrg[k] = porOrg[k].sort((a, b) => b.ts - a.ts).slice(0, limite);
+    for (const [k, posts] of Object.entries(dados.fb.posts)) {
+      const c = porFb.get(k);
+      if (!c || (org && c.org !== org)) continue;
+      for (const p of posts) (porOrg[c.org] ||= []).push(p);
+    }
+    for (const k of Object.keys(porOrg)) porOrg[k] = semRepetidos(porOrg[k]).slice(0, limite);
+    // clubes de cada associação com Instagram ou Facebook
+    const nomes = (o) => new Set([...lista, ...listaFb].filter((c) => c.org === o).map((c) => c.nome)).size;
     return {
-      orgs: ASSOCIACOES.map((a) => ({ key: a.key, nome: a.nome, clubes: lista.filter((c) => c.org === a.key).length })).filter((a) => a.clubes),
+      orgs: ASSOCIACOES.map((a) => ({ key: a.key, nome: a.nome, clubes: nomes(a.key) })).filter((a) => a.clubes),
       posts: porOrg,
-      estado: { ...estado, lidosTotal: Object.keys(dados.lido).length },
+      estado: { ...estado, perfis: lista.length + listaFb.length, lidosTotal: Object.keys(dados.lido).length + Object.keys(dados.fb.lido).length },
     };
   }
 
@@ -250,5 +323,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     start() { if (estado.ativo) correr().catch((e) => log(`[Distritais] ${e.message}`)); },
     parar() { parar = true; },
     juntar, deEdges, feed, imagem, paraRetransmissor, doRetransmissor, estado: () => estado,
+    // posts de Facebook que a recolha dos jogos já leu
+    deFacebook: (chave, posts) => (porFb.has(chave) ? juntarEm(dados.fb, chave, posts.map((p) => ({ ...p, handle: `fb:${chave}` }))) : 0),
   };
 }
