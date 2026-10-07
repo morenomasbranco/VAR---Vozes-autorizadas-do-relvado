@@ -5,9 +5,12 @@
 // Sete pedidos por semana, feitos quando a semana muda (e repetidos só para os dias que falharem). O resultado
 // fica em data/efemerides-claude.json e junta-se ao que vem da Wikipédia, do Wikidata e da ESPN.
 //
-// Precisa de ANTHROPIC_API_KEY no .env. Ao contrário das outras fontes, isto tem custo: cada dia é um pedido
-// ao Claude Opus 5.5 com pesquisas na web (o preço por pesquisa e por token está na página de preços da
-// Anthropic); o total semanal depende de quantas pesquisas o modelo fizer (limitado por EFEMERIDES_CLAUDE_PESQUISAS).
+// Dois motores, à escolha (EFEMERIDES_MOTOR=gemini|claude; por omissão, o Claude se houver ANTHROPIC_API_KEY,
+// senão o Gemini se houver GEMINI_API_KEY):
+//  - Gemini, gratuito: a mesma GEMINI_API_KEY do resto do site, com a pesquisa Google («grounding») que o plano
+//    gratuito inclui. Sete pedidos por semana ficam muito abaixo dos limites diários.
+//  - Claude, pago: cada dia é um pedido ao Claude Opus 5.5 com pesquisas na web (o preço por pesquisa e por token
+//    está na página de preços da Anthropic), limitado por EFEMERIDES_CLAUDE_PESQUISAS.
 //
 // Os pedidos são feitos por HTTP direto (fetch), sem o SDK @anthropic-ai/sdk: o projeto instala as dependências
 // com «npm ci» a partir do package-lock.json, e acrescentar o SDK obriga a regenerar esse ficheiro.
@@ -15,6 +18,16 @@ import fs from "node:fs";
 import { sleep } from "../util.js";
 
 const KEY = process.env.ANTHROPIC_API_KEY;
+const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
+const GEMINI_MODELO = () => process.env.EFEMERIDES_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+// motor em uso: o escolhido no .env, ou o que tiver chave (o Claude primeiro, por ser o que foi pedido de início)
+const motorEscolhido = () => {
+  const m = String(process.env.EFEMERIDES_MOTOR || "").toLowerCase();
+  if (m === "claude") return KEY ? "claude" : null;
+  if (m === "gemini") return process.env.GEMINI_API_KEY ? "gemini" : null;
+  if (m === "0" || m === "nenhum") return null;
+  return KEY ? "claude" : process.env.GEMINI_API_KEY ? "gemini" : null;
+};
 const BASE = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
 const MODELO = process.env.EFEMERIDES_CLAUDE_MODEL || "claude-opus-5-5";
 const ESFORCO = process.env.EFEMERIDES_CLAUDE_ESFORCO || "medium"; // low | medium | high | xhigh | max
@@ -127,38 +140,84 @@ export async function pesquisarDia({ ano, mes, dia }, anos) {
   throw new Error("demasiadas voltas sem resposta final");
 }
 
+// O mesmo pedido ao Gemini, com a pesquisa Google. A pesquisa e o JSON estruturado nem sempre andam juntos nos
+// modelos do plano gratuito, por isso pede-se o JSON no texto e lê-se com tolerância.
+const SISTEMA_GEMINI = SISTEMA.replace(/- Quando terminares, chama a ferramenta guardar_efemerides[^\n]*/, `- No fim, responde APENAS com um objeto JSON, sem mais texto: {"acontecimentos": [{"ano": 2016, "ambito": "portugal" ou "internacional", "modalidade": "futebol", "titulo": "…", "descricao": "…", "fonte": "https://…", "importancia": "alta" ou "media"}]}. Se não houver nada confirmado, {"acontecimentos": []}.`);
+
+export function lerJsonGemini(texto) {
+  const t = String(texto || "").replace(/```(?:json)?/gi, "");
+  const i = t.indexOf("{");
+  const f = t.lastIndexOf("}");
+  if (i < 0 || f < i) throw new Error("o Gemini não devolveu a lista em JSON");
+  const j = JSON.parse(t.slice(i, f + 1));
+  return (Array.isArray(j.acontecimentos) ? j.acontecimentos : [])
+    .filter((x) => x && Number.isInteger(+x.ano) && typeof x.titulo === "string" && x.titulo.trim())
+    .map((x) => ({
+      ano: +x.ano, ambito: x.ambito === "portugal" ? "portugal" : "internacional", modalidade: String(x.modalidade || ""),
+      titulo: x.titulo.trim().slice(0, 140), descricao: String(x.descricao || "").trim().slice(0, 500),
+      fonte: String(x.fonte || ""), importancia: x.importancia === "alta" ? "alta" : "media",
+    }));
+}
+
+export async function pesquisarDiaGemini({ ano, mes, dia }, anos) {
+  const lista = anos.map((a) => `${a} (há ${ano - a} ${ano - a === 1 ? "ano" : "anos"})`).join(", ");
+  const res = await fetch(`${GEMINI_API}/models/${GEMINI_MODELO()}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SISTEMA_GEMINI }] },
+      contents: [{ role: "user", parts: [{ text: `Data: ${dia} de ${MESES[mes - 1]}.\nAnos: ${lista}.\n\nQue acontecimentos desportivos, portugueses e internacionais, marcaram o dia ${dia} de ${MESES[mes - 1]} em cada um destes anos? Pesquisa no Google para confirmar cada um.` }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.3 },
+    }),
+    signal: AbortSignal.timeout(5 * 60e3),
+  });
+  if (!res.ok) {
+    const e = new Error(`Gemini respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    e.status = res.status;
+    throw e;
+  }
+  const j = await res.json();
+  const texto = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+  if (!texto && j.promptFeedback?.blockReason) throw new Error(`pedido recusado pelo Gemini (${j.promptFeedback.blockReason})`);
+  return lerJsonGemini(texto);
+}
+
 export function createEfemeridesClaude({ log = () => {} } = {}) {
   let dados = {};
   try { dados = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { dados = {}; }
-  const estado = { ativo: !!KEY, modelo: MODELO, dias: {}, erros: {} };
-  if (!KEY) log("[Nesta semana] sem ANTHROPIC_API_KEY: a pesquisa do Claude está desligada");
+  const motor = motorEscolhido();
+  const modelo = motor === "gemini" ? GEMINI_MODELO() : MODELO;
+  const estado = { ativo: !!motor, motor, modelo, dias: {}, erros: {} };
+  if (!motor) log("[Nesta semana] sem GEMINI_API_KEY nem ANTHROPIC_API_KEY: a pesquisa na web de cada dia está desligada");
+  else log(`[Nesta semana] pesquisa na web de cada dia pelo ${motor === "gemini" ? "Gemini (gratuito)" : "Claude"} (${modelo})`);
   let aCorrer = false;
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* */ } };
 
   // pesquisa os dias da semana que ainda não têm resultado (hoje primeiro); chama aoChegar a cada dia feito
   async function semana(sem, anosDoDia, aoChegar = () => {}) {
-    if (!KEY || aCorrer) return;
+    if (!motor || aCorrer) return;
     aCorrer = true;
     try {
       // guarda só a semana atual
       for (const k of Object.keys(dados)) if (!sem.dias.some((d) => d.iso === k)) delete dados[k];
       const iHoje = Math.max(0, sem.dias.findIndex((d) => d.iso === sem.hoje));
       for (const d of [...sem.dias.slice(iHoje), ...sem.dias.slice(0, iHoje)]) {
-        if (dados[d.iso]?.ok) continue;
+        if (dados[d.iso]?.ok && (dados[d.iso].motor || "claude") === motor) continue;
         const anos = anosDoDia(d);
         if (!anos.length) continue;
         try {
-          const lista = await pesquisarDia(d, anos);
+          const lista = motor === "gemini" ? await pesquisarDiaGemini(d, anos) : await pesquisarDia(d, anos);
           const validos = new Set(anos);
-          dados[d.iso] = { ok: true, at: Date.now(), modelo: MODELO, itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
+          dados[d.iso] = { ok: true, at: Date.now(), motor, modelo, itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
           estado.dias[d.iso] = dados[d.iso].itens.length;
           delete estado.erros[d.iso];
           gravar();
-          log(`[Nesta semana] Claude: ${dados[d.iso].itens.length} acontecimentos para ${d.iso}`);
+          log(`[Nesta semana] ${motor}: ${dados[d.iso].itens.length} acontecimentos para ${d.iso}`);
           aoChegar();
         } catch (e) {
           estado.erros[d.iso] = e.message;
-          log(`[Nesta semana] Claude (${d.iso}): ${e.message}`);
+          log(`[Nesta semana] ${motor} (${d.iso}): ${e.message}`);
           if (e.status === 401 || e.status === 403) break; // chave errada: não vale a pena insistir
           await sleep(e.status === 429 ? 60e3 : 5e3);
         }
@@ -176,7 +235,7 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
         out.push({
           id: `cl:${d.iso}:${x.ano}:${i}`, tipo: "acontecimento", ano: x.ano, dia: d.iso, anos: anoDe.get(d.iso) - x.ano,
           texto: `${x.titulo}${x.descricao ? ` — ${x.descricao}` : ""}`, mod: modDe(x.modalidade) || undefined,
-          portugues: pt, link: /^https?:\/\//.test(x.fonte || "") ? x.fonte : null, claude: true,
+          portugues: pt, link: /^https?:\/\//.test(x.fonte || "") ? x.fonte : null, claude: true, motor: dados[d.iso].motor || "claude",
           peso: 120 + (pt ? 40 : 0) + (x.importancia === "alta" ? 20 : 0),
         });
       }
