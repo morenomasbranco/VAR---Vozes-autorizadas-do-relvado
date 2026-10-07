@@ -195,10 +195,12 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   }
 
   // duas vias em paralelo, cada uma ao seu ritmo: o Instagram (que pode pedir uma pausa) e os visualizadores anónimos
-  const GAP_IG = Math.max(2, Number(process.env.DISTRITAIS_SEGUNDOS) || (cookie ? 4 : 8)) * 1000;
+  // o Instagram limita muito os pedidos vindos de servidores (429), mesmo com sessão: devagar, e cada vez mais
+  // devagar enquanto ele se queixar (a pausa dobra a cada 429 seguido, até 4 h; volta ao normal quando responde)
+  const GAP_IG = Math.max(2, Number(process.env.DISTRITAIS_SEGUNDOS) || (cookie ? 15 : 20)) * 1000;
   const GAP_ANON = Math.max(2, Number(process.env.DISTRITAIS_ANONIMO_SEGUNDOS) || 6) * 1000;
   let parar = false;
-  estado.vias = { instagram: { ok: 0, erros: 0, pausaAte: 0 }, anonimo: { ok: 0, erros: 0 }, retransmissor: { ok: 0, ultimo: null } };
+  estado.vias = { instagram: { ok: 0, erros: 0, pausaAte: 0, recusas: 0, comSessao: !!cookie }, anonimo: { ok: 0, erros: 0 }, retransmissor: { ok: 0, ultimo: null } };
   async function via(nome, ler, gap) {
     const v = estado.vias[nome];
     while (!parar) {
@@ -211,11 +213,15 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       try {
         certo(c, await ler(c));
         v.ok++;
+        v.recusas = 0;
+        v.ultimoOk = Date.now();
       } catch (e) {
         v.erros++;
         if (nome === "instagram" && ([401, 403, 429].includes(e.status) || (e.status >= 300 && e.status < 400))) {
-          v.pausaAte = Date.now() + (v.ok ? 15 : 30) * 60e3; // o Instagram está a recusar este servidor: pausa
+          v.recusas = (v.recusas || 0) + 1;
+          v.pausaAte = Date.now() + Math.min(240, 15 * 2 ** (v.recusas - 1)) * 60e3; // 15, 30, 60, 120, 240 min
           v.ultimoErro = e.message;
+          v.ultimaRecusa = Date.now();
         } else erro(c, e);
       } finally { ocupados.delete(c.instagram); }
       await sleep(gap);
@@ -315,7 +321,13 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     return {
       orgs: ASSOCIACOES.map((a) => ({ key: a.key, nome: a.nome, clubes: nomes(a.key) })).filter((a) => a.clubes),
       posts: porOrg,
-      estado: { ...estado, perfis: lista.length + listaFb.length, lidosTotal: Object.keys(dados.lido).length + Object.keys(dados.fb.lido).length },
+      // só contam as páginas lidas de facto (as tentativas que falharam não)
+      estado: {
+        ...estado, perfis: lista.length + listaFb.length,
+        lidosTotal: Object.values(dados.lido).filter((l) => l.ok || l.naoExiste).length + Object.values(dados.fb.lido).filter((l) => l.ok).length,
+        lidosInstagram: Object.values(dados.lido).filter((l) => l.ok).length, lidosFacebook: Object.values(dados.fb.lido).filter((l) => l.ok).length,
+        paginasInstagram: lista.length, paginasFacebook: listaFb.length,
+      },
     };
   }
 

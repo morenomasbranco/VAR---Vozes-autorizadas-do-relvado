@@ -171,7 +171,7 @@ A secção **Distritais** (ao lado de «Portugueses pelo mundo») mostra os post
 O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o servidor percorre os perfis devagar, um de cada vez (`server/pt/distritais.js`):
 
 - primeiro os clubes que ainda não foram lidos, alternando entre associações (para todas as colunas terem posts cedo); depois, os que publicam muito (relidos a cada 45 min) antes dos que publicam pouco (a cada 4 h);
-- duas vias ao mesmo tempo: o Instagram (um perfil a cada 8 s sem sessão, 4 s com `IG_SESSIONID`; `DISTRITAIS_SEGUNDOS`) e as páginas públicas dos perfis nos visualizadores anónimos (imginn, picnob, pixwox; um a cada 6 s, `DISTRITAIS_ANONIMO_SEGUNDOS`; a lista troca-se em `DISTRITAIS_FONTES`). Quando o Instagram recusa o servidor, essa via faz uma pausa e a outra continua;
+- duas vias ao mesmo tempo: o Instagram (um perfil a cada 20 s sem sessão, 15 s com `IG_SESSIONID`; `DISTRITAIS_SEGUNDOS`; a cada recusa seguida do Instagram, a pausa dobra: 15, 30, 60, 120 e 240 min) e as páginas públicas dos perfis nos visualizadores anónimos (imginn, picnob, pixwox; um a cada 6 s, `DISTRITAIS_ANONIMO_SEGUNDOS`; a lista troca-se em `DISTRITAIS_FONTES`). Quando o Instagram recusa o servidor, essa via faz uma pausa e a outra continua;
 - o **retransmissor** de casa (`npm run instagram-relay`) também lê perfis para esta secção: pede ao site que clubes ler e devolve os posts (`RELAY_DISTRITAIS=0` desliga). É a forma mais fiável quando o Instagram bloqueia o servidor;
 - os perfis que a recolha dos jogos já leu (clubes a jogar) entram também, sem pedidos a mais.
 

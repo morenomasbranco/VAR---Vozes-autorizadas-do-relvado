@@ -84,22 +84,38 @@ export default function Distritais({ API = "", now, query = "" }) {
   if (!d) return <p className="empty">{erro || "A carregar os posts dos clubes…"}</p>;
   const e = d.estado || {};
   const vias = e.vias || {};
-  const igPausa = vias.instagram && agora < (vias.instagram.pausaAte || 0);
+  const hora = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
+  const ig = vias.instagram || {};
+  const fb = vias.facebook || null;
+  const igPausa = agora < (ig.pausaAte || 0);
   const anonFalha = vias.anonimo && vias.anonimo.erros > 0 && !vias.anonimo.ok;
   const relayVivo = vias.retransmissor?.ultimo && agora - vias.retransmissor.ultimo < 10 * 60e3;
-  const bloqueado = igPausa && anonFalha && !relayVivo;
+  const fbPausa = fb && agora < (fb.pausaAte || 0);
+  const fbFalha = fb && fb.erros > 0 && !fb.ok;
+  // nada está a chegar: o Instagram recusa, os visualizadores falham, o Facebook também (ou não há) e não há retransmissor
+  const bloqueado = igPausa && anonFalha && !relayVivo && (!fb || fbPausa || fbFalha);
   const total = Object.values(d.posts || {}).reduce((t, l) => t + l.length, 0);
+  const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
   return (
     <div className="dist">
       <p className="muted dnota">
-        Os posts mais recentes do Instagram e do Facebook dos clubes de cada associação. {e.lidosTotal < (e.perfis || e.clubes) ? `A ler as páginas dos clubes: ${e.lidosTotal} de ${e.perfis || e.clubes} já lidas, ${total} posts.` : `${e.perfis || e.clubes} páginas de clubes, relidas ao longo do dia.`}
-        {igPausa && !bloqueado ? " O Instagram pediu uma pausa ao servidor: a leitura continua pelos visualizadores anónimos." : ""}
-        {relayVivo ? " A receber perfis do retransmissor." : ""}
+        Os posts mais recentes do Instagram e do Facebook dos clubes de cada associação.{" "}
+        {porLer ? `A ler as páginas dos clubes: ${e.lidosTotal || 0} de ${e.perfis || e.clubes} já lidas, ${total} posts.` : `${e.perfis || e.clubes} páginas de clubes, relidas ao longo do dia.`}
       </p>
+      <ul className="muted dvias">
+        <li>
+          Instagram{ig.comSessao ? " (com sessão)" : " (sem sessão)"}: {e.lidosInstagram ?? 0} de {e.paginasInstagram ?? "?"} lidos
+          {igPausa ? ` · o Instagram está a limitar os pedidos deste servidor (${ig.ultimoErro || "recusa"}); volta a tentar às ${hora(ig.pausaAte)}, mais devagar` : ig.ultimoOk ? " · a ler" : ""}
+        </li>
+        {fb && <li>Facebook: {e.lidosFacebook ?? 0} de {e.paginasFacebook ?? fb.paginas} páginas lidas{fbPausa ? ` · o Facebook está a recusar os pedidos (${fb.ultimoErro || "recusa"}); volta a tentar às ${hora(fb.pausaAte)}` : fbFalha ? ` · ainda sem leituras certas (${fb.ultimoErro || "erro"})` : fb.ok ? " · a ler" : ""}</li>}
+        {relayVivo && <li>Retransmissor de casa: {vias.retransmissor.ok} perfis recebidos</li>}
+      </ul>
       {bloqueado && (
         <p className="ptwarn dnota">
-          O Instagram e os visualizadores anónimos estão a recusar os pedidos do servidor{vias.instagram.ultimoErro ? ` (${vias.instagram.ultimoErro})` : ""}, por isso os posts não estão a chegar.
-          Para os carregar: junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou deixa o retransmissor (npm run instagram-relay) a correr num computador de casa.
+          Neste momento nenhuma das vias está a trazer posts.{" "}
+          {ig.comSessao
+            ? "O Instagram está a limitar este servidor mesmo com a sessão: costuma acontecer com servidores de alojamento e passa ao fim de algum tempo, mas a forma mais fiável é o retransmissor (npm run instagram-relay) num computador de casa."
+            : "Junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou deixa o retransmissor (npm run instagram-relay) a correr num computador de casa."}
         </p>
       )}
       <div className="cols dcols">
@@ -124,6 +140,7 @@ export default function Distritais({ API = "", now, query = "" }) {
 
 export const DIST_CSS = `
 .apito .dist .dnota{font-size:12.5px;margin:0 0 12px}
+.apito .dist .dvias{font-size:12px;margin:-6px 0 12px;padding-left:18px}
 .apito .dpost .drede{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;line-height:16px;color:#fff;flex:none}
 .apito .dpost .drede.ig{background:#C13584} .apito .dpost .drede.fb{background:#1877F2}
 .apito .dpost .dtambem{font-size:11.5px;margin:4px 0 0} .apito .dpost .dtambem a{color:inherit}
