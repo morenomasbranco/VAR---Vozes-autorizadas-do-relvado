@@ -41,7 +41,9 @@ export default function Distritais({ API = "", now, query = "" }) {
   const [n, setN] = useState({});
   const agora = now || Date.now();
   const ler = () => fetch(`${API}/api/distritais`).then((r) => r.json()).then((x) => { setD(x); setErro(null); }).catch(() => setErro("Sem ligação ao servidor"));
-  useEffect(() => { ler(); const t = setInterval(ler, 2 * 60e3); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // enquanto ainda há clubes por ler, relê de 20 em 20 s (as colunas vão enchendo); depois, de 2 em 2 min
+  const aLer = !d || (d.estado?.lidosTotal || 0) < (d.estado?.clubes || 0);
+  useEffect(() => { ler(); const t = setInterval(ler, aLer ? 20e3 : 2 * 60e3); return () => clearInterval(t); }, [aLer]); // eslint-disable-line react-hooks/exhaustive-deps
   // post novo em tempo real: entra no topo da coluna da associação
   useEffect(() => {
     const on = (e) => {
@@ -60,12 +62,25 @@ export default function Distritais({ API = "", now, query = "" }) {
 
   if (!d) return <p className="empty">{erro || "A carregar os posts dos clubes…"}</p>;
   const e = d.estado || {};
+  const vias = e.vias || {};
+  const igPausa = vias.instagram && agora < (vias.instagram.pausaAte || 0);
+  const anonFalha = vias.anonimo && vias.anonimo.erros > 0 && !vias.anonimo.ok;
+  const relayVivo = vias.retransmissor?.ultimo && agora - vias.retransmissor.ultimo < 10 * 60e3;
+  const bloqueado = igPausa && anonFalha && !relayVivo;
+  const total = Object.values(d.posts || {}).reduce((t, l) => t + l.length, 0);
   return (
     <div className="dist">
       <p className="muted dnota">
-        Os posts mais recentes do Instagram dos clubes de cada associação. {e.lidosTotal < e.clubes ? `A ler os perfis dos clubes: ${e.lidosTotal} de ${e.clubes} já lidos (um a cada poucos segundos).` : `${e.clubes} clubes, relidos ao longo do dia.`}
-        {e.ultimoErro && agora - e.ultimoErro.ts < 15 * 60e3 && e.via?.includes("pausa") ? " O Instagram pediu uma pausa: a leitura continua mais devagar." : ""}
+        Os posts mais recentes do Instagram dos clubes de cada associação. {e.lidosTotal < e.clubes ? `A ler os perfis dos clubes: ${e.lidosTotal} de ${e.clubes} já lidos, ${total} posts.` : `${e.clubes} clubes, relidos ao longo do dia.`}
+        {igPausa && !bloqueado ? " O Instagram pediu uma pausa ao servidor: a leitura continua pelos visualizadores anónimos." : ""}
+        {relayVivo ? " A receber perfis do retransmissor." : ""}
       </p>
+      {bloqueado && (
+        <p className="ptwarn dnota">
+          O Instagram e os visualizadores anónimos estão a recusar os pedidos do servidor{vias.instagram.ultimoErro ? ` (${vias.instagram.ultimoErro})` : ""}, por isso os posts não estão a chegar.
+          Para os carregar: junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou deixa o retransmissor (npm run instagram-relay) a correr num computador de casa.
+        </p>
+      )}
       <div className="cols dcols">
         {colunas.map((c) => {
           const k = n[c.key] || 12;

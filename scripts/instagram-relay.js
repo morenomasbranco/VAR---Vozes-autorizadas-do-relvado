@@ -55,3 +55,36 @@ else createInstagram({
   log: (...a) => console.log(...a),
   entregar,
 });
+
+// «Distritais»: o retransmissor também lê os perfis dos clubes para a secção Distritais (de casa, o Instagram
+// responde onde recusa os servidores). O site diz que clubes ler; RELAY_DISTRITAIS=0 desliga.
+if (process.env.RELAY_DISTRITAIS !== "0") (async () => {
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  const GAP = Math.max(3, Number(process.env.RELAY_DISTRITAIS_SEGUNDOS) || 6) * 1000;
+  const auth = { Authorization: `Bearer ${TOKEN}` };
+  const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+  let lidos = 0;
+  for (;;) {
+    try {
+      const r = await fetch(`${URL_SITE}/api/distritais/alvos?n=5`, { headers: auth });
+      const handles = r.ok ? await r.json() : [];
+      if (!handles.length) { await espera(60e3); continue; }
+      for (const h of handles) {
+        const res = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(h)}`, {
+          headers: { "User-Agent": UA, "X-IG-App-ID": "936619743392459", Accept: "*/*", Referer: "https://www.instagram.com/", ...(cookie ? { Cookie: cookie } : {}) },
+        });
+        if ([401, 403, 429].includes(res.status)) { console.log(`[relay] Distritais: o Instagram pediu uma pausa (${res.status}); volto daqui a 15 min`); await espera(15 * 60e3); break; }
+        const j = await res.json().catch(() => null);
+        const edges = (j?.data?.user?.edge_owner_to_timeline_media?.edges || []).slice(0, 6).map(({ node: n }) => ({ node: {
+          id: n.id, shortcode: n.shortcode, taken_at_timestamp: n.taken_at_timestamp, thumbnail_src: n.thumbnail_src, display_url: n.display_url,
+          is_video: n.is_video, accessibility_caption: n.accessibility_caption, edge_media_to_caption: n.edge_media_to_caption,
+        } }));
+        if (j?.data?.user) {
+          await fetch(`${URL_SITE}/api/distritais/posts`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ itens: [{ handle: h, edges }] }) });
+          if (++lidos % 25 === 0) console.log(`[relay] Distritais: ${lidos} perfis de clubes enviados`);
+        }
+        await espera(GAP);
+      }
+    } catch (e) { console.log(`[relay] Distritais: ${e.message}`); await espera(60e3); }
+  }
+})();

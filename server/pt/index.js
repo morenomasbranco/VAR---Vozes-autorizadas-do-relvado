@@ -782,8 +782,17 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       competicoes: Object.keys(st.comps).length, jogos: Object.keys(st.jogos).length, eventos: eventos.length, alvos: alvos().length,
       semJogos: Object.values(st.comps).filter((c) => !Object.values(c.series || {}).some((s) => s.equipas.length)).map((c) => ({ id: c.id, nome: c.nome, org: c.org })).slice(0, 80),
     }));
+    // o que a FPF devolveu ao servidor (o início das últimas respostas), para perceber porque não aparece nada
+    app.get("/api/pt/amostra", (req, res) => res.json({ estado: fpf.estado, listas: estado.listas || null, amostras: fpf.amostras }));
     // «Distritais»: posts recentes por associação, e as imagens (que o Instagram não deixa abrir noutros sites)
     app.get("/api/distritais", (req, res) => res.json(distritais.feed({ org: req.query.org || null, limite: Math.min(Number(req.query.limite) || 40, 120) })));
+    // retransmissor de casa: pede perfis de clubes para ler e devolve os posts (chave PT_TOKEN)
+    app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
+    app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {
+      if (!autorizado(req)) return res.status(401).json({ erro: "chave PT_TOKEN em falta ou errada" });
+      const itens = Array.isArray(req.body?.itens) ? req.body.itens : [req.body];
+      res.json({ ok: itens.slice(0, 20).map((x) => (x?.handle ? distritais.doRetransmissor(String(x.handle), x.edges) : false)) });
+    });
     app.get("/api/distritais/img", async (req, res) => {
       try {
         const img = await distritais.imagem(String(req.query.u || ""));

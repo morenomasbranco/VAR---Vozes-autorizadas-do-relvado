@@ -659,7 +659,24 @@ function AutoVideo({ embed, title }) {
 // 2) se falhar, uma imagem tirada do próprio vídeo (1.º segundo); 3) no fim, o cartão desenhado pelo servidor
 const thumbUrl = (v, svg = false) => `${API}/api/videos/thumb/${encodeURIComponent(v.video_id)}${svg ? "?svg=1" : `?t=${encodeURIComponent(v.thumbnail || "")}`}`;
 const mp4De = (v) => (v.embed?.tipo === "mp4" ? v.embed.src : v.embed?.mp4) || null;
-function VideoImg({ v }) {
+// vídeo sem título, só com o nome do ficheiro («video-2026-10-07T12-59-09», «20261007_055402[1]»)
+const TITULO_FICHEIRO = /^\s*(?:video|vid|img|mov|clip|screen ?recording|whatsapp video|gravação|telegram)?[\s_-]*[\dT:._\-\[\]() ]{6,}(?:\.(?:mp4|mov|m4v|webm))?\s*$/i;
+const tituloDeFicheiro = (t) => TITULO_FICHEIRO.test(String(t || "")) && (String(t).match(/\d/g) || []).length >= 6;
+// miniatura toda preta: o brilho médio de uma versão de 16×9 (só funciona com imagens do próprio servidor)
+function imagemEscura(img) {
+  try {
+    const c = document.createElement("canvas");
+    c.width = 16; c.height = 9;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 16, 9);
+    const d = ctx.getImageData(0, 0, 16, 9).data;
+    let soma = 0, max = 0;
+    for (let i = 0; i < d.length; i += 4) { const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; soma += y; if (y > max) max = y; }
+    return soma / (d.length / 4) <= 16 && max <= 60;
+  } catch { return false; } // imagem de outro sítio: o browser não deixa ler os píxeis
+}
+
+function VideoImg({ v, onEscuro }) {
   // sem miniatura mas com o ficheiro do vídeo: mostra logo o 1.º segundo, sem esperar pelo servidor
   const inicio = !v.thumbnail && mp4De(v) ? 1 : 0;
   const [fase, setFase] = useState(inicio);
@@ -674,10 +691,10 @@ function VideoImg({ v }) {
     return <video className="vframe" src={`${mp4De(v)}#t=1`} preload="auto" muted playsInline onLoadedData={() => setFrame(true)} onError={() => setFase(2)} aria-hidden="true" />;
   }
   if (fase >= 1) return <img src={thumbUrl(v, true)} alt="" loading="lazy" />;
-  return <img src={thumbUrl(v)} alt="" loading="lazy" onError={() => setFase(1)} />;
+  return <img src={thumbUrl(v)} alt="" loading="lazy" onError={() => setFase(1)} onLoad={onEscuro ? (e) => { if (imagemEscura(e.currentTarget)) onEscuro(v.video_id); } : undefined} />;
 }
 
-function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false }) {
+function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false, onEscuro }) {
   const tx = VTXT[lang] || VTXT.pt;
   const c = VCAT[v.category] || VCAT.other;
   const link = v.embed ? null : (v.reddit_url && /t\.me\//.test(v.reddit_url) ? v.reddit_url : v.video_url || v.reddit_url);
@@ -697,7 +714,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
       <div className="vthumb">
         {!playing && auto && v.embed && (
           <button className="vplay vautobtn" onClick={() => onPlay(v.video_id)} aria-label={tx.watch}>
-            <VideoImg v={v} />
+            <VideoImg v={v} onEscuro={onEscuro} />
             <AutoVideo embed={v.embed} title={v.title} />
             <span className="vcat">{c[lang] || c.en}</span>
             <span className="vsom" aria-hidden="true">🔇</span>
@@ -709,7 +726,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
               : <video className="vplayer" src={v.embed.src} muted controls autoPlay playsInline />
         ) : (
           <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
-            <VideoImg v={v} />
+            <VideoImg v={v} onEscuro={onEscuro} />
             <span className="vbtn"><Play size={20} fill="currentColor" /></span>
             <span className="vcat">{c[lang] || c.en}</span>
           </button>
@@ -1543,8 +1560,8 @@ export default function App() {
   });
   const [showLeagues, setShowLeagues] = useState(false);
   // secção Resultados: «Portugal» (todos os campeonatos, jornadas e tabelas) ou «Em direto» (o quadro de todas as ligas)
-  const [resVista, setResVista] = useState(() => { try { return localStorage.getItem("var-res-vista") || "direto"; } catch { return "direto"; } });
-  useEffect(() => { try { localStorage.setItem("var-res-vista", resVista); } catch { /* */ } }, [resVista]);
+  // a secção Resultados abre sempre em «Em direto · todas as ligas»; «Portugal» fica à direita
+  const [resVista, setResVista] = useState("direto");
   const [stories, setStories] = useState([]);
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
   const [diag, setDiag] = useState({}); // estado de cada fonte: por onde é lida, se responde, última notícia
@@ -2047,6 +2064,8 @@ export default function App() {
   // decorrer), os golos tardios, o número de fontes que publicaram o mesmo vídeo (sinal de que é falado) e a
   // frescura (a nota cai para metade a cada 4 horas). No máximo dois vídeos por jogo, para a faixa não ficar só com um.
   const horaDest = Math.floor(now / 60000);
+  const [escuros, setEscuros] = useState(() => new Set());
+  const marcaEscuro = (id) => setEscuros((s) => (s.has(id) ? s : new Set([...s, id])));
   const destaquesVid = useMemo(() => {
     const t = horaDest * 60000;
     const PESO = { goal: 5, red: 4.5, var: 4, save: 3.5, skill: 3, highlight: 2, other: 0.5 };
@@ -2069,7 +2088,9 @@ export default function App() {
     };
     const porJogo = new Map();
     const out = [];
-    for (const [v, n] of videos.map((v) => [v, nota(v)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])) {
+    // fora dos Destaques: os vídeos todos pretos (marcados pelo servidor ou vistos aqui) e os que só têm o nome do ficheiro
+    const visivel = (v) => !v.escuro && !escuros.has(v.video_id) && !(!v.teams && tituloDeFicheiro(v.title));
+    for (const [v, n] of videos.filter(visivel).map((v) => [v, nota(v)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])) {
       const k = v.teams ? `${eqTok(v.teams.home).join(" ")}|${eqTok(v.teams.away).join(" ")}` : v.video_id;
       if ((porJogo.get(k) || 0) >= 2) continue;
       porJogo.set(k, (porJogo.get(k) || 0) + 1);
@@ -2078,7 +2099,7 @@ export default function App() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos, horaDest, aoVivo.length]);
+  }, [videos, horaDest, aoVivo.length, escuros]);
 
   // Jogos e vídeos juntos: cada jogo com os vídeos que lhe pertencem. Primeiro os jogos a decorrer (com ou sem
   // vídeos), depois os jogos que já acabaram e ainda têm vídeos, e no fim os vídeos que não se ligam a nenhum jogo.
@@ -2572,7 +2593,7 @@ export default function App() {
                       onTouchStart={() => { vPausa.current = true; }}
                       onTouchEnd={() => { vPausa.current = false; vEspera.current = performance.now() + 2500; }}>
                       {destaquesVid.map((v) => (
-                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini />
+                        <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini onEscuro={marcaEscuro} />
                       ))}
                     </ul>
                   </section>

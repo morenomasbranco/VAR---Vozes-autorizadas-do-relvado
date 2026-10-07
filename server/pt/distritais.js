@@ -39,7 +39,7 @@ export function dePost(node, clube) {
 export function lerPerfilAnonimo(html, clube, agora = Date.now()) {
   const out = [];
   const vistos = new Set();
-  for (const m of String(html || "").matchAll(/href=["'][^"']*\/p\/([A-Za-z0-9_-]{5,})\/?["'][\s\S]{0,1500}?<img[^>]+(?:data-src|src)=["']([^"']+)["'][^>]*>/g)) {
+  for (const m of String(html || "").matchAll(/href=["'][^"']*\/(?:p|post|reel)\/([A-Za-z0-9_-]{5,})\/?["'][\s\S]{0,1500}?<img[^>]+(?:data-src|src)=["']([^"']+)["'][^>]*>/g)) {
     const [bloco, codigo, src] = m;
     if (vistos.has(codigo)) continue;
     vistos.add(codigo);
@@ -48,7 +48,8 @@ export function lerPerfilAnonimo(html, clube, agora = Date.now()) {
     const ts = t ? (t[1] ? +t[1] * 1000 : Date.parse(t[2]) || null) : null;
     out.push({
       id: `ig:sc:${codigo}`, handle: clube.instagram, clube: clube.nome, org: clube.org, ts: ts && ts <= agora + 60e3 ? ts : null,
-      legenda: alt.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'"), url: `https://www.instagram.com/p/${codigo}/`,
+      // um número comprido é o id interno do post (não dá endereço no Instagram): fica a ligação para o perfil
+      legenda: alt.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'"), url: /^\d{12,}$/.test(codigo) ? `https://www.instagram.com/${clube.instagram}/` : `https://www.instagram.com/p/${codigo}/`,
       img: src.replace(/&amp;/g, "&"), video: false,
     });
   }
@@ -60,7 +61,9 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   const porHandle = new Map(lista.map((c) => [c.instagram, c]));
   let dados = { posts: {}, lido: {} }; // handle → posts; handle → { ts, ativo, falhas }
   try { dados = { posts: {}, lido: {}, ...JSON.parse(fs.readFileSync(FICHEIRO, "utf8")) }; } catch { /* primeira vez */ }
-  const estado = { ativo: process.env.DISTRITAIS !== "0", clubes: lista.length, lidos: 0, pedidos: 0, erros: 0, ultimoErro: null, pausaAte: 0, via: cookie ? "Instagram com sessão" : "Instagram sem sessão", ultimo: null };
+  // versões antigas marcavam como «não existe» os perfis que o Instagram recusou: voltam a ser lidos
+  for (const [h, l] of Object.entries(dados.lido)) if (l.naoExiste && !l.confirmado) delete dados.lido[h];
+  const estado = { ativo: process.env.DISTRITAIS !== "0", clubes: lista.length, lidos: 0, pedidos: 0, erros: 0, ultimoErro: null, pausaAte: 0, comSessao: !!cookie, ultimo: null };
   let sujo = false;
   setInterval(() => {
     if (!sujo) return;
@@ -101,70 +104,116 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     });
     if (res.status === 404) return { naoExiste: true };
     if (!res.ok) throw Object.assign(new Error(`Instagram respondeu ${res.status}`), { status: res.status });
-    const j = await res.json();
-    const edges = j?.data?.user?.edge_owner_to_timeline_media?.edges;
-    if (!j?.data?.user) return { naoExiste: true };
+    const j = await res.json().catch(() => null);
+    // sem «user» é o Instagram a pedir sessão (ou a dizer para esperar), não uma conta que não existe
+    if (!j?.data?.user) throw Object.assign(new Error(`Instagram não deu o perfil (${j?.message || j?.status || "pediu sessão"})`), { status: 401 });
+    const edges = j.data.user.edge_owner_to_timeline_media?.edges;
     return { posts: (edges || []).slice(0, POR_CLUBE).map(({ node }) => dePost(node, clube)).filter(Boolean) };
   }
-  const ANONIMOS = (process.env.DISTRITAIS_FONTES || "https://imginn.com/{u}/").split(/[\s,]+/).filter((u) => u.includes("{u}"));
+  // visualizadores anónimos (páginas públicas dos perfis); trocam-se no .env (DISTRITAIS_FONTES, com {u})
+  const ANONIMOS = (process.env.DISTRITAIS_FONTES || "https://imginn.com/{u}/ https://www.picnob.com/profile/{u}/ https://www.pixwox.com/profile/{u}/")
+    .split(/[\s,]+/).filter((u) => u.includes("{u}")).map((url) => ({ url, castigoAte: 0 }));
   async function lerAnonimo(clube) {
+    let tentou = false;
     for (const f of ANONIMOS) {
+      if (Date.now() < f.castigoAte) continue;
+      tentou = true;
       try {
-        const res = await fetch(f.replace("{u}", encodeURIComponent(clube.instagram)), { headers: { "User-Agent": UA, Accept: "text/html,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(25000) });
-        if (res.status === 404) return { naoExiste: true };
-        if (!res.ok) continue;
+        const res = await fetch(f.url.replace("{u}", encodeURIComponent(clube.instagram)), { headers: { "User-Agent": UA, Accept: "text/html,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(20000) });
+        if (!res.ok) { if (res.status !== 404) f.castigoAte = Date.now() + 15 * 60e3; continue; }
         const posts = lerPerfilAnonimo(await res.text(), clube);
         if (posts.length) return { posts };
-      } catch { /* o seguinte */ }
+      } catch { f.castigoAte = Date.now() + 10 * 60e3; }
     }
-    throw new Error("nenhum visualizador anónimo respondeu");
+    throw new Error(tentou ? "nenhum visualizador anónimo deu os posts" : "visualizadores anónimos em pausa");
   }
 
-  // o próximo clube a ler: nunca lido primeiro; depois o que está há mais tempo à espera do seu intervalo
+  // o próximo clube a ler. Nunca lidos primeiro, alternando entre associações (para todas as colunas terem posts
+  // cedo); depois o que está há mais tempo à espera do seu intervalo. «ocupados»: os que outra via está a ler.
+  const ocupados = new Set();
+  let vez = 0;
   function proximo(agora = Date.now()) {
+    const porLer = lista.filter((c) => !dados.lido[c.instagram] && !ocupados.has(c.instagram));
+    if (porLer.length) {
+      const orgs = [...new Set(porLer.map((c) => c.org))];
+      const org = orgs[vez++ % orgs.length];
+      return porLer.find((c) => c.org === org);
+    }
     let melhor = null, atraso = -Infinity;
     for (const c of lista) {
+      if (ocupados.has(c.instagram)) continue;
       const l = dados.lido[c.instagram];
-      if (!l) return c;
       const devido = l.ts + (l.naoExiste ? 7 * 86400e3 : l.ativo ? ATIVO_MS : CALMO_MS) * (1 + Math.min(4, l.falhas || 0));
       if (agora - devido > atraso) { atraso = agora - devido; melhor = c; }
     }
     return atraso >= 0 ? melhor : null;
   }
 
-  const GAP = Math.max(3, Number(process.env.DISTRITAIS_SEGUNDOS) || (cookie ? 6 : 12)) * 1000;
+  function erro(c, e) {
+    estado.erros++;
+    estado.ultimoErro = { handle: c.instagram, erro: e.message, ts: Date.now() };
+    const l = dados.lido[c.instagram] || {};
+    // sem nenhuma leitura certa, o clube volta à fila daqui a pouco (não fica 4 horas à espera)
+    dados.lido[c.instagram] = { ...l, ts: l.ok ? Date.now() : Date.now() - CALMO_MS + 10 * 60e3, falhas: (l.falhas || 0) + 1, ok: l.ok };
+  }
+  function certo(c, r) {
+    if (r.naoExiste) dados.lido[c.instagram] = { ts: Date.now(), naoExiste: true, confirmado: true, falhas: 0 };
+    else { juntar(c.instagram, r.posts); dados.lido[c.instagram].ok = true; estado.lidos++; }
+    sujo = true;
+  }
+
+  // duas vias em paralelo, cada uma ao seu ritmo: o Instagram (que pode pedir uma pausa) e os visualizadores anónimos
+  const GAP_IG = Math.max(2, Number(process.env.DISTRITAIS_SEGUNDOS) || (cookie ? 4 : 8)) * 1000;
+  const GAP_ANON = Math.max(2, Number(process.env.DISTRITAIS_ANONIMO_SEGUNDOS) || 6) * 1000;
   let parar = false;
-  async function correr() {
-    log(`[Distritais] ${lista.length} clubes das associações com Instagram; um perfil a cada ${GAP / 1000} s`);
-    let instagramAte = 0; // depois de uma recusa do Instagram, uns minutos só pelos visualizadores anónimos
+  estado.vias = { instagram: { ok: 0, erros: 0, pausaAte: 0 }, anonimo: { ok: 0, erros: 0 }, retransmissor: { ok: 0, ultimo: null } };
+  async function via(nome, ler, gap) {
+    const v = estado.vias[nome];
     while (!parar) {
+      if (nome === "instagram" && Date.now() < v.pausaAte) { await sleep(Math.min(60e3, v.pausaAte - Date.now())); continue; }
       const c = proximo();
       if (!c) { await sleep(30e3); continue; }
+      ocupados.add(c.instagram);
       estado.pedidos++;
       estado.ultimo = Date.now();
       try {
-        let r;
-        if (Date.now() >= instagramAte) {
-          try { r = await lerInstagram(c); } catch (e) {
-            if ([401, 403, 429].includes(e.status) || (e.status >= 300 && e.status < 400)) {
-              instagramAte = Date.now() + 20 * 60e3;
-              estado.via = "visualizador anónimo (o Instagram pediu uma pausa)";
-            }
-            r = await lerAnonimo(c);
-          }
-        } else r = await lerAnonimo(c);
-        if (r.naoExiste) dados.lido[c.instagram] = { ts: Date.now(), naoExiste: true, falhas: 0 };
-        else { juntar(c.instagram, r.posts); estado.lidos++; }
-        if (Date.now() >= instagramAte) estado.via = cookie ? "Instagram com sessão" : "Instagram sem sessão";
+        certo(c, await ler(c));
+        v.ok++;
       } catch (e) {
-        estado.erros++;
-        estado.ultimoErro = { handle: c.instagram, erro: e.message, ts: Date.now() };
-        const l = dados.lido[c.instagram] || {};
-        dados.lido[c.instagram] = { ...l, ts: Date.now(), falhas: (l.falhas || 0) + 1 };
-      }
-      sujo = true;
-      await sleep(GAP);
+        v.erros++;
+        if (nome === "instagram" && ([401, 403, 429].includes(e.status) || (e.status >= 300 && e.status < 400))) {
+          v.pausaAte = Date.now() + (v.ok ? 15 : 30) * 60e3; // o Instagram está a recusar este servidor: pausa
+          v.ultimoErro = e.message;
+        } else erro(c, e);
+      } finally { ocupados.delete(c.instagram); }
+      await sleep(gap);
     }
+  }
+  async function correr() {
+    log(`[Distritais] ${lista.length} clubes das associações com Instagram; pelo Instagram (um a cada ${GAP_IG / 1000} s) e pelos visualizadores anónimos (um a cada ${GAP_ANON / 1000} s)`);
+    await Promise.all([via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)]);
+  }
+
+  // retransmissor de casa (npm run instagram-relay): pede clubes para ler e devolve os posts
+  function paraRetransmissor(n = 5) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const c = proximo();
+      if (!c) break;
+      ocupados.add(c.instagram);
+      setTimeout(() => ocupados.delete(c.instagram), 3 * 60e3).unref?.();
+      out.push(c.instagram);
+    }
+    return out;
+  }
+  function doRetransmissor(handle, edges) {
+    const c = porHandle.get(handle);
+    if (!c) return false;
+    ocupados.delete(handle);
+    certo(c, { posts: (edges || []).slice(0, POR_CLUBE).map(({ node }) => dePost(node, c)).filter(Boolean) });
+    estado.vias.retransmissor.ok++;
+    estado.vias.retransmissor.ultimo = Date.now();
+    return true;
   }
 
   // as imagens passam pelo servidor (o Instagram não as deixa abrir noutros sites); cache pequena em memória
@@ -200,6 +249,6 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   return {
     start() { if (estado.ativo) correr().catch((e) => log(`[Distritais] ${e.message}`)); },
     parar() { parar = true; },
-    juntar, deEdges, feed, imagem, estado: () => estado,
+    juntar, deEdges, feed, imagem, paraRetransmissor, doRetransmissor, estado: () => estado,
   };
 }

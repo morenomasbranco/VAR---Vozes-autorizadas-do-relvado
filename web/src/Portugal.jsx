@@ -142,7 +142,7 @@ function Tabela({ linhas, compacta = false, destaque = null }) {
 }
 
 // o que o servidor está a fazer enquanto lê as competições (e porque é que pode não aparecer nada)
-function Progresso({ p, agora, curto = false }) {
+function Progresso({ p, agora, API = "", curto = false }) {
   if (!p) return <p className="empty">A ligar ao servidor…</p>;
   const min = (ms) => Math.max(1, Math.round(ms / 60000));
   const listas = p.listas;
@@ -160,6 +160,9 @@ function Progresso({ p, agora, curto = false }) {
       </p>
       {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}</p>}
       {erros.length > 0 && !curto && <p className="muted small">Sem lista de competições: {erros.map(([k]) => k).join(", ")}</p>}
+      {listas && listas.lidas > 0 && !p.total && !curto && (
+        <p className="ptwarn">A FPF respondeu, mas não reconheci nenhuma competição na resposta. O que ela devolveu está em <a href={`${API}/api/pt/amostra`} target="_blank" rel="noreferrer">/api/pt/amostra</a>.</p>
+      )}
       {!curto && <p className="muted small">Na primeira vez (ou depois de o servidor recomeçar sem os dados guardados), as competições vão aparecendo ao longo de uns minutos e as jornadas todas em uma a duas horas.</p>}
     </div>
   );
@@ -279,12 +282,12 @@ export default function Portugal({ API = "", now }) {
   );
 
   if (!cat.competicoes.length) {
-    return <div className="ptv">{filtros}{erro ? <p className="empty">{erro}</p> : <Progresso p={cat.progresso} agora={agora} />}</div>;
+    return <div className="ptv">{filtros}{erro ? <p className="empty">{erro}</p> : <Progresso p={cat.progresso} agora={agora} API={API} />}</div>;
   }
 
   return (
     <div className="ptv">
-      {aLer && <Progresso p={cat.progresso} agora={agora} curto />}
+      {aLer && <Progresso p={cat.progresso} agora={agora} API={API} curto />}
       {filtros}
       {modo === "jornada" && (
         <>

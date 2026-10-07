@@ -33,3 +33,15 @@ test("Distritais: feed por associação; na primeira leitura não anuncia, depoi
   d.deEdges("desconhecido", [{ node: node("9", 1, "x") }]);
   assert.equal(d.feed().posts["af-porto"].length, 3);
 });
+
+test("Distritais: visualizador com ligações /post/<id> e retransmissor", () => {
+  const html = `<a href="/post/3456789012345678901/"><img data-src="https://scontent.cdninstagram.com/b.jpg" alt="Resultado final 1-1"></a>`;
+  const l = lerPerfilAnonimo(html, clube);
+  assert.equal(l[0].url, "https://www.instagram.com/gd.covelo/");
+  const d = createDistritais({ clubes: { clubes: [clube] } });
+  assert.deepEqual(d.paraRetransmissor(3), ["gd.covelo"]);
+  assert.deepEqual(d.paraRetransmissor(3), [], "o clube já pedido não é dado outra vez");
+  assert.equal(d.doRetransmissor("gd.covelo", [{ node: node("7", 1, "GOLO!") }]), true);
+  assert.equal(d.feed().posts["af-porto"][0].legenda, "GOLO!");
+  assert.equal(d.estado().vias.retransmissor.ok, 1);
+});
