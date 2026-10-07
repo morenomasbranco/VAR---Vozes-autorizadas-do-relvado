@@ -1489,7 +1489,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
-                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title="Encontrado pela pesquisa do Claude na web">pesquisa Claude</span></>}</p>
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title={`Encontrado pela pesquisa do ${it.motor === "gemini" ? "Gemini (Google)" : "Claude"} na web`}>{it.motor === "gemini" ? "pesquisa Gemini" : "pesquisa Claude"}</span></>}</p>
                     )}
                   </div>
                   {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}
