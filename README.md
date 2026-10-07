@@ -208,7 +208,7 @@ Isto usa a API interna do Instagram (a mesma que o browser usa), não uma API of
 
 ### Clubes e redes sociais
 
-O `pt/clubes.json` é feito a partir do Excel `pt/clubes_redes_sociais.xlsx` com `npm run importar-clubes` (precisa de `pip install openpyxl`). Os links que faltavam no Excel e foram encontrados por pesquisa estão em `pt/redes-encontradas.json` (com `alta` ou `media` de confiança) e entram no `clubes.json` só onde o Excel estava vazio. Para os que ainda faltam, o `npm run procurar-redes` faz o que se faria à mão — pesquisa «site:instagram.com "Clube" terra futebol» e fica com o primeiro perfil que tenha o nome do clube — e marca-os como «Pesquisa automática» para serem revistos (`-- --limite 50` para ir aos poucos, `-- --assoc "AF Porto"` para uma associação).
+O `pt/clubes.json` é feito a partir do Excel `pt/clubes_redes_sociais.xlsx` com `npm run importar-clubes` (precisa de `pip install openpyxl`). Os links que faltavam no Excel e foram encontrados por pesquisa estão em `pt/redes-encontradas.json` (com `alta` ou `media` de confiança) e entram no `clubes.json` só onde o Excel estava vazio. O `pt/clubes-sem-redes.csv` lista os clubes a quem ainda falta o Instagram ou o Facebook (depois de duas pesquisas cada), com as ligações de pesquisa, para se completar à mão. Para os que ainda faltam, o `npm run procurar-redes` faz o que se faria à mão — pesquisa «site:instagram.com "Clube" terra futebol» e fica com o primeiro perfil que tenha o nome do clube — e marca-os como «Pesquisa automática» para serem revistos (`-- --limite 50` para ir aos poucos, `-- --assoc "AF Porto"` para uma associação).
 
 ### Classificações
 
