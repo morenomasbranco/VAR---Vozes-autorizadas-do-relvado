@@ -28,9 +28,9 @@
   {
    "clube": "Esp. Lagos",
    "assoc": "AF Algarve",
-   "ig": null,
+   "ig": "https://www.instagram.com/cfesperancadelagos/",
    "fb": "https://www.facebook.com/profile.php?id=1015691191883240",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "media"
   },
   {
@@ -76,17 +76,17 @@
   {
    "clube": "Messinense",
    "assoc": "AF Algarve",
-   "ig": null,
+   "ig": "https://www.instagram.com/udm.1975/",
    "fb": "https://www.facebook.com/uniaodesportiva.messinense/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
    "clube": "Moncarapachense",
    "assoc": "AF Algarve",
-   "ig": null,
+   "ig": "https://www.instagram.com/l.g.c.moncarapachense/",
    "fb": "https://www.facebook.com/LGCMoncarapachense/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
@@ -196,9 +196,9 @@
   {
    "clube": "Argoncilhe",
    "assoc": "AF Aveiro",
-   "ig": null,
+   "ig": "https://www.instagram.com/adargoncilhe/",
    "fb": "https://www.facebook.com/associacaodesportivaargoncilhe/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
@@ -260,9 +260,9 @@
   {
    "clube": "Carregosense",
    "assoc": "AF Aveiro",
-   "ig": null,
+   "ig": "https://www.instagram.com/jd_carregosense/",
    "fb": "https://www.facebook.com/JDCarregosa/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
@@ -1508,9 +1508,9 @@
   {
    "clube": "Aldenovense",
    "assoc": "AF Beja",
-   "ig": null,
+   "ig": "https://www.instagram.com/c.a.aldenovense/",
    "fb": "https://www.facebook.com/caaldenovense/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "media"
   },
   {
@@ -2548,9 +2548,9 @@
   {
    "clube": "Sepins",
    "assoc": "AF Coimbra",
-   "ig": null,
+   "ig": "https://www.instagram.com/gdsepins/",
    "fb": "https://www.facebook.com/GDSepins/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
@@ -2612,17 +2612,17 @@
   {
    "clube": "Vigor Mocidade",
    "assoc": "AF Coimbra",
-   "ig": null,
+   "ig": "https://www.instagram.com/vigordamocidade/",
    "fb": "https://www.facebook.com/VigorDaMocidade/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
    "clube": "Vinha da Rainha",
    "assoc": "AF Coimbra",
-   "ig": null,
+   "ig": "https://www.instagram.com/acdsvinhadarainha/",
    "fb": "https://www.facebook.com/acdsfvr/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "media"
   },
   {
@@ -2732,9 +2732,9 @@
   {
    "clube": "Trancoso",
    "assoc": "AF Guarda",
-   "ig": null,
+   "ig": "https://www.instagram.com/gdtrancoso/",
    "fb": "https://www.facebook.com/gdt.trancoso/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "media"
   },
   {
@@ -2900,9 +2900,9 @@
   {
    "clube": "GRAP",
    "assoc": "AF Leiria",
-   "ig": null,
+   "ig": "https://www.instagram.com/grap.oficial/",
    "fb": "https://www.facebook.com/GRAP.Pousos1940/",
-   "conf_ig": null,
+   "conf_ig": "alta",
    "conf_fb": "alta"
   },
   {
@@ -4912,6 +4912,78 @@
    "fb": "https://www.facebook.com/SCL1939Official/",
    "conf_ig": null,
    "conf_fb": "media"
+  },
+  {
+   "clube": "GD Aldeia Nova",
+   "assoc": "AF Porto",
+   "ig": "https://www.instagram.com/gdaldeianova/",
+   "fb": "https://www.facebook.com/GD.AldeiaNova.oficial/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Gulpilhares FC",
+   "assoc": "AF Porto",
+   "ig": "https://www.instagram.com/gulpilharesfutebolclube/",
+   "fb": "https://www.facebook.com/raposasdegaia/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Inter Milheirós",
+   "assoc": "AF Porto",
+   "ig": "https://www.instagram.com/intermilheiros/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Lomba SC Amarante",
+   "assoc": "AF Porto",
+   "ig": null,
+   "fb": "https://www.facebook.com/lombasca/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Raimonda",
+   "assoc": "AF Porto",
+   "ig": null,
+   "fb": "https://www.facebook.com/CCRRaimonda/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Mação",
+   "assoc": "AF Santarém",
+   "ig": null,
+   "fb": "https://www.facebook.com/associacaodesportivademacao/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "GD Alfarim",
+   "assoc": "AF Setúbal",
+   "ig": null,
+   "fb": "https://www.facebook.com/grupodesportivoalfarim/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Raianos",
+   "assoc": "AF Viana do Castelo",
+   "ig": null,
+   "fb": "https://www.facebook.com/uniaodesportiva.osraianos/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "AD São Paio SC",
+   "assoc": "AF Braga",
+   "ig": "https://www.instagram.com/spaiosc/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
   }
  ]
 }
