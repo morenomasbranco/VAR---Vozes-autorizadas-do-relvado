@@ -34,7 +34,7 @@ export function cookieDoEnv(env = process.env) {
   return partes.join("; ");
 }
 
-export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, info = () => ({}), log = () => {} }) {
+export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, info = () => ({}), perfil = () => {}, log = () => {} }) {
   const estado = { ativo: !!cookie, pedidos: 0, erros: 0, ultimoErro: null, pausaAte: 0, stories: 0, posts: 0, tray: null, seguidas: 0, alvos: 0, ultimoCiclo: null };
   if (!cookie) return { estado, parar() {} };
   const csrf = cookie.match(/csrftoken=([^;]+)/)?.[1];
@@ -121,6 +121,7 @@ export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, i
     const user = j?.data?.user;
     if (user?.id && !info(handle).igId) guardar(handle, { igId: user.id });
     const edges = user?.edge_owner_to_timeline_media?.edges || [];
+    perfil(handle, edges); // também para a secção «Distritais»
     for (const { node } of edges.slice(0, 6)) {
       const legenda = node.edge_media_to_caption?.edges?.[0]?.node?.text || "";
       // há clubes que vão editando a legenda do mesmo post durante o jogo («ATUALIZADO: 2-1»): cada versão conta

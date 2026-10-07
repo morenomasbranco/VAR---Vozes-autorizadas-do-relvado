@@ -24,6 +24,7 @@ import { minutoEm, textoMinuto } from "./stories/relogio.js";
 import { lerTexto } from "./stories/parser.js";
 import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
+import { createDistritais } from "./distritais.js";
 import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
 
@@ -53,6 +54,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
   st.comps ||= {}; st.jogos ||= {};
   let eventos = ler(EVENTOS, []);
   const clubes = createClubes({ log });
+  // «Distritais»: os posts mais recentes dos clubes de cada associação (secção própria do site)
+  const distritais = createDistritais({ clubes, broadcast: (ev, d) => broadcast(ev, d), cookie: cookieDoEnv(), log });
   const estado = { arranque: Date.now(), descoberta: null, filas: { alta: 0, normal: 0, baixa: 0 }, ultimoCiclo: null, evidencias: { recebidas: 0, novo: 0, confirmacao: 0, historico: 0, conflito: 0, ignorado: 0, relogio: 0, semJogo: 0, repetido: 0 } };
   let sujo = false, sujoEv = false;
   const marca = () => { sujo = true; };
@@ -357,9 +360,12 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const inicio = Date.now();
     let n = 0;
     const listas = [{ org: FPF.key, ler: () => fpf.competicoesNacionais() }, ...ASSOCIACOES.map((a) => ({ org: a.key, ler: () => fpf.competicoesDaAssociacao(a.id, EPOCA_FPF) }))];
+    estado.listas = { total: listas.length, lidas: 0, erros: {} };
     for (const { org, ler: lerLista } of listas) {
       try {
         const lista = await lerLista();
+        estado.listas.lidas++;
+        delete estado.listas.erros[org];
         for (const c of lista) {
           if (c.seasonId && +c.seasonId !== EPOCA_FPF) continue;
           const cl = classificar({ nome: c.nome, org, contexto: c.contexto });
@@ -371,6 +377,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
           if (nova || !comp.lidoEm || Date.now() - comp.lidoEm > ESTRUTURA_MS) agenda(nova ? "normal" : "baixa", `c:${id}`, () => estruturaFpf(comp));
         }
       } catch (e) {
+        estado.listas.erros[org] = e.message;
         log(`[PT] lista de competições de ${ORG[org]?.nome || org}: ${e.message}`);
       }
     }
@@ -669,15 +676,16 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         await sleep(ha ? SOFA_VIVO_MS : 60e3);
       }
     })();
+    distritais.start(); // DISTRITAIS=0 desliga
     ocr.verificar().then((o) => log(`[PT] OCR dos stories: ${o.tesseract ? `tesseract (${o.tesseract.linguas.join(", ") || "?"})` : "sem tesseract"}${o.ffmpeg ? " + ffmpeg" : ""}${process.env.GEMINI_API_KEY ? " + Gemini como reserva" : ""}`));
     // com sessão de uma conta qualquer (não precisa de seguir os clubes): leitura direta pelo Instagram;
     // sem conta nenhuma: visualizadores anónimos públicos (STORIES_ANONIMO=0 desliga)
     const cookie = cookieDoEnv();
     if (cookie) {
-      ig = createInstagram({ cookie, alvos, entregar: async (p) => evidencia(p), guardar: (h, c) => clubes.nota(h, c), info: (h) => clubes.info(h), log });
+      ig = createInstagram({ cookie, alvos, entregar: async (p) => evidencia(p), guardar: (h, c) => clubes.nota(h, c), info: (h) => clubes.info(h), perfil: distritais.deEdges, log });
       ig.estado.modo = "com sessão (sem precisar de seguir os clubes)";
     } else if (process.env.STORIES_ANONIMO !== "0") {
-      ig = createAnonimo({ alvos, entregar: async (p) => evidencia(p), log });
+      ig = createAnonimo({ alvos, entregar: async (p) => evidencia(p), perfil: distritais.deEdges, log });
     } else log("[PT] recolha de stories desligada: os stories só entram pelo retransmissor (npm run instagram-relay), pelo formulário do site ou pela API");
   }
 
@@ -693,7 +701,19 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     app.get("/api/pt/competicoes", (req, res) => {
       const vivos = new Map();
       for (const j of jogosPerto(Date.now(), 4)) if (["direto", "intervalo"].includes(j.estado)) vivos.set(j.comp, (vivos.get(j.comp) || 0) + 1);
-      res.json({ orgs: ORGS.map((o) => ({ key: o.key, nome: o.nome, longo: o.longo })), competicoes: Object.values(st.comps).filter((c) => Object.keys(c.series || {}).length || c.lidoEm).map((c) => ({ ...resumoComp(c), aoVivo: vivos.get(c.id) || 0 })).sort((a, b) => a.ordem - b.ordem) });
+      // todas as competições conhecidas, também as que ainda estão à espera de ser lidas (aparecem logo no site),
+      // e o progresso da leitura, para o site dizer o que se passa enquanto não há jogos
+      const comps = Object.values(st.comps);
+      res.json({
+        orgs: ORGS.map((o) => ({ key: o.key, nome: o.nome, longo: o.longo })),
+        competicoes: comps.map((c) => ({ ...resumoComp(c), lida: !!(Object.keys(c.series || {}).length || c.lidoEm), aoVivo: vivos.get(c.id) || 0 })).sort((a, b) => a.ordem - b.ordem),
+        progresso: {
+          arranque: estado.arranque, listas: estado.listas || null, descoberta: estado.descoberta, filas: estado.filas,
+          lidas: comps.filter((c) => c.lidoEm).length, total: comps.length, jogos: Object.keys(st.jogos).length,
+          fpf: { pedidos: fpf.estado.pedidos, erros: fpf.estado.erros, ultimoOk: fpf.estado.ultimoOk, ultimoErro: fpf.estado.ultimoErro, bloqueado: fpf.estado.bloqueado },
+          sofascore: { ultimoErro: sofa.estado?.ultimoErro || null },
+        },
+      });
     });
     app.get("/api/pt/competicao/:id", (req, res) => {
       const comp = st.comps[req.params.id];
@@ -762,6 +782,15 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       competicoes: Object.keys(st.comps).length, jogos: Object.keys(st.jogos).length, eventos: eventos.length, alvos: alvos().length,
       semJogos: Object.values(st.comps).filter((c) => !Object.values(c.series || {}).some((s) => s.equipas.length)).map((c) => ({ id: c.id, nome: c.nome, org: c.org })).slice(0, 80),
     }));
+    // «Distritais»: posts recentes por associação, e as imagens (que o Instagram não deixa abrir noutros sites)
+    app.get("/api/distritais", (req, res) => res.json(distritais.feed({ org: req.query.org || null, limite: Math.min(Number(req.query.limite) || 40, 120) })));
+    app.get("/api/distritais/img", async (req, res) => {
+      try {
+        const img = await distritais.imagem(String(req.query.u || ""));
+        if (!img) return res.status(404).end();
+        res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=86400" }).send(img.buf);
+      } catch { res.status(502).end(); }
+    });
     app.get("/api/pt/clubes", (req, res) => res.json(clubes.clubes.filter((c) => !req.query.org || c.org === req.query.org).map((c) => ({ nome: c.nome, org: c.org, assoc: c.assoc, instagram: c.instagram, facebook: c.facebook, estadoInstagram: c.estadoInstagram, conv: clubes.convencao(c.instagram), provas: clubes.info(c.instagram).provas || 0 }))));
     // retransmissor e redação: lista de contas a vigiar e entrega de stories/posts lidos noutro computador
     app.get("/api/pt/alvos", (req, res) => (autorizado(req) ? res.json(alvos()) : res.status(401).json({ erro: "chave em falta" })));

@@ -80,7 +80,7 @@ export function lerResposta(texto, agora = Date.now()) {
   return [...out.values()];
 }
 
-export function createAnonimo({ alvos, entregar, log = () => {} }) {
+export function createAnonimo({ alvos, entregar, perfil = () => {}, log = () => {} }) {
   const fontes = (fontesDoEnv().length ? fontesDoEnv() : FONTES_PADRAO).map((url) => ({ url, castigoAte: 0, ok: 0, falhas: 0, ultimoErro: null }));
   const estado = { ativo: true, modo: "sem conta (visualizadores anónimos)", fontes, pedidos: 0, stories: 0, posts: 0, alvos: 0, ultimoCiclo: null, postsBloqueadoAte: 0 };
   const vistos = new Map(); // id do story → primeira vez visto
@@ -126,6 +126,7 @@ export function createAnonimo({ alvos, entregar, log = () => {} }) {
     if (res.status === 429 || res.status === 401 || res.status === 403) { estado.postsBloqueadoAte = Date.now() + 30 * 60e3; return; }
     if (!res.ok) return;
     const j = await res.json().catch(() => null);
+    perfil(handle, j?.data?.user?.edge_owner_to_timeline_media?.edges || []); // também para a secção «Distritais»
     for (const { node } of (j?.data?.user?.edge_owner_to_timeline_media?.edges || []).slice(0, 6)) {
       const legenda = node.edge_media_to_caption?.edges?.[0]?.node?.text || "";
       // cada versão da legenda conta (clubes que vão editando o mesmo post durante o jogo)

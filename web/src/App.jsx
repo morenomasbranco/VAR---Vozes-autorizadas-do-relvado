@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Portugal, { PT_CSS } from "./Portugal.jsx";
+import Distritais, { DIST_CSS } from "./Distritais.jsx";
 import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
@@ -21,6 +22,7 @@ const CATS = [
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
   { id: "premios", pt: "Prémios", en: "Awards", es: "Premios", fr: "Trophées", it: "Premi", de: "Auszeichnungen" },
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
+  { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
   { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
   { id: "historias", pt: "Possíveis histórias", en: "Story leads", es: "Posibles historias", fr: "Pistes d'articles", it: "Possibili storie", de: "Mögliche Geschichten", hl: "hist" },
 ];
@@ -1541,7 +1543,7 @@ export default function App() {
   });
   const [showLeagues, setShowLeagues] = useState(false);
   // secção Resultados: «Portugal» (todos os campeonatos, jornadas e tabelas) ou «Em direto» (o quadro de todas as ligas)
-  const [resVista, setResVista] = useState(() => { try { return localStorage.getItem("var-res-vista") || "portugal"; } catch { return "portugal"; } });
+  const [resVista, setResVista] = useState(() => { try { return localStorage.getItem("var-res-vista") || "direto"; } catch { return "direto"; } });
   useEffect(() => { try { localStorage.setItem("var-res-vista", resVista); } catch { /* */ } }, [resVista]);
   const [stories, setStories] = useState([]);
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
@@ -1799,6 +1801,7 @@ export default function App() {
     // «corrigido»: a mesma entrada com a hora certa (não pisca como nova)
     es.addEventListener("oficial", (e) => { const x = JSON.parse(e.data); ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() }); });
     // Portugal: o jogo que mudou segue para a vista de Portugal; o acontecimento (golo, final…) entra no feed
+    es.addEventListener("distrital", (e) => window.dispatchEvent(new CustomEvent("distrital", { detail: JSON.parse(e.data) })));
     es.addEventListener("pt-jogo", (e) => window.dispatchEvent(new CustomEvent("pt-jogo", { detail: JSON.parse(e.data) })));
     es.addEventListener("pt-evento", (e) => {
       const it = prep(JSON.parse(e.data), true);
@@ -2371,7 +2374,7 @@ export default function App() {
 
   return (
     <div className="apito" data-theme={theme}>
-      <style>{CSS + PT_CSS}</style>
+      <style>{CSS + PT_CSS + DIST_CSS}</style>
 
       <header className="hdr">
         <div className="wrap">
@@ -2443,8 +2446,8 @@ export default function App() {
               <h1 className={section === "historias" ? "hist" : ""}>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
                 <div className="seg" role="group" aria-label="Vista dos resultados">
-                  <button aria-pressed={resVista === "portugal"} onClick={() => setResVista("portugal")}>Portugal</button>
                   <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto · todas as ligas</button>
+                  <button aria-pressed={resVista === "portugal"} onClick={() => setResVista("portugal")}>Portugal</button>
                 </div>
               )}
               {section === "resultados" && resVista === "direto" && leagues.length > 0 && (
@@ -2671,6 +2674,8 @@ export default function App() {
                   );
                 })()}
               </>
+            ) : section === "distritais" ? (
+              <Distritais API={API} now={now} query={query} />
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "historias" ? (

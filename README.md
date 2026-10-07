@@ -160,6 +160,19 @@ Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta
 
 As páginas montadas no browser (como a da Lega Serie A) também se leem pela lista que vem em JSON dentro da própria página; cada fonte pode ter páginas alternativas (`alternativas`, por exemplo a versão italiana) e várias pesquisas do Google News, experimentadas por ordem. As horas escritas sem fuso são lidas no fuso do país da fonte (Roma, Madrid, Paris, Berlim, Londres, São Paulo), e quando a lista só dá o dia, ou não dá data nenhuma, o servidor abre a notícia para ler a hora exata da publicação. As entradas gravadas antes desta correção são datadas de novo, devagar, quando o servidor arranca.
 
+## Distritais
+
+A secção **Distritais** (ao lado de «Portugueses pelo mundo») mostra os posts mais recentes do Instagram dos clubes de cada associação de futebol, uma coluna por associação, à maneira da «Ronda pela atualidade». Os clubes e as contas são os do `pt/clubes.json`.
+
+O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o servidor percorre os perfis devagar, um de cada vez (`server/pt/distritais.js`):
+
+- primeiro os clubes que ainda não foram lidos; depois, os que publicam muito (relidos a cada 45 min) antes dos que publicam pouco (a cada 4 h);
+- um perfil a cada 12 s sem sessão, ou a cada 6 s com `IG_SESSIONID` (`DISTRITAIS_SEGUNDOS`). A primeira volta aos 570 clubes leva cerca de duas horas sem sessão;
+- se o Instagram recusar, a leitura passa uns minutos para a página pública do perfil num visualizador anónimo (`DISTRITAIS_FONTES`, por omissão o imginn);
+- os perfis que a recolha dos jogos já leu (clubes a jogar) entram também, sem pedidos a mais.
+
+As imagens passam pelo servidor (`/api/distritais/img`), porque o Instagram não as deixa abrir noutros sites. Os posts ficam em `data/pt-distritais.json` (os das últimas 3 semanas, `DISTRITAIS_DIAS`); cada post novo chega ao site no mesmo instante. `DISTRITAIS=0` desliga a secção.
+
 ## Resultados de Portugal (nacionais e distritais)
 
 Na secção Resultados, a vista **Portugal** tem todos os campeonatos seniores de futebol e de futsal do país — Liga Portugal, FPF e as 22 associações distritais e regionais — e o campeonato nacional de sub-23. Ficam de fora a formação, os sub-22/sub-23 e esperanças distritais, os veteranos, o futebol de praia, o futebol de 7/9 e o INATEL (regras em `server/pt/catalogo.js`). Tudo é gratuito.
@@ -169,6 +182,8 @@ Há quatro vistas, com filtros de modalidade (futebol, futsal), nível (nacionai
 - **Competição**: a jornada da semana de uma competição e série, com setas para as anteriores e as seguintes, e a classificação ao lado (ao vivo quando há jogos). A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
 - **Jornadas da semana**: a jornada atual (ou a próxima) de todas as competições ao mesmo tempo, com os jogos, as horas e os resultados que já houver.
 - **Jogos de hoje**: todos os jogos do dia, agrupados por competição, os que estão a decorrer primeiro.
+- **Enquanto o servidor lê as competições**, a vista mostra o progresso (associações e competições já lidas, páginas na fila) e, se a FPF não estiver a responder ao servidor, o erro. As competições aparecem assim que são encontradas, mesmo antes de estarem lidas.
+- **Guardar os dados entre arranques**: tudo o que foi lido fica na pasta `data/`. Se o alojamento apagar essa pasta a cada publicação (no Northflank, quando o serviço não tem um volume), a leitura recomeça do zero. Para isso não acontecer, junta ao serviço um volume montado em `/app/data`, se o plano o permitir.
 - **Todas as tabelas**: as classificações de todos os campeonatos, nacionais e distritais, agrupadas por organizador (FPF, Liga Portugal e cada associação, com atalhos para saltar para cada uma) e com pesquisa por equipa. Uma série que ainda não tem resultados nem tabela oficial aparece com as equipas do calendário a zero.
 
 Os golos, intervalos e finais destes jogos entram nos Acontecimentos (o feed da secção Resultados) e no quadro de resultados, com um filtro por organizador no botão «Escolher ligas» («Portugal · AF Porto», etc.).
