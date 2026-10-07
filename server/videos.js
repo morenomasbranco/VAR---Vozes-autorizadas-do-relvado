@@ -283,6 +283,66 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     } finally { larga(); }
   }
 
+  // Vídeos «todos pretos»: o brilho médio (0–255) de uma imagem ou de um instante do vídeo, pelo ffmpeg reduzido a
+  // 32×18 em tons de cinzento. Uma miniatura escura faz experimentar outros instantes do vídeo; se forem todos
+  // escuros, o vídeo fica marcado («escuro») e sai dos Destaques.
+  const ESCURO_MEDIA = Number(process.env.VIDEOS_ESCURO_MEDIA) || 16;
+  function brilhoDe({ buf = null, src = null, seg = 0 }) {
+    return new Promise((ok) => {
+      const entrada = buf ? ["-i", "pipe:0"] : ["-user_agent", UA_IMG, "-ss", String(seg), "-i", src];
+      const pr = spawn(FFMPEG, ["-hide_banner", "-loglevel", "error", ...entrada, "-frames:v", "1", "-vf", "scale=32:18,format=gray", "-f", "rawvideo", "pipe:1"], { stdio: [buf ? "pipe" : "ignore", "pipe", "ignore"] });
+      const partes = [];
+      const fim = setTimeout(() => pr.kill("SIGKILL"), 10000);
+      pr.stdout.on("data", (d) => partes.push(d));
+      pr.on("error", (e) => { if (e.code === "ENOENT") ffmpegFalta = true; clearTimeout(fim); ok(null); });
+      pr.on("close", () => {
+        clearTimeout(fim);
+        const b = Buffer.concat(partes);
+        if (b.length < 100) return ok(null);
+        const ord = [...b].sort((x, y) => x - y);
+        ok({ media: b.reduce((t, x) => t + x, 0) / b.length, p95: ord[Math.floor(ord.length * 0.95)] });
+      });
+      if (buf) { pr.stdin.on("error", () => {}); pr.stdin.end(buf); }
+    });
+  }
+  const escuro = (b) => b && b.media <= ESCURO_MEDIA && b.p95 <= ESCURO_MEDIA * 2.5;
+  async function verEscuro(v) {
+    if (!v || v.escuro !== undefined || ffmpegFalta) return;
+    const img = v.thumbnail && await descarregaImagem(v.thumbnail);
+    const src = v.mp4 || v.hls || (v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null);
+    if (!img && !src) return;
+    await vez();
+    let mudou = false;
+    try {
+      const b = img ? await brilhoDe({ buf: img.buf }) : null;
+      if (img && !b) return; // o ffmpeg não leu a imagem: fica por saber
+      if (b && !escuro(b)) { v.escuro = false; return; }
+      // miniatura escura (ou nenhuma): outros instantes do vídeo; o primeiro com imagem passa a ser a miniatura
+      for (const seg of src ? [2, 5, 10, 20] : []) {
+        const x = await brilhoDe({ src, seg });
+        if (x && !escuro(x)) {
+          const f = await umFotograma(src, seg);
+          if (f) {
+            const chave = `frame:${v.video_id}:${seg}`;
+            imagens.set(chave, { buf: f, tipo: "image/jpeg" });
+            if (imagens.size > IMG_MAX) imagens.delete(imagens.keys().next().value);
+            v.thumbnail = chave;
+            const prin = principal(v);
+            if (prin) prin.thumbnail = chave; // senão a fonte principal voltava a pôr a miniatura escura
+          }
+          v.escuro = false;
+          mudou = true;
+          return;
+        }
+      }
+      v.escuro = true;
+      mudou = true;
+    } finally {
+      larga();
+      if (mudou) { v.upd = Date.now(); sujo = true; broadcast("video-update", v); }
+    }
+  }
+
   async function hashMiniatura(url) {
     const img = await descarregaImagem(url);
     return img ? crypto.createHash("sha1").update(img.buf).digest("hex") : null;
@@ -374,7 +434,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     const hash = hashMiniatura(raw.thumbnail);
     const p = fila.then(async () => addUm(raw, await hash)).catch((e) => { log(`[Vídeos] ${e.message}`); return null; });
     fila = p;
-    p.then(resolver).catch(() => {});
+    p.then(async (v) => { await resolver(v); await verEscuro(v); }).catch(() => {});
     return p;
   };
 
@@ -446,7 +506,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
 
   // vídeos guardados de antes, ainda sem ficheiro que toque no site: tenta-se, devagar, depois do arranque
   setTimeout(async () => {
-    for (const v of videos.filter((x) => idade(x) < 12 * 3600e3).slice(0, 200)) { await resolver(v); await new Promise((r) => setTimeout(r, 500)); }
+    for (const v of videos.filter((x) => idade(x) < 12 * 3600e3).slice(0, 200)) { await resolver(v); await verEscuro(v).catch(() => {}); await new Promise((r) => setTimeout(r, 500)); }
   }, 20000).unref?.();
 
   const limpar = () => { const antes = videos.length; videos = videos.filter((v) => idade(v) < IDADE_MAX); if (videos.length !== antes) sujo = true; };

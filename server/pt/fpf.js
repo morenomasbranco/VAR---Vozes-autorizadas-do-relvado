@@ -28,6 +28,9 @@ const URL_SERIE = [
 ].filter(Boolean);
 
 export const estado = { pedidos: 0, erros: 0, ultimoErro: null, ultimoOk: null, urlJornada: null, urlSerie: null, bloqueado: false };
+// o início das últimas respostas de cada tipo, para se ver o que a FPF devolve ao servidor (/api/pt/amostra)
+export const amostras = {};
+const guardaAmostra = (tipo, url, txt) => { amostras[tipo] = { url, ts: Date.now(), tamanho: String(txt || "").length, inicio: String(txt || "").slice(0, 20000) }; };
 
 let fila = Promise.resolve();
 let ultimo = 0;
@@ -93,7 +96,35 @@ const lerHora = (t) => { const m = String(t || "").match(/\b([01]?\d|2[0-3])[:h]
 // ───────── competições de uma associação ─────────
 // cada ligação com competitionId é uma competição; o título da secção em que está (Futebol, Futsal, Futebol
 // de Praia…) serve de contexto para a classificar
+// o número da competição num atributo: «competitionId=123», «competitionId: 123» ou um caminho «/Competition/Details/123»
+const idCompeticao = (v) => ids(v, "competitionId") || String(v || "").match(/\/competi(?:tion|cao|ção)s?\/(?:details\/|detalhe\/)?(\d{3,})\b/i)?.[1] || null;
+
+// a lista também pode vir em JSON (objetos com o número e o nome da competição)
+function listaDeJson(txt) {
+  let j;
+  try { j = JSON.parse(txt); } catch { return null; }
+  const out = new Map();
+  const anda = (o, contexto) => {
+    if (Array.isArray(o)) return o.forEach((x) => anda(x, contexto));
+    if (!o || typeof o !== "object") return;
+    const chaves = Object.keys(o);
+    const kId = chaves.find((k) => /^(competition_?id|competicao_?id|id)$/i.test(k));
+    const kNome = chaves.find((k) => /^(name|nome|description|descricao|designacao|competitionname|title|titulo)$/i.test(k));
+    const kEpoca = chaves.find((k) => /^season_?id$/i.test(k));
+    const ctx = chaves.find((k) => /^(modality|modalidade|category|categoria|sport)(name)?$/i.test(k));
+    const contextoAqui = ctx && typeof o[ctx] === "string" ? o[ctx] : contexto;
+    if (kId && kNome && /^\d{2,}$/.test(String(o[kId])) && typeof o[kNome] === "string" && !out.has(String(o[kId]))) {
+      out.set(String(o[kId]), { competitionId: String(o[kId]), seasonId: kEpoca ? String(o[kEpoca]) : null, nome: o[kNome].replace(/\s+/g, " ").trim(), contexto: contextoAqui || "" });
+    }
+    for (const v of Object.values(o)) if (v && typeof v === "object") anda(v, contextoAqui);
+  };
+  anda(j, "");
+  return [...out.values()];
+}
+
 export function lerListaCompeticoes(html) {
+  const json = /^\s*[[{]/.test(String(html || "")) ? listaDeJson(html) : null;
+  if (json) return json;
   const raiz = parse(html);
   const out = new Map();
   let contexto = "";
@@ -104,7 +135,7 @@ export function lerListaCompeticoes(html) {
     }
     for (const [k, v] of Object.entries(n.attrs)) {
       if (!/href|onclick|data-|value/.test(k)) continue;
-      const id = ids(v, "competitionId");
+      const id = idCompeticao(v);
       if (!id || out.has(id)) continue;
       const nome = texto(n) || n.attrs.title || "";
       if (!nome || nome.length > 160) continue;
@@ -336,12 +367,17 @@ export const tituloDe = (raiz) => {
 
 // ───────── leituras de alto nível ─────────
 export async function competicoesDaAssociacao(assocId, epoca) {
-  const html = await pedir(`/Competition/GetCompetitionsByAssociation?associationId=${assocId}&seasonId=${epoca}`);
-  return lerListaCompeticoes(html);
+  const url = `/Competition/GetCompetitionsByAssociation?associationId=${assocId}&seasonId=${epoca}`;
+  const html = await pedir(url);
+  const lista = lerListaCompeticoes(html);
+  if (!amostras.lista || !lista.length) guardaAmostra("lista", url, html);
+  return lista;
 }
 export async function competicoesNacionais() {
   const html = await pedir("/");
-  return lerListaCompeticoes(html);
+  const lista = lerListaCompeticoes(html);
+  if (!lista.length) guardaAmostra("nacionais", "/", html);
+  return lista;
 }
 
 export function lerPaginaCompeticao(html) {
@@ -349,8 +385,11 @@ export function lerPaginaCompeticao(html) {
   return { titulo: tituloDe(raiz), ...lerEstrutura(raiz), jogos: lerJogos(raiz), tabelas: lerTabelas(raiz) };
 }
 export async function competicao(competitionId, epoca) {
-  const html = await pedir(`/Competition/Details?competitionId=${competitionId}&seasonId=${epoca}`);
-  return lerPaginaCompeticao(html);
+  const url = `/Competition/Details?competitionId=${competitionId}&seasonId=${epoca}`;
+  const html = await pedir(url);
+  const p = lerPaginaCompeticao(html);
+  if (!amostras.competicao || (!p.jogos.length && !p.series.length)) guardaAmostra("competicao", url, html);
+  return p;
 }
 
 // uma peça que se carrega à parte (jornada ou série): experimenta os endereços conhecidos e fica com o que dá jogos

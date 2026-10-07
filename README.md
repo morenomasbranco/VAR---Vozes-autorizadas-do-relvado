@@ -160,16 +160,22 @@ Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta
 
 As páginas montadas no browser (como a da Lega Serie A) também se leem pela lista que vem em JSON dentro da própria página; cada fonte pode ter páginas alternativas (`alternativas`, por exemplo a versão italiana) e várias pesquisas do Google News, experimentadas por ordem. As horas escritas sem fuso são lidas no fuso do país da fonte (Roma, Madrid, Paris, Berlim, Londres, São Paulo), e quando a lista só dá o dia, ou não dá data nenhuma, o servidor abre a notícia para ler a hora exata da publicação. As entradas gravadas antes desta correção são datadas de novo, devagar, quando o servidor arranca.
 
+## Destaques sem vídeos pretos
+
+Nos Destaques do Feed ficam de fora os vídeos «todos pretos» e os que só têm o nome do ficheiro como título («video-2026-10-07T12-59-09», «20261007_055402[1]»). O servidor mede o brilho da miniatura com o ffmpeg; se estiver escura, experimenta outros instantes do vídeo (2, 5, 10 e 20 s) e o primeiro com imagem passa a ser a miniatura; se forem todos escuros, o vídeo fica marcado e sai dos Destaques (`VIDEOS_ESCURO_MEDIA`, brilho médio máximo de 0 a 255, 16 por omissão). O site faz a mesma verificação às miniaturas que mostra.
+
 ## Distritais
 
 A secção **Distritais** (ao lado de «Portugueses pelo mundo») mostra os posts mais recentes do Instagram dos clubes de cada associação de futebol, uma coluna por associação, à maneira da «Ronda pela atualidade». Os clubes e as contas são os do `pt/clubes.json`.
 
 O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o servidor percorre os perfis devagar, um de cada vez (`server/pt/distritais.js`):
 
-- primeiro os clubes que ainda não foram lidos; depois, os que publicam muito (relidos a cada 45 min) antes dos que publicam pouco (a cada 4 h);
-- um perfil a cada 12 s sem sessão, ou a cada 6 s com `IG_SESSIONID` (`DISTRITAIS_SEGUNDOS`). A primeira volta aos 570 clubes leva cerca de duas horas sem sessão;
-- se o Instagram recusar, a leitura passa uns minutos para a página pública do perfil num visualizador anónimo (`DISTRITAIS_FONTES`, por omissão o imginn);
+- primeiro os clubes que ainda não foram lidos, alternando entre associações (para todas as colunas terem posts cedo); depois, os que publicam muito (relidos a cada 45 min) antes dos que publicam pouco (a cada 4 h);
+- duas vias ao mesmo tempo: o Instagram (um perfil a cada 8 s sem sessão, 4 s com `IG_SESSIONID`; `DISTRITAIS_SEGUNDOS`) e as páginas públicas dos perfis nos visualizadores anónimos (imginn, picnob, pixwox; um a cada 6 s, `DISTRITAIS_ANONIMO_SEGUNDOS`; a lista troca-se em `DISTRITAIS_FONTES`). Quando o Instagram recusa o servidor, essa via faz uma pausa e a outra continua;
+- o **retransmissor** de casa (`npm run instagram-relay`) também lê perfis para esta secção: pede ao site que clubes ler e devolve os posts (`RELAY_DISTRITAIS=0` desliga). É a forma mais fiável quando o Instagram bloqueia o servidor;
 - os perfis que a recolha dos jogos já leu (clubes a jogar) entram também, sem pedidos a mais.
+
+O Instagram costuma recusar pedidos sem sessão vindos de servidores de alojamento. Se a secção mostrar o aviso de que os pedidos estão a ser recusados, há duas saídas gratuitas: a variável `IG_SESSIONID` (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou o retransmissor a correr num computador de casa.
 
 As imagens passam pelo servidor (`/api/distritais/img`), porque o Instagram não as deixa abrir noutros sites. Os posts ficam em `data/pt-distritais.json` (os das últimas 3 semanas, `DISTRITAIS_DIAS`); cada post novo chega ao site no mesmo instante. `DISTRITAIS=0` desliga a secção.
 
