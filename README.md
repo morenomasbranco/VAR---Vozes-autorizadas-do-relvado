@@ -175,13 +175,11 @@ O `npm run fpf-sonda -- <endereço>` mostra o que o leitor tira de uma página d
 
 ### Tempo real pelos stories
 
-Os clubes não precisam de fazer nada (nem de identificar o site). O servidor usa uma **conta de Instagram coletora** — uma conta normal, criada para isto, que segue os clubes:
+Os clubes não precisam de fazer nada (nem de identificar o site), e **não é preciso criar uma conta para seguir os clubes**. Há três maneiras de os stories e posts chegarem, que se podem usar ao mesmo tempo:
 
-1. Cria a conta e segue os clubes do `pt/clubes.json` (o campo `instagram`; a lista também está em `/api/pt/clubes`). Segue-os aos poucos — umas dezenas por dia —, porque o Instagram trava contas novas que seguem centenas de perfis de uma vez.
-2. Entra nessa conta no browser, abre as ferramentas de programador › Armazenamento/Application › Cookies de instagram.com e copia o valor de `sessionid` (e, se quiseres, `ds_user_id` e `csrftoken`).
-3. Põe no `.env` do servidor: `IG_SESSIONID=…` (ou `IG_COOKIE` com o cookie inteiro).
-
-Com a conta a seguir os clubes, **um só pedido** (a barra dos stories) diz quais publicaram algo novo, e só esses são lidos — é o que permite acompanhar mais de mil clubes. Só se consultam os clubes com jogo a começar, a decorrer ou acabado há pouco; os que a conta não segue são lidos diretamente de 3 em 3 minutos; os posts (legendas «Resultado final…») são lidos perto do fim de cada jogo. Há um limite de 40 pedidos por minuto (`IG_PEDIDOS_MINUTO`) e pausas automáticas se o Instagram se queixar.
+1. **Sem conta nenhuma (o que acontece por omissão).** O Instagram só mostra stories a quem tem sessão iniciada, por isso o VAR pergunta aos «visualizadores anónimos» públicos (imginn, anonyig, storiesig, fastdl…), sites gratuitos que vão buscar os stories de contas públicas. Só se pergunta pelos clubes que estão a jogar, primeiro os jogos a decorrer e os clubes que já se viu publicarem. Há várias fontes experimentadas por ordem; uma que falhe fica de lado 10 minutos e passa-se à seguinte. A lista está em `STORIES_FONTES` no `.env` (endereços com `{u}` no lugar do nome da conta), para se trocar quando um destes sites mudar ou fechar, sem mexer no código. Os posts («Resultado final…») vêm do endereço público do Instagram, que responde sem sessão a um número limitado de pedidos por hora. Estes sites não são oficiais e vão mudando: o estado de cada um está em `/api/pt/estado`, em `instagram.fontes`.
+2. **Com a sessão de uma conta qualquer, sem seguir ninguém** (mais rápido e mais fiável). Põe no `.env` o `IG_SESSIONID` de uma conta de Instagram (pode ser uma que já tenhas): no browser, com a sessão iniciada, ferramentas de programador › Armazenamento/Application › Cookies de instagram.com › `sessionid`. Os stories das contas públicas leem-se diretamente, 20 clubes por pedido, só dos que estão a jogar, de minuto a minuto (`IG_DIRETO_SEGUNDOS`). Seguir os clubes é opcional: se a conta os seguir, um pedido à barra dos stories diz logo quem publicou e poupam-se pedidos. Usa uma conta que não te faça falta: a API é a interna do Instagram e uma conta com pedidos a mais pode ser travada (há um limite de 40 por minuto, `IG_PEDIDOS_MINUTO`, e pausas automáticas).
+3. **Quem está no campo.** Na vista Portugal, cada jogo sem resultado oficial tem «Enviar resultado»: qualquer pessoa pode mandar o resultado, o minuto, o marcador ou uma captura do story do clube (lida pelo OCR). Não precisa de conta. Para evitar brincadeiras, um envio só conta quando outra pessoa manda o mesmo resultado nos 20 minutos seguintes, ou quando bate com o que os stories ou a FPF já disseram; com `PT_LEITOR_DIRETO=1`, basta um envio (se só pessoas de confiança usarem o formulário). Há um limite de 12 envios por pessoa em 10 minutos.
 
 O texto de cada story vem, por esta ordem: do texto automático que o próprio Instagram gera para as imagens; do **Tesseract** (OCR livre, já instalado na imagem Docker, com português; os vídeos passam pelo ffmpeg, que tira três fotogramas); e, só quando os dois não dão números, do **Gemini** (o mesmo `GEMINI_API_KEY`, no máximo 60 imagens por hora, `STORIES_GEMINI_POR_HORA`).
 
@@ -194,21 +192,21 @@ Cada story é uma **prova**, não uma ordem (`server/pt/stories/evidencia.js`):
 - **Stories perdidos**: de 0-0 para 2-1 criam-se os golos que faltam, com minuto desconhecido, e só o último leva minuto.
 - **Clubes que não publicam**: o jogo fica com a hora marcada («a decorrer?» e, depois do fim provável, «à espera do resultado») e recebe o resultado quando um dos clubes o puser num post ou quando a associação o publicar no resultados.fpf.pt. O resultado oficial passa sempre por cima do dos stories (o dos stories fica marcado com «*» até lá).
 
-**Retransmissor** (recomendado): o Instagram desconfia de pedidos vindos de servidores de alojamento. O `npm run instagram-relay` faz a mesma recolha num computador de casa e envia o texto para o site:
+**Retransmissor**: o Instagram e os visualizadores anónimos desconfiam de pedidos vindos de servidores de alojamento. O `npm run instagram-relay` faz a mesma recolha num computador de casa (com ou sem `IG_SESSIONID`) e envia o texto para o site:
 
 ```
-VAR_URL=https://o-teu-site PT_TOKEN=uma-chave-tua IG_SESSIONID=… npm run instagram-relay
+VAR_URL=https://o-teu-site PT_TOKEN=uma-chave-tua npm run instagram-relay
 ```
 
-No servidor põe-se a mesma `PT_TOKEN` (sem `IG_SESSIONID` no servidor, se quiseres que a recolha seja só em casa). Com o Tesseract instalado em casa (`brew install tesseract tesseract-lang` ou `sudo apt install tesseract-ocr tesseract-ocr-por`) o OCR corre aí.
+No servidor põe-se a mesma `PT_TOKEN` e, se a recolha for só em casa, `STORIES_ANONIMO=0`. Com o Tesseract instalado em casa (`brew install tesseract tesseract-lang` ou `sudo apt install tesseract-ocr tesseract-ocr-por`) o OCR corre aí.
 
 A mesma chave dá acesso à API da redação: `POST /api/pt/evidencia` (texto de um story ou post, por exemplo do Facebook, com `conta` ou `jogoId`) e `POST /api/pt/jogo/<id>` (corrigir um resultado à mão). O Facebook não tem forma gratuita e fiável de ser lido de forma automática; os posts do Facebook podem entrar por esta API.
 
-Isto usa a API interna do Instagram (a mesma que o browser usa), não uma API oficial: o Instagram pode pedir verificação à conta coletora ou bloqueá-la se houver pedidos a mais. Usa uma conta própria para isto, nunca a conta pessoal ou a do site.
+Nenhuma destas vias é uma API oficial do Instagram (a oficial não dá stories de contas de terceiros): os visualizadores anónimos podem deixar de funcionar de um dia para o outro, e uma conta usada para ler stories pode ser travada pelo Instagram. Por isso as três vias coexistem, e o resultado oficial da FPF fecha sempre cada jogo.
 
 ### Clubes e redes sociais
 
-O `pt/clubes.json` é feito a partir do Excel `pt/clubes_redes_sociais.xlsx` com `npm run importar-clubes` (precisa de `pip install openpyxl`). Os links que faltavam no Excel e foram encontrados por pesquisa estão em `pt/redes-encontradas.json` (com `alta` ou `media` de confiança) e entram no `clubes.json` só onde o Excel estava vazio. O `pt/clubes-sem-redes.csv` lista os clubes a quem ainda falta o Instagram ou o Facebook (depois de duas pesquisas cada), com as ligações de pesquisa, para se completar à mão. Para os que ainda faltam, o `npm run procurar-redes` faz o que se faria à mão — pesquisa «site:instagram.com "Clube" terra futebol» e fica com o primeiro perfil que tenha o nome do clube — e marca-os como «Pesquisa automática» para serem revistos (`-- --limite 50` para ir aos poucos, `-- --assoc "AF Porto"` para uma associação).
+O `pt/clubes.json` é feito a partir do Excel `pt/clubes_redes_sociais.xlsx` (a versão com os links encontrados preenchidos, a amarelo e laranja, e a folha «Sem redes» é o `pt/clubes_redes_sociais_atualizado.xlsx`) com `npm run importar-clubes` (precisa de `pip install openpyxl`). Os links que faltavam no Excel e foram encontrados por pesquisa estão em `pt/redes-encontradas.json` (com `alta` ou `media` de confiança) e entram no `clubes.json` só onde o Excel estava vazio. O `pt/clubes-sem-redes.csv` lista os clubes a quem ainda falta o Instagram ou o Facebook (depois de duas pesquisas cada), com as ligações de pesquisa, para se completar à mão. Para os que ainda faltam, o `npm run procurar-redes` faz o que se faria à mão — pesquisa «site:instagram.com "Clube" terra futebol» e fica com o primeiro perfil que tenha o nome do clube — e marca-os como «Pesquisa automática» para serem revistos (`-- --limite 50` para ir aos poucos, `-- --assoc "AF Porto"` para uma associação).
 
 ### Classificações
 
@@ -218,9 +216,11 @@ As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incl
 
 | Variável | Para quê |
 | --- | --- |
-| `IG_SESSIONID` (ou `IG_COOKIE`) | sessão da conta coletora do Instagram |
+| `IG_SESSIONID` (ou `IG_COOKIE`) | sessão de uma conta de Instagram (opcional; não precisa de seguir os clubes) |
+| `STORIES_ANONIMO=0`, `STORIES_FONTES`, `STORIES_ANONIMO_SEGUNDOS`, `STORIES_ANONIMO_PEDIDOS_MINUTO` | modo sem conta: desligar, lista de visualizadores (com `{u}`), ritmo (60 s) e limite de pedidos (30/min) |
+| `PT_LEITOR_DIRETO=1` | os resultados enviados pelos leitores contam sem precisar de uma segunda pessoa |
 | `PT_TOKEN` | chave do retransmissor e da API da redação |
-| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS`, `IG_POSTS_SEGUNDOS` | ritmo da recolha no Instagram (40/min, 45 s, 180 s, 420 s) |
+| `IG_PEDIDOS_MINUTO`, `IG_SEGUNDOS`, `IG_DIRETO_SEGUNDOS`, `IG_POSTS_SEGUNDOS` | ritmo da recolha no Instagram com sessão (40/min, 45 s, 60 s, 420 s) |
 | `STORIES_GEMINI_POR_HORA` | imagens que podem ir ao Gemini por hora (60; 0 desliga) |
 | `STORY_ATRASO_SEGUNDOS` | atraso médio entre o lance e o story (60) |
 | `FPF_EPOCA` | época no resultados.fpf.pt (106 = 2026/27) |

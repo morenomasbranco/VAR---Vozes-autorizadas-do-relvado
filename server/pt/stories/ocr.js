@@ -104,16 +104,17 @@ async function gemini(buf, tipo) {
 const temNumeros = (t) => /\d\s*[-–x:]\s*\d|\d{1,3}\s*['’]/.test(t || "");
 
 // lê o texto de um story: { url, video, alt } → texto
-export async function lerStory({ url, video = false, alt = "", legenda = "" }) {
+// (buf: a imagem já em memória, por exemplo uma captura de ecrã enviada pelo formulário do site)
+export async function lerStory({ url, buf: dado = null, video = false, alt = "", legenda = "" }) {
   await verificar();
   estado.lidos++;
   const partes = [];
   const altTxt = textoAlternativo(alt);
   if (altTxt) { partes.push(altTxt); estado.alt++; }
   if (legenda) partes.push(legenda);
-  if (temNumeros(partes.join(" ")) || !url) return partes.join("\n");
-  let buf = null, tipo = video ? "video/mp4" : "image/jpeg";
-  try {
+  if (temNumeros(partes.join(" ")) || (!url && !dado)) return partes.join("\n");
+  let buf = dado, tipo = video ? "video/mp4" : "image/jpeg";
+  if (!buf) try {
     const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) throw new Error(`media ${res.status}`);
     buf = Buffer.from(await res.arrayBuffer());

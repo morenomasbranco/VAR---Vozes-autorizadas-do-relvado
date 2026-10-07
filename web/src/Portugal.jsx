@@ -51,7 +51,35 @@ function Fonte({ j }) {
   return null;
 }
 
-function Jogo({ j, agora, mostrarComp = false, onComp }) {
+// formulário para quem está no campo: resultado, minuto, marcador e/ou captura do story do clube
+const lerFicheiro = (f) => new Promise((ok, erro) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
+function EnviarResultado({ j, envio, onEnviar, onFechar }) {
+  const submeter = async (e) => {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget);
+    const f = d.get("imagem");
+    if (f && f.size > 2.5e6) return onEnviar(j, null, "A imagem é grande demais (máximo 2,5 MB).");
+    const imagem = f && f.size ? await lerFicheiro(f).catch(() => null) : null;
+    onEnviar(j, { jogoId: j.id, hs: d.get("hs"), as: d.get("as"), min: d.get("min"), marcador: d.get("marcador"), imagem });
+  };
+  return (
+    <form className="ptenv" onSubmit={submeter}>
+      <span className="ptenvt">Estás no jogo? Envia o resultado</span>
+      <label className="ptenvr"><span>{j.casa}</span><input name="hs" type="number" min="0" max="39" inputMode="numeric" defaultValue={j.hs ?? ""} aria-label={`Golos do ${j.casa}`} /></label>
+      <label className="ptenvr"><span>{j.fora}</span><input name="as" type="number" min="0" max="39" inputMode="numeric" defaultValue={j.as ?? ""} aria-label={`Golos do ${j.fora}`} /></label>
+      <input name="min" placeholder="minuto (opcional)" inputMode="numeric" maxLength={6} />
+      <input name="marcador" placeholder="quem marcou (opcional)" maxLength={60} />
+      <label className="ptenvf">ou uma captura do story <input name="imagem" type="file" accept="image/*" /></label>
+      <span className="ptenva">
+        <button type="submit" className="textbtn" disabled={envio?.aEnviar}>{envio?.aEnviar ? "A enviar…" : "Enviar"}</button>
+        <button type="button" className="textbtn" onClick={onFechar}>Fechar</button>
+      </span>
+      {envio?.msg && <span className={`ptenvm ${envio.ok ? "ok" : ""}`}>{envio.msg}</span>}
+    </form>
+  );
+}
+
+function Jogo({ j, agora, mostrarComp = false, onComp, form }) {
   const temRes = j.hs != null && j.as != null && j.estado !== "agendado";
   const golos = [...(j.golos || [])].sort((a, b) => ((a.min ?? 999) * 100 + (a.extra || 0)) - ((b.min ?? 999) * 100 + (b.extra || 0)));
   return (
@@ -77,7 +105,11 @@ function Jogo({ j, agora, mostrarComp = false, onComp }) {
           {j.ig.h && <a href={`https://www.instagram.com/${j.ig.h}/`} target="_blank" rel="noreferrer" title={`Instagram do ${j.casa}`}>@{j.ig.h}</a>}
           {j.ig.a && <a href={`https://www.instagram.com/${j.ig.a}/`} target="_blank" rel="noreferrer" title={`Instagram do ${j.fora}`}>@{j.ig.a}</a>}
         </span>) : null}
+        {form && !(j.oficial && j.estado === "final") && (vivo(j) || j.semInfo || j.porConfirmar || j.estado === "final") && form.aberto !== j.id && (
+          <button className="textbtn ptenvb" onClick={() => form.setAberto(j.id)}>Enviar resultado</button>
+        )}
       </span>
+      {form && form.aberto === j.id && <EnviarResultado j={j} envio={form.envio[j.id]} onEnviar={form.enviar} onFechar={() => form.setAberto(null)} />}
     </li>
   );
 }
@@ -119,6 +151,20 @@ export default function Portugal({ API = "", now }) {
   const [tabelas, setTabelas] = useState([]);
   const [busca, setBusca] = useState("");
   const [erro, setErro] = useState(null);
+  const [aberto, setAberto] = useState(null); // jogo com o formulário «Enviar resultado» aberto
+  const [envios, setEnvios] = useState({});
+  const enviar = async (j, corpo, msgErro) => {
+    if (!corpo) return setEnvios((e) => ({ ...e, [j.id]: { msg: msgErro } }));
+    setEnvios((e) => ({ ...e, [j.id]: { aEnviar: true } }));
+    try {
+      const r = await fetch(`${API}/api/pt/leitor`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      const d = await r.json().catch(() => ({}));
+      setEnvios((e) => ({ ...e, [j.id]: { ok: !!d.ok, msg: d.ok ? (d.aceite ? "Obrigado! Resultado atualizado." : d.mensagem) : d.erro || "Não foi possível enviar." } }));
+    } catch {
+      setEnvios((e) => ({ ...e, [j.id]: { msg: "Sem ligação ao servidor." } }));
+    }
+  };
+  const form = { aberto, setAberto, envio: envios, enviar };
   const agora = now || Date.now();
   useEffect(() => grava("var-pt", f), [f]);
   useEffect(() => grava("var-pt-modo", modo), [modo]);
@@ -234,7 +280,7 @@ export default function Portugal({ API = "", now }) {
                   <button className="icon-btn" aria-label="Jornada seguinte" disabled={!dados.jornadas.length || dados.jornada === dados.jornadas.at(-1)?.n} onClick={() => { const i = dados.jornadas.findIndex((x) => x.n === dados.jornada); if (i >= 0 && i < dados.jornadas.length - 1) setJornada(dados.jornadas[i + 1].n); }}><ChevronRight size={16} /></button>
                 </div>
                 {dados.jogos.length === 0 ? <p className="muted">Ainda não há jogos desta jornada.</p> : (
-                  <ul className="ptlist" aria-live="polite">{dados.jogos.map((j) => <Jogo key={j.id} j={j} agora={agora} />)}</ul>
+                  <ul className="ptlist" aria-live="polite">{dados.jogos.map((j) => <Jogo key={j.id} j={j} agora={agora} form={form} />)}</ul>
                 )}
                 <p className="ptnota muted">~ minuto estimado pela hora do story (início, intervalo ou hora marcada) · * resultado dado pelos clubes, à espera do oficial</p>
               </section>
@@ -262,7 +308,7 @@ export default function Portugal({ API = "", now }) {
             {[...grupos.values()].map((js) => (
               <section key={`${js[0].comp}|${js[0].serie}`} className="ptgrupo">
                 <button className="ptgh" onClick={() => irPara(js[0])}>{js[0].compNome}{js[0].serieNome ? ` · ${js[0].serieNome}` : ""}{js[0].jornada ? ` · ${js[0].jornada}.ª jornada` : ""} <ChevronRight size={14} /></button>
-                <ul className="ptlist">{js.map((j) => <Jogo key={j.id} j={j} agora={agora} />)}</ul>
+                <ul className="ptlist">{js.map((j) => <Jogo key={j.id} j={j} agora={agora} form={form} />)}</ul>
               </section>
             ))}
           </>
@@ -323,6 +369,16 @@ export const PT_CSS = `
 .apito .ptwarn{color:var(--accent);font-weight:700}
 .apito .pulse.pausa{color:var(--accent)} .apito .pulse.pausa i{background:var(--accent)}
 .apito .ptnota{font-size:12px;margin:8px 0 0}
+.apito .ptenvb{font-size:11.5px;padding:0 6px;border:1px solid var(--line);border-radius:999px;margin-left:auto}
+.apito .ptenv{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 4px 2px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--raise);font-size:13px}
+.apito .ptenv input{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 6px;max-width:170px}
+.apito .ptenv input[type=number]{width:52px}
+.apito .ptenv input[type=file]{border:0;background:none;padding:0;max-width:220px}
+.apito .ptenvt{font-weight:700;width:100%}
+.apito .ptenvr{display:inline-flex;align-items:center;gap:6px} .apito .ptenvr span{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apito .ptenvf{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.apito .ptenva{display:inline-flex;gap:4px}
+.apito .ptenvm{width:100%;color:var(--accent);font-weight:600} .apito .ptenvm.ok{color:var(--sporting)}
 .apito .ptth{font-family:var(--display);font-size:18px;margin:6px 0 8px;display:flex;align-items:center;gap:10px}
 .apito .pttab{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
 .apito .pttab th{font-size:11.5px;font-weight:700;color:var(--muted);text-align:center;padding:4px 3px;border-bottom:1px solid var(--line)}

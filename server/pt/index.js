@@ -5,7 +5,8 @@
 //   - calendário, jornadas, resultados finais e classificações oficiais: resultados.fpf.pt (todas as associações
 //     e a FPF) e Sofascore (competições da Liga Portugal e minuto ao segundo dos nacionais que acompanha);
 //   - tempo real dos jogos sem transmissão (distritais e não só): stories e posts dos clubes no Instagram,
-//     lidos pela conta coletora e passados pelo motor de evidência; os jogos de clubes que não publicam ficam
+//     lidos sem conta (visualizadores anónimos) ou com a sessão de uma conta qualquer, e enviados por quem está
+//     no campo, tudo passado pelo motor de evidência; os jogos de clubes que não publicam ficam
 //     com o resultado final quando a FPF o publica (ou quando um dos clubes o põe num post);
 //   - Liga Portugal Betclic, Liga 2, Liga 3, Next Gen, Liga BPI e Taça de Portugal continuam também a chegar pela
 //     ESPN/Sofascore do ligas.json (cartões e notícias de golo já existentes); aqui servem para as tabelas.
@@ -22,6 +23,8 @@ import { aplicar, aplicarOficial, novoJogoEstado } from "./stories/evidencia.js"
 import { minutoEm, textoMinuto } from "./stories/relogio.js";
 import { lerTexto } from "./stories/parser.js";
 import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
+import { createAnonimo } from "./stories/anonimo.js";
+import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
 
 const DADOS = fileURLToPath(new URL("../../data/pt.json", import.meta.url));
@@ -161,7 +164,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     suspenso: (j) => [`Suspenso: ${j.casa} ${j.hs ?? 0}–${j.as ?? 0} ${j.fora}`, `Suspended: ${j.casa} ${j.hs ?? 0}–${j.as ?? 0} ${j.fora}`],
     anulado: (j) => [`Golo anulado no ${j.casa}–${j.fora}: ${j.hs}–${j.as}`, `Goal ruled out in ${j.casa} v ${j.fora}: ${j.hs}–${j.as}`],
   };
-  const FONTE_TXT = { story: "story", post: "publicação", fpf: "FPF", sofa: "Sofascore", manual: "redação", externo: "transmissão" };
+  const FONTE_TXT = { story: "story", post: "publicação", fpf: "FPF", sofa: "Sofascore", manual: "redação", externo: "transmissão", leitor: "leitores no campo" };
   function emitir(j, f, prova = {}) {
     const comp = st.comps[j.comp];
     if (!comp || comp.externo) return; // as da Liga/ESPN já dão as notícias pelo ligas.json
@@ -481,12 +484,15 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       if (j.origem === "sofa" && j.relogioExterno && agora - j.relogioExterno.ts < 3 * 60e3) continue; // já há minuto ao segundo
       const dur = DURACAO[comp.mod];
       if (!j.inicio || agora < j.inicio - 45 * 60e3 || agora > j.inicio + dur + 60 * 60e3) continue;
+      // prioridade: jogo a decorrer primeiro; depois os clubes que já se viu publicarem stories
+      const aDecorrer = ["direto", "intervalo"].includes(j.estado) || (agora >= j.inicio && agora <= j.inicio + dur);
       for (const [handle, lado] of [[j.igCasa, "h"], [j.igFora, "a"]]) {
         if (!handle || out.has(handle)) continue;
-        out.set(handle, { handle, jogoId: j.id, lado, desde: j.inicio - 60 * 60e3, postsDesde: j.inicio + dur - 20 * 60e3 });
+        const publica = (clubes.info(handle).provas || 0) > 0;
+        out.set(handle, { handle, jogoId: j.id, lado, desde: j.inicio - 60 * 60e3, postsDesde: j.inicio + dur - 20 * 60e3, prioridade: (aDecorrer ? 2 : 0) + (publica ? 1 : 0) });
       }
     }
-    return [...out.values()];
+    return [...out.values()].sort((a, b) => b.prioridade - a.prioridade);
   }
 
   function jogoDaProva(p) {
@@ -644,15 +650,15 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       }
     })();
     ocr.verificar().then((o) => log(`[PT] OCR dos stories: ${o.tesseract ? `tesseract (${o.tesseract.linguas.join(", ") || "?"})` : "sem tesseract"}${o.ffmpeg ? " + ffmpeg" : ""}${process.env.GEMINI_API_KEY ? " + Gemini como reserva" : ""}`));
-    ig = createInstagram({
-      cookie: cookieDoEnv(),
-      alvos,
-      entregar: async (p) => evidencia(p),
-      guardar: (h, c) => clubes.nota(h, c),
-      info: (h) => clubes.info(h),
-      log,
-    });
-    if (!ig.estado.ativo) log("[PT] sem IG_SESSIONID no .env: os stories só entram pelo retransmissor (npm run instagram-relay) ou pela API");
+    // com sessão de uma conta qualquer (não precisa de seguir os clubes): leitura direta pelo Instagram;
+    // sem conta nenhuma: visualizadores anónimos públicos (STORIES_ANONIMO=0 desliga)
+    const cookie = cookieDoEnv();
+    if (cookie) {
+      ig = createInstagram({ cookie, alvos, entregar: async (p) => evidencia(p), guardar: (h, c) => clubes.nota(h, c), info: (h) => clubes.info(h), log });
+      ig.estado.modo = "com sessão (sem precisar de seguir os clubes)";
+    } else if (process.env.STORIES_ANONIMO !== "0") {
+      ig = createAnonimo({ alvos, entregar: async (p) => evidencia(p), log });
+    } else log("[PT] recolha de stories desligada: os stories só entram pelo retransmissor (npm run instagram-relay), pelo formulário do site ou pela API");
   }
 
   // ───────── API ─────────
@@ -729,6 +735,13 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       });
       res.json({ ok: true, resultados: out });
     });
+    // formulário público do site: resultado, minuto, marcador e/ou captura do story
+    app.post("/api/pt/leitor", express.json({ limit: "3mb" }), async (req, res) => {
+      const b = req.body || {};
+      const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
+      const r = await leitor({ jogoId: String(b.jogoId || ""), hs: b.hs === "" || b.hs == null ? null : Number(b.hs), as: b.as === "" || b.as == null ? null : Number(b.as), min: b.min, marcador: b.marcador, imagem: b.imagem, ip });
+      res.status(r.ok ? 200 : 400).json(r);
+    });
     // correção manual de um jogo (redação)
     app.post("/api/pt/jogo/:id", express.json({ limit: "32kb" }), (req, res) => {
       if (!autorizado(req)) return res.status(401).json({ erro: "chave PT_TOKEN em falta ou errada" });
@@ -742,8 +755,51 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     });
   }
 
+  // ───────── resultados enviados pelos leitores (formulário do site, sem conta) ─────────
+  // Qualquer pessoa no campo pode mandar o resultado, o minuto, o marcador ou uma captura do story. Para evitar
+  // brincadeiras, um envio só conta quando outra pessoa (outro endereço) manda o mesmo resultado nos 20 minutos
+  // seguintes, ou quando bate com o que os stories ou a FPF já disseram (fica como confirmação). Com
+  // PT_LEITOR_DIRETO=1, um só envio chega (útil se forem só pessoas de confiança a usar o formulário).
+  const LEITOR_JANELA = 20 * 60e3;
+  const LEITOR_DIRETO = process.env.PT_LEITOR_DIRETO === "1";
+  const pendentes = new Map(); // jogo → [{ quem, hs, as, ts, texto }]
+  const limiteIp = new Map(); // quem → [instantes]
+  async function leitor({ jogoId, hs, as, min, marcador, imagem, ip }) {
+    const j = st.jogos[jogoId];
+    if (!j) return { ok: false, erro: "jogo desconhecido" };
+    if (j.oficial && j.estado === "final") return { ok: false, erro: "este jogo já tem resultado oficial" };
+    const quem = crypto.createHash("sha256").update(`${ip}|${process.env.PT_TOKEN || "var"}`).digest("hex").slice(0, 16);
+    const agora = Date.now();
+    const vezes = (limiteIp.get(quem) || []).filter((t) => agora - t < 10 * 60e3);
+    if (vezes.length >= 12) return { ok: false, erro: "demasiados envios; tenta daqui a uns minutos" };
+    vezes.push(agora);
+    limiteIp.set(quem, vezes);
+    let texto = "";
+    if (imagem) {
+      const m = String(imagem).match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/);
+      if (m) texto = await ocr.lerStory({ buf: Buffer.from(m[2], "base64") }).catch(() => "");
+    }
+    const temPlacar = Number.isInteger(hs) && Number.isInteger(as) && hs >= 0 && as >= 0 && hs < 40 && as < 40;
+    if (!temPlacar && !texto) return { ok: false, erro: "falta o resultado (ou uma imagem com ele)" };
+    // o resultado escrito com os nomes das duas equipas, para o motor saber de que lado é cada número
+    const linha = temPlacar ? `${j.casa} ${hs}-${as} ${j.fora}` : "";
+    const extra = [min ? `${String(min).replace(/[^\d+]/g, "")}'` : "", marcador ? `golo de ${String(marcador).slice(0, 60)}` : ""].filter(Boolean).join(" ");
+    const t = [linha, extra, texto].filter(Boolean).join("\n");
+    const placar = temPlacar ? `${hs}-${as}` : null;
+    const confirma = placar && j.hs === hs && j.as === as && j.hs != null;
+    const lista = (pendentes.get(jogoId) || []).filter((x) => agora - x.ts < LEITOR_JANELA);
+    const outro = placar && lista.find((x) => x.placar === placar && x.quem !== quem);
+    lista.push({ quem, placar, ts: agora });
+    pendentes.set(jogoId, lista);
+    if (LEITOR_DIRETO || confirma || outro || (!placar && texto)) {
+      const r = evidencia({ id: `leitor:${jogoId}:${quem}:${agora}`, tipo: "leitor", jogoId, ts: agora, texto: t });
+      return { ok: true, aceite: true, decisao: r.decisao };
+    }
+    return { ok: true, aceite: false, mensagem: "Obrigado! O resultado entra quando outra pessoa confirmar (ou um dos clubes o publicar)." };
+  }
+
   // grupos para o filtro de ligas do site (uma entrada por organizador)
   const ligasSite = () => ORGS.map((o) => ({ key: `pt-${o.key}`, nome: `Portugal · ${o.nome}`, nome_en: `Portugal · ${o.nome}`, pais: "pt", grupo: "pt" }));
 
-  return { start, rotas, externo, evidencia, alvos, ligasSite, estado, _st: st, _jornadaAtual: jornadaAtual, _registarJogo: registarJogo, _upsertComp: upsertComp, _serieDe: serieDe, _tabela: tabela };
+  return { start, rotas, externo, evidencia, alvos, leitor, ligasSite, estado, _st: st, _jornadaAtual: jornadaAtual, _registarJogo: registarJogo, _upsertComp: upsertComp, _serieDe: serieDe, _tabela: tabela };
 }
