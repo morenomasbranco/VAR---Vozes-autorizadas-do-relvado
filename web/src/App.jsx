@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import Portugal, { PT_CSS } from "./Portugal.jsx";
 import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
@@ -1537,6 +1538,9 @@ export default function App() {
     try { const v = JSON.parse(localStorage.getItem("var-ligas")); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
   });
   const [showLeagues, setShowLeagues] = useState(false);
+  // secção Resultados: «Portugal» (todos os campeonatos, jornadas e tabelas) ou «Em direto» (o quadro de todas as ligas)
+  const [resVista, setResVista] = useState(() => { try { return localStorage.getItem("var-res-vista") || "portugal"; } catch { return "portugal"; } });
+  useEffect(() => { try { localStorage.setItem("var-res-vista", resVista); } catch { /* */ } }, [resVista]);
   const [stories, setStories] = useState([]);
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
   const [diag, setDiag] = useState({}); // estado de cada fonte: por onde é lida, se responde, última notícia
@@ -1741,6 +1745,18 @@ export default function App() {
       })
       .catch(() => setConn("offline"));
 
+    // resultados de Portugal (campeonatos nacionais e distritais): golos, intervalos e finais para os Acontecimentos
+    fetch(`${API}/api/pt/eventos?limit=400`)
+      .then((r) => r.json())
+      .then((list) => {
+        if (stop || !Array.isArray(list)) return;
+        setItems((cur) => {
+          const ids = new Set(cur.map((x) => x.id));
+          return [...cur, ...list.filter((x) => !ids.has(x.id)).map((x) => prep(x, false))].sort(byTime).slice(0, MAX_ITEMS);
+        });
+      })
+      .catch(() => {});
+
     const es = new EventSource(`${API}/api/stream`);
     // ao (re)ligar, relê o que pode ter mudado enquanto a ligação esteve em baixo
     let abriu = false;
@@ -1779,6 +1795,13 @@ export default function App() {
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
     es.addEventListener("oficial", (e) => ofEntra({ ...JSON.parse(e.data), vistoEm: Date.now() }));
+    // Portugal: o jogo que mudou segue para a vista de Portugal; o acontecimento (golo, final…) entra no feed
+    es.addEventListener("pt-jogo", (e) => window.dispatchEvent(new CustomEvent("pt-jogo", { detail: JSON.parse(e.data) })));
+    es.addEventListener("pt-evento", (e) => {
+      const it = prep(JSON.parse(e.data), true);
+      setItems((l) => (l.some((x) => x.id === it.id) ? l.map((x) => (x.id === it.id ? { ...x, ...it, unread: x.unread, fresh: x.fresh } : x)) : [it, ...l].sort(byTime).slice(0, MAX_ITEMS)));
+      unfresh([it.id]);
+    });
     es.addEventListener("remove", (e) => {
       const { id } = JSON.parse(e.data);
       setItems((l) => l.filter((x) => x.id !== id));
@@ -2345,7 +2368,7 @@ export default function App() {
 
   return (
     <div className="apito" data-theme={theme}>
-      <style>{CSS}</style>
+      <style>{CSS + PT_CSS}</style>
 
       <header className="hdr">
         <div className="wrap">
@@ -2415,7 +2438,13 @@ export default function App() {
           <main>
             <div className="feedhead">
               <h1 className={section === "historias" ? "hist" : ""}>{emLingua(CAT[section], lang)}</h1>
-              {section === "resultados" && leagues.length > 0 && (
+              {section === "resultados" && (
+                <div className="seg" role="group" aria-label="Vista dos resultados">
+                  <button aria-pressed={resVista === "portugal"} onClick={() => setResVista("portugal")}>Portugal</button>
+                  <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto · todas as ligas</button>
+                </div>
+              )}
+              {section === "resultados" && resVista === "direto" && leagues.length > 0 && (
                 <button className="textbtn" onClick={() => setShowLeagues((v) => !v)} aria-expanded={showLeagues}><ListFilter size={15} />{ui.pickLeagues}</button>
               )}
             </div>
@@ -2640,6 +2669,11 @@ export default function App() {
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "historias" ? (
               <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
+            ) : section === "resultados" && resVista === "portugal" ? (
+              <>
+              <Portugal API={API} now={now} />
+              <div className="mobevents">{eventsPanel}</div>
+              </>
             ) : section === "resultados" ? (
               <>
               {games.length === 0 ? <p className="empty">{ui.noResults}</p> : (

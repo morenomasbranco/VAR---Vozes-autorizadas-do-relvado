@@ -97,7 +97,7 @@ export function normalizeEvent(ev) {
   };
 }
 
-export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, onFinal = () => {} }) {
+export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, onFinal = () => {}, onJogo = () => {} }) {
   const tracked = new Map(); // estado de cada jogo acompanhado
   const list = leagues.map((l) => ({ ...l, key: slug(l.nome), sport: l.espn.split("/")[0] }));
 
@@ -195,6 +195,7 @@ export function startEspn(leagues, { publish, upsert, remove, log, onBlocked, on
   };
 
   const handle = (m, lg, first) => {
+    try { onJogo(m, lg); } catch (e) { log(`[PT] ${e.message}`); } // resultados de Portugal: tabelas ao vivo
     const prev = tracked.get(m.id);
     if (m.state === "pre") return;
     const diff = m.hs - m.as;
