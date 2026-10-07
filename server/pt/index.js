@@ -12,7 +12,7 @@
 //     ESPN/Sofascore do ligas.json (cartões e notícias de golo já existentes); aqui servem para as tabelas.
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { norm, slug, sleep } from "../util.js";
+import { norm, slug, sleep, hash } from "../util.js";
 import * as fpf from "./fpf.js";
 import * as sofa from "./sofa.js";
 import { ASSOCIACOES, FPF, ORG, ORGS, EPOCA_FPF, classificar, bonito, ordem as ordemComp } from "./catalogo.js";
@@ -25,6 +25,7 @@ import { lerTexto } from "./stories/parser.js";
 import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
+import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
 import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
 
@@ -677,6 +678,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       }
     })();
     distritais.start(); // DISTRITAIS=0 desliga
+    vigiarFacebook(); // PT_FACEBOOK=0 desliga
     ocr.verificar().then((o) => log(`[PT] OCR dos stories: ${o.tesseract ? `tesseract (${o.tesseract.linguas.join(", ") || "?"})` : "sem tesseract"}${o.ffmpeg ? " + ffmpeg" : ""}${process.env.GEMINI_API_KEY ? " + Gemini como reserva" : ""}`));
     // com sessão de uma conta qualquer (não precisa de seguir os clubes): leitura direta pelo Instagram;
     // sem conta nenhuma: visualizadores anónimos públicos (STORIES_ANONIMO=0 desliga)
@@ -687,6 +689,57 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     } else if (process.env.STORIES_ANONIMO !== "0") {
       ig = createAnonimo({ alvos, entregar: async (p) => evidencia(p), perfil: distritais.deEdges, log });
     } else log("[PT] recolha de stories desligada: os stories só entram pelo retransmissor (npm run instagram-relay), pelo formulário do site ou pela API");
+  }
+
+  // ───────── Facebook nos jogos ─────────
+  // As páginas de Facebook dos clubes que estão a jogar, pelo plugin público de página (facebook.js): de 5 em 5 min
+  // cada uma (FB_JOGOS_SEGUNDOS), até 6 por minuto. Cada post (e cada versão editada) é uma prova, como os do
+  // Instagram; o texto das imagens («RESULTADO FINAL 2-1») é lido pelo OCR quando a legenda não traz o resultado.
+  const FB_JOGOS_MS = Math.max(60, Number(process.env.FB_JOGOS_SEGUNDOS) || 300) * 1000;
+  estado.facebook = { ativo: process.env.PT_FACEBOOK !== "0", lidas: 0, provas: 0, erros: 0, ultimoErro: null, pausaAte: 0 };
+  async function vigiarFacebook() {
+    if (!estado.facebook.ativo) return;
+    const ultimo = new Map(); // página → última leitura
+    const versoes = new Map(); // post → versão do texto já entregue
+    for (;;) {
+      const agora = Date.now();
+      let feitos = 0;
+      if (agora >= estado.facebook.pausaAte) {
+        for (const j of jogosPerto(agora, 4)) {
+          const comp = st.comps[j.comp];
+          if (!comp || comp.externo || (j.oficial && j.estado === "final") || !j.inicio) continue;
+          if (agora < j.inicio - 15 * 60e3 || agora > j.inicio + DURACAO[comp.mod] + 60 * 60e3) continue;
+          for (const [fb, lado, nome] of [[j.fbCasa, "h", j.casa], [j.fbFora, "a", j.fora]]) {
+            const pg = paginaFacebook(fb);
+            if (!pg || feitos >= 6 || Date.now() - (ultimo.get(pg.chave) || 0) < FB_JOGOS_MS) continue;
+            ultimo.set(pg.chave, Date.now());
+            feitos++;
+            try {
+              const { posts } = await lerPaginaFacebook({ nome, org: comp.org, facebook: fb });
+              estado.facebook.lidas++;
+              distritais.deFacebook(pg.chave, posts);
+              for (const p of posts.sort((a, b) => a.ts - b.ts)) {
+                if (p.ts < j.inicio - 60 * 60e3) continue;
+                const versao = hash(p.legenda || p.img || "");
+                const antes = versoes.get(p.id);
+                if (antes === versao) continue;
+                versoes.set(p.id, versao);
+                const texto = await ocr.lerStory({ url: /\d\s*[-–x]\s*\d/.test(p.legenda || "") ? null : p.img, alt: "", legenda: p.legenda || "" }).catch(() => p.legenda || "");
+                estado.facebook.provas++;
+                evidencia({ id: `${p.id}:${versao}`, tipo: "facebook", rede: "facebook", conta: `fb:${pg.chave}`, jogoId: j.id, lado, ts: antes ? Date.now() : p.ts, texto, url: p.url });
+              }
+            } catch (e) {
+              estado.facebook.erros++;
+              estado.facebook.ultimoErro = { pagina: pg.chave, erro: e.message, ts: Date.now() };
+              if ([401, 403, 429].includes(e.status)) { estado.facebook.pausaAte = Date.now() + 30 * 60e3; break; }
+            }
+          }
+          if (Date.now() < estado.facebook.pausaAte) break;
+        }
+      }
+      if (versoes.size > 20000) versoes.clear();
+      await sleep(60e3);
+    }
   }
 
   // ───────── API ─────────
