@@ -1,5 +1,5 @@
 {
- "nota": "Links encontrados por pesquisa (instagram.com/facebook.com) em 07-10-2026 para clubes que não os tinham no Excel (duas rondas). alta = nome e terra coincidem; media = provável, a confirmar.",
+ "nota": "Links encontrados por pesquisa (instagram.com/facebook.com) em 07-10-2026 para clubes que não os tinham no Excel (três rondas). alta = nome e terra coincidem; media = provável, a confirmar.",
  "clubes": [
   {
    "clube": "Bensafrim",
@@ -488,14 +488,6 @@
    "fb": "https://www.facebook.com/ud.mourisquense/",
    "conf_ig": "alta",
    "conf_fb": "alta"
-  },
-  {
-   "clube": "União da Mata",
-   "assoc": "AF Aveiro",
-   "ig": null,
-   "fb": "https://www.facebook.com/UDRCMM/",
-   "conf_ig": null,
-   "conf_fb": "media"
   },
   {
    "clube": "Vaguense",
@@ -2247,6 +2239,1062 @@
    "ig": null,
    "fb": "https://www.facebook.com/udcsantoadriao/",
    "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Viatodos",
+   "assoc": "AF Braga",
+   "ig": "https://www.instagram.com/cdcviatodos/",
+   "fb": "https://www.facebook.com/cdcviatodos1983/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Vieira",
+   "assoc": "AF Braga",
+   "ig": null,
+   "fb": "https://www.facebook.com/Vieira.Sport.Clube.1965/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "«Os Ceramistas»",
+   "assoc": "AF Braga",
+   "ig": null,
+   "fb": "https://www.facebook.com/cfosceramistas/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Águias da Graça",
+   "assoc": "AF Braga",
+   "ig": "https://www.instagram.com/a.d.aguias_da_graca/",
+   "fb": "https://www.facebook.com/profile.php?id=100070859702929",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Águias de Alvelos",
+   "assoc": "AF Braga",
+   "ig": "https://www.instagram.com/arcaguiasdealvelos/",
+   "fb": "https://www.facebook.com/arcaguiasdealvelos/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Águias Negras Tabuadelo",
+   "assoc": "AF Braga",
+   "ig": "https://www.instagram.com/aguiasnegras_tabuadelo/",
+   "fb": "https://www.facebook.com/aguiasnegrastabuadelo/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Carrazeda de Ansiães",
+   "assoc": "AF Bragança",
+   "ig": "https://www.instagram.com/f.c.carrazeda/",
+   "fb": "https://www.facebook.com/FCcarrazedadeansiaes/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Macedo de Cavaleiros",
+   "assoc": "AF Bragança",
+   "ig": "https://www.instagram.com/clubeatleticomcoficial/",
+   "fb": "https://www.facebook.com/profile.php?id=100094105282058",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Minas Argozelo",
+   "assoc": "AF Bragança",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100066319615178",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Mirandela",
+   "assoc": "AF Bragança",
+   "ig": "https://www.instagram.com/scmirandelaoficial/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Torre Moncorvo",
+   "assoc": "AF Bragança",
+   "ig": "https://www.instagram.com/gdmoncorvo/",
+   "fb": "https://www.facebook.com/GDMONCORVO/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "ARC Oleiros",
+   "assoc": "AF Castelo Branco",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100064522789200",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Atalaia do Campo",
+   "assoc": "AF Castelo Branco",
+   "ig": "https://www.instagram.com/acrac_atalaia/",
+   "fb": "https://www.facebook.com/acratalaiadocampo/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Idanhense",
+   "assoc": "AF Castelo Branco",
+   "ig": null,
+   "fb": "https://www.facebook.com/CUIdanhense/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "UD Belmonte",
+   "assoc": "AF Castelo Branco",
+   "ig": null,
+   "fb": "https://www.facebook.com/UDBELMONTE/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Vitória Sernache",
+   "assoc": "AF Castelo Branco",
+   "ig": "https://www.instagram.com/gdvsernache/",
+   "fb": "https://www.facebook.com/profile.php?id=61563756042146",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Águias do Moradal",
+   "assoc": "AF Castelo Branco",
+   "ig": null,
+   "fb": "https://www.facebook.com/aguiasdomoradal/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "AD Poiares",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/ADPoiares1940/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "ADC Adémia",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/futebolademia/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "ADC Almalaguês",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/adcalmalagues/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "ADCR Pereira",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/associacaodesportivaculturalerecreativapereira/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Ançã",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/anca.ferryaco/",
+   "fb": "https://www.facebook.com/profile.php?id=100063354752267",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Brasfemes",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/realclubedebrasfemes/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Carapinheirense",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/cdcarapinheirense/",
+   "fb": "https://www.facebook.com/cdcarapinheirense/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "CD Gambo",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/cdgambo/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Condeixa",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/clubecondeixa/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Eirense",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/uceirense/",
+   "fb": "https://www.facebook.com/uniaoclubeeirense/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "GD Cova-Gala",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/CovaGala/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Moinhos",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/grupodesportivomoinhos/",
+   "fb": "https://www.facebook.com/GrupoDesportivoDosMoinhos/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Os Águias",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/grupodesportivoosaguias/",
+   "fb": "https://www.facebook.com/profile.php?id=100057335955366",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Gândaras",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/cagandarasrcs/",
+   "fb": "https://www.facebook.com/cagandarasrcs/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Lousanense",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/cdlousanense/",
+   "fb": "https://www.facebook.com/cdlousanense/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Maiorca",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/grupodesportivomaiorca/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Mocidade FC",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/mocidadefc/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Pedrulhense",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/pedrulhense/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Penelense",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/cdrpenelense/",
+   "fb": "https://www.facebook.com/CDRPenelense/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Praia da Leirosa",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/crpleirosa/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Sanjoanense AC",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/sanjoanense.a.c/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Sepins",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/GDSepins/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Sourense",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/gdsourense/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "São Pedro de Alva",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/adcspa.spalva/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Tocha",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/udtocha/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Tourizense",
+   "assoc": "AF Coimbra",
+   "ig": "https://www.instagram.com/grupodesportivotourizense/",
+   "fb": "https://www.facebook.com/profile.php?id=100063251347610",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "UD V.N. Anços",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/UDVNA/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "UDR Cernache",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/udrcernache/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "União 1919",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/ClubeUniaoCoimbra/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Vigor Mocidade",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/VigorDaMocidade/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Vinha da Rainha",
+   "assoc": "AF Coimbra",
+   "ig": null,
+   "fb": "https://www.facebook.com/acdsfvr/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "AD Vera Cruz",
+   "assoc": "AF Évora",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100057186860855",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Alcaçovense",
+   "assoc": "AF Évora",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100054670890798",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Aguiar da Beira",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100057478148266",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Casal Cinza",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100054618361937",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "CCR Vila Verde",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100064421992589",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "CD Gouveia",
+   "assoc": "AF Guarda",
+   "ig": "https://www.instagram.com/clubedesportivogouveia/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Mileu Guarda",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100064031621745",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Os Vilanovenses",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100057146841935",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Paços da Serra",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/scpacosdaserra/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Pinhelenses",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/Uniaodesportivaospinhelenses/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "SC Sabugal",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/scsabugal/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Seia FC",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/seiafutebolclube/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Sp. Mêda",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100057667501284",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Trancoso",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/gdt.trancoso/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "UFC Arcozelo",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/uniao.futebol.clube.de.arcozelo/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Vila Cortez",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/ccdrvilacortes/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Vilar Formoso",
+   "assoc": "AF Guarda",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100057405731431",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "CD Lajense",
+   "assoc": "AF Horta",
+   "ig": "https://www.instagram.com/c.d.lajense/",
+   "fb": "https://www.facebook.com/lajense/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Fayal",
+   "assoc": "AF Horta",
+   "ig": "https://www.instagram.com/fayal_sport_club/",
+   "fb": "https://www.facebook.com/fayalsc/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Flamengos",
+   "assoc": "AF Horta",
+   "ig": null,
+   "fb": "https://www.facebook.com/fcflamengos/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Vitória do Pico",
+   "assoc": "AF Horta",
+   "ig": null,
+   "fb": "https://www.facebook.com/vitoriafutebolclubepico/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "ARCUDA",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/arcuda1976/",
+   "fb": "https://www.facebook.com/ARCUDA1976/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Atouguiense",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/gdatouguiense/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Avelarense",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100057099084468",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Beneditense",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/a_beneditense_cd/",
+   "fb": "https://www.facebook.com/abeneditensecd/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Bombarralense",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/scebombarralense/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Caranguejeira",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/cdcaranguejeiraoficial/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Alvaiázere",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/grupodesportivodealvaiazere/",
+   "fb": "https://www.facebook.com/profile.php?id=61558634782689",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Ilha",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=155858284448873",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Pelariga",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100063478149842",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Santo Amaro",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/gdsantoamaro/",
+   "fb": "https://www.facebook.com/gdsa.ortigosa/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GDR Boavista",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/gdr_boavista_oficial/",
+   "fb": "https://www.facebook.com/G.D.R.BoaVista/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "GDR Cultural Unidos",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/gdrc_unidos/",
+   "fb": "https://www.facebook.com/grupo.desporto.recreio.cultura.unidos/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Ginásio de Alcobaça",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/ginasio.alcobaca/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GRAP",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/GRAP.Pousos1940/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Guiense",
+   "assoc": "AF Leiria",
+   "ig": "https://www.instagram.com/gdguiense/",
+   "fb": "https://www.facebook.com/guiense/",
+   "conf_ig": "media",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Leiria e Marrazes",
+   "assoc": "AF Leiria",
+   "ig": null,
+   "fb": "https://www.facebook.com/sclmarrazes/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "ADCEO",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/oficial.adceo/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Alcainça AC",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/alcainca.atleticoclube/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Algés",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/sportalgesedafundo/",
+   "fb": "https://www.facebook.com/sport.a.dafundo/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Alta de Lisboa",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/udaltadelisboa/",
+   "fb": "https://www.facebook.com/profile.php?id=100066692321119",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Arneiros",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/acdr_arneiros/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Arrudense",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/crd_arrudense/",
+   "fb": "https://www.facebook.com/CRDARRUDENSE.PT/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Arsenal 72",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/a72_dc/",
+   "fb": "https://www.facebook.com/arsenal72.oficial/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Assoc. Torre",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/associacaotorre/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Associação Murteirense",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/associacao.murteirense/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "At. Tojal",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/actojal/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Aveiras",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/aveirasdecimasportclube/",
+   "fb": "https://www.facebook.com/AveirasdeCimaSportClube/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Bobadelense",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/AssociacaoDesportivaBobadelense/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Carcavelos",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/gs_carcavelos/",
+   "fb": "https://www.facebook.com/GSCarcavelos/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Carregado",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100064089130108",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Catujalense",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/catujalense/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "CD Belas",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/cdbelas/",
+   "fb": "https://www.facebook.com/CDBelas-816043761752263/",
+   "conf_ig": "alta",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "CF Unidos",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/cfunidos/",
+   "fb": "https://www.facebook.com/cf.osunidos/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Coutada",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/coutada1951/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "CSD Bairro da Boavista",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100069174904814",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Desportivo O. Moscavide",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/cdolivaismoscavide/",
+   "fb": "https://www.facebook.com/CDOMoscavide/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "FC Despertar",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/fc_despertar/",
+   "fb": "https://www.facebook.com/fcdespertar.casaldecambra/",
+   "conf_ig": "media",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Fontainhas",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/gdrfontainhascascais/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Freiria",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/freiriasportclube/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Fut. Benfica",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/cfbenfica/",
+   "fb": "https://www.facebook.com/CfBenfica/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GD Vialonga",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/gd_vialonga/",
+   "fb": "https://www.facebook.com/gdvialonga/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GDS Cascais",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/gds.cascais.oficial/",
+   "fb": "https://www.facebook.com/somos.cascais/",
+   "conf_ig": "media",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "GS Loures",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/gsportivoloures/",
+   "fb": "https://www.facebook.com/louresgs/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Igreja Nova",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/grupo.desportivo.igreja.nova/",
+   "fb": "https://www.facebook.com/gdin.igrejanova/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Jerumelo",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/clubefuteboljerumelo1961/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Juventude Castanheira",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/juventudedacastanheira/",
+   "fb": "https://www.facebook.com/JuventudeDaCastanheira/",
+   "conf_ig": "media",
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Leões Porto Salvo",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/leoesportosalvofutebol/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Linda-a-Velha",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/sportingclubelindaavelha/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Lourinhanense",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/lourinhanense_oficial/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Mem Martins SC",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/futebolmemmartinssportclube/",
+   "fb": "https://www.facebook.com/memmartinsfutebol/",
+   "conf_ig": "media",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Mirantense",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/profile.php?id=100063532482359",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Monte Agraço",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/monteagracofc/",
+   "fb": "https://www.facebook.com/MonteAgracoFC/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "MTBA",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/MTBAgrupo/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Operário Lisboa",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/operario_lisboa/",
+   "fb": "https://www.facebook.com/operariolisboa/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Oriental",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/clubeorientaldelisboa/",
+   "fb": null,
+   "conf_ig": "media",
+   "conf_fb": null
+  },
+  {
+   "clube": "Os Bucelenses",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/Bucelenses/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Os Montelavarenses",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/osmontelavarenses.cfm/",
+   "conf_ig": null,
+   "conf_fb": "media"
+  },
+  {
+   "clube": "Palmense",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/sf_palmense/",
+   "fb": null,
+   "conf_ig": "alta",
+   "conf_fb": null
+  },
+  {
+   "clube": "Pedra",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/clube.s.d.c.pedra/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Ponte Frielas",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/udpontedefrielas/",
+   "fb": "https://www.facebook.com/udpf49/",
+   "conf_ig": "alta",
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Ponterrolense",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/gdrcponterrolense1941/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "Pêro Pinheiro",
+   "assoc": "AF Lisboa",
+   "ig": null,
+   "fb": "https://www.facebook.com/CAPP1945/",
+   "conf_ig": null,
+   "conf_fb": "alta"
+  },
+  {
+   "clube": "RD Algueirão",
+   "assoc": "AF Lisboa",
+   "ig": "https://www.instagram.com/rdalgueirao_/",
+   "fb": "https://www.facebook.com/recreiosdesportivosdoalgueirao/",
+   "conf_ig": "alta",
    "conf_fb": "alta"
   }
  ]
