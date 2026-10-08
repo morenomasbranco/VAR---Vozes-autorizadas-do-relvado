@@ -158,7 +158,7 @@ function Progresso({ p, agora, API = "", curto = false }) {
         {p.jogos ? ` · ${p.jogos} jogos` : ""}
         {fila ? ` · ${fila} páginas na fila` : ""}
       </p>
-      {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}</p>}
+      {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {/403/.test(fpfErro.erro) ? "A FPF recusa os pedidos de servidores; para os resultados chegarem, liga a ponte de casa num computador de casa (o guia está em deploy/GUIA-PONTE-CASA.md)." : p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}</p>}
       {erros.length > 0 && !curto && <p className="muted small">Sem lista de competições: {erros.map(([k]) => k).join(", ")}</p>}
       {listas && listas.lidas > 0 && !p.total && !curto && (
         <p className="ptwarn">A FPF respondeu, mas não reconheci nenhuma competição na resposta. O que ela devolveu está em <a href={`${API}/api/pt/amostra`} target="_blank" rel="noreferrer">/api/pt/amostra</a>.</p>

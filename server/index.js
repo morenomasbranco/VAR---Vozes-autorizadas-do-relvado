@@ -26,6 +26,7 @@ import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
 import { createPortugal } from "./pt/index.js";
+import { rotasPonte } from "./ponte.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
@@ -353,6 +354,11 @@ app.get("/api/leagues", (req, res) => res.json([
   ...portugal.ligasSite(), // um filtro por organizador: Liga, FPF e cada associação distrital
 ]));
 portugal.rotas(app, express);
+// ponte de casa: um computador de casa faz os pedidos aos sites que bloqueiam o servidor (scripts/ponte-casa.js)
+rotasPonte(app, express, (req) => {
+  const t = process.env.PT_TOKEN || process.env.VIDEOS_RELAY_TOKEN;
+  return !!t && req.get("authorization") === `Bearer ${t}`;
+});
 app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/zapping", (req, res) => res.json(zapping.all())); // grelha de transmissões (canal de cada jogo)
 app.get("/api/zapping/estado", (req, res) => res.json(zapping.estado()));

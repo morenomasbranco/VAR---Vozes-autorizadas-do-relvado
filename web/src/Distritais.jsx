@@ -114,8 +114,8 @@ export default function Distritais({ API = "", now, query = "" }) {
         <p className="ptwarn dnota">
           Neste momento nenhuma das vias está a trazer posts.{" "}
           {ig.comSessao
-            ? "O Instagram está a limitar este servidor mesmo com a sessão: costuma acontecer com servidores de alojamento e passa ao fim de algum tempo, mas a forma mais fiável é o retransmissor (npm run instagram-relay) num computador de casa."
-            : "Junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou deixa o retransmissor (npm run instagram-relay) a correr num computador de casa."}
+            ? "O Instagram está a limitar este servidor mesmo com a sessão: costuma acontecer com servidores de alojamento e passa ao fim de algum tempo, mas a forma mais fiável é a ponte de casa num computador de casa (o guia está em deploy/GUIA-PONTE-CASA.md)."
+            : "Junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou liga a ponte de casa num computador de casa (o guia está em deploy/GUIA-PONTE-CASA.md)."}
         </p>
       )}
       <div className="cols dcols">

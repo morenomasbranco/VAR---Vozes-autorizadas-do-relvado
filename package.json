@@ -15,7 +15,8 @@
     "instagram-relay": "node scripts/instagram-relay.js",
     "procurar-redes": "node scripts/procurar-redes.js",
     "fpf-sonda": "node scripts/fpf-sonda.js",
-    "importar-clubes": "python3 scripts/importar_clubes.py"
+    "importar-clubes": "python3 scripts/importar_clubes.py",
+    "ponte-casa": "node scripts/ponte-casa.js"
   },
   "engines": {
     "node": ">=20"
