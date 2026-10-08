@@ -15,6 +15,7 @@
 // de 60 s, fica a menos de um minuto da publicação, o que chega para o relógio do jogo).
 import { sleep, hash } from "../../util.js";
 import { lerStory } from "./ocr.js";
+import { buscar } from "../../ponte.js";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const CICLO_MS = Math.max(30, Number(process.env.STORIES_ANONIMO_SEGUNDOS) || 60) * 1000;
@@ -102,7 +103,7 @@ export function createAnonimo({ alvos, entregar, perfil = () => {}, log = () => 
       if (Date.now() < f.castigoAte) continue;
       await espera();
       try {
-        const res = await fetch(f.url.replace("{u}", encodeURIComponent(handle)), { headers: { "User-Agent": UA, Accept: "application/json,text/html;q=0.9,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9", Referer: new URL(f.url).origin + "/" }, signal: AbortSignal.timeout(25000) });
+        const res = await buscar(f.url.replace("{u}", encodeURIComponent(handle)), { headers: { "User-Agent": UA, Accept: "application/json,text/html;q=0.9,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9", Referer: new URL(f.url).origin + "/" }, signal: AbortSignal.timeout(25000) });
         if (res.status === 404) { f.ok++; return []; } // a conta não tem stories (ou não existe)
         if (!res.ok) throw new Error(`respondeu ${res.status}`);
         const itens = lerResposta(await res.text());
@@ -122,7 +123,7 @@ export function createAnonimo({ alvos, entregar, perfil = () => {}, log = () => 
   async function postsDe(handle, alvo) {
     if (Date.now() < estado.postsBloqueadoAte) return;
     await espera();
-    const res = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(handle)}`, { headers: { "User-Agent": UA, "X-IG-App-ID": "936619743392459", Accept: "*/*", Referer: "https://www.instagram.com/" }, signal: AbortSignal.timeout(20000) });
+    const res = await buscar(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(handle)}`, { headers: { "User-Agent": UA, "X-IG-App-ID": "936619743392459", Accept: "*/*", Referer: "https://www.instagram.com/" }, signal: AbortSignal.timeout(20000) });
     if (res.status === 429 || res.status === 401 || res.status === 403) { estado.postsBloqueadoAte = Date.now() + 30 * 60e3; return; }
     if (!res.ok) return;
     const j = await res.json().catch(() => null);

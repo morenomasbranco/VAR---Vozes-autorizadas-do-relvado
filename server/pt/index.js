@@ -26,6 +26,7 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
+import { estadoPonte } from "../ponte.js";
 import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
 
@@ -715,7 +716,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
             ultimo.set(pg.chave, Date.now());
             feitos++;
             try {
-              const { posts } = await lerPaginaFacebook({ nome, org: comp.org, facebook: fb });
+              const { posts } = await Promise.race([lerPaginaFacebook({ nome, org: comp.org, facebook: fb }), sleep(45e3).then(() => { throw new Error("sem resposta em 45 s"); })]);
               estado.facebook.lidas++;
               distritais.deFacebook(pg.chave, posts);
               for (const p of posts.sort((a, b) => a.ts - b.ts)) {
@@ -850,6 +851,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         },
         distritais: { perfis: d.perfis, lidos: d.lidosTotal, instagram: d.lidosInstagram, facebook: d.lidosFacebook, pedidos: d.pedidos, ultimoErro: d.ultimoErro, vias: d.vias, comSessao: d.comSessao },
         facebookJogos: estado.facebook,
+        ponte: { ligada: !!process.env.PONTE_URL, ...estadoPonte },
         instagramJogos: ig.estado,
       });
     });

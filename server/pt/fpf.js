@@ -8,6 +8,7 @@
 // que foi lido e grava a página em data/fpf-sonda/ para se ajustar o leitor.
 import { parse, nos, texto, pedacos, porTag, atributos, acima } from "./html.js";
 import { sleep, lerTexto, norm } from "../util.js";
+import { buscar } from "../ponte.js";
 
 export const BASE = (process.env.FPF_BASE || "https://resultados.fpf.pt").replace(/\/$/, "");
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -44,7 +45,7 @@ export function pedir(caminho, { tentativas = 2 } = {}) {
       ultimo = Date.now();
       estado.pedidos++;
       try {
-        const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,*/*", "Accept-Language": "pt-PT,pt;q=0.9", "X-Requested-With": "XMLHttpRequest" }, signal: AbortSignal.timeout(20000) });
+        const res = await buscar(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,*/*", "Accept-Language": "pt-PT,pt;q=0.9", "X-Requested-With": "XMLHttpRequest" }, signal: AbortSignal.timeout(20000) });
         if (res.status === 429 || res.status === 503) { estado.bloqueado = true; throw Object.assign(new Error(`FPF respondeu ${res.status}`), { status: res.status }); }
         if (!res.ok) throw Object.assign(new Error(`FPF respondeu ${res.status}`), { status: res.status });
         estado.bloqueado = false;

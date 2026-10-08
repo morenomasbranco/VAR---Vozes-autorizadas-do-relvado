@@ -3,6 +3,7 @@
 // o minuto ao segundo dos jogos nacionais que o Sofascore acompanha. Os endereços são os que o próprio site usa:
 // sem chave e sem custo, mas não oficiais (se o Sofascore os recusar, fica-se pela FPF e pelos stories).
 import { sleep, norm } from "../util.js";
+import { buscar } from "../ponte.js";
 
 const BASE = process.env.SOFASCORE_BASE || "https://api.sofascore.com/api/v1";
 const HEADERS = {
@@ -20,7 +21,7 @@ export async function getJson(path) {
   if (espera > 0) await sleep(espera);
   ultimo = Date.now();
   estado.pedidos++;
-  const res = await fetch(`${BASE}${path}`, { headers: HEADERS, signal: AbortSignal.timeout(15000) }).catch((e) => { throw Object.assign(e, { status: 0 }); });
+  const res = await buscar(`${BASE}${path}`, { headers: HEADERS, signal: AbortSignal.timeout(15000) }).catch((e) => { throw Object.assign(e, { status: 0 }); });
   if (!res.ok) {
     estado.erros++;
     estado.ultimoErro = { path, status: res.status, ts: Date.now() };

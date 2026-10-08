@@ -9,6 +9,7 @@
 // Se o Facebook passar a pedir sessão, o FB_COOKIE (os cookies c_user e xs de uma conta qualquer, copiados do
 // browser) é enviado com o pedido. Isto não é uma API oficial e pode mudar.
 import { hash, entidades, conserta } from "../util.js";
+import { buscar } from "../ponte.js";
 
 const UA = process.env.FB_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 // botões e rodapés do plugin que não fazem parte do texto do post
@@ -75,7 +76,7 @@ export function lerPlugin(html, clube, agora = Date.now()) {
 export async function lerPaginaFacebook(clube, { cookie = process.env.FB_COOKIE || null } = {}) {
   const p = paginaFacebook(clube.facebook);
   if (!p) return { posts: [] };
-  const res = await fetch(urlPlugin(p.url), {
+  const res = await buscar(urlPlugin(p.url), {
     headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.7", Referer: "https://www.google.com/", ...(cookie ? { Cookie: cookie } : {}) },
     redirect: "follow", signal: AbortSignal.timeout(20000),
   });
