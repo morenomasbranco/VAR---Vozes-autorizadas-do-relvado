@@ -26,6 +26,7 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
+import { estadoPonte } from "../ponte.js";
 import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
 
@@ -715,7 +716,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
             ultimo.set(pg.chave, Date.now());
             feitos++;
             try {
-              const { posts } = await lerPaginaFacebook({ nome, org: comp.org, facebook: fb });
+              const { posts } = await Promise.race([lerPaginaFacebook({ nome, org: comp.org, facebook: fb }), sleep(45e3).then(() => { throw new Error("sem resposta em 45 s"); })]);
               estado.facebook.lidas++;
               distritais.deFacebook(pg.chave, posts);
               for (const p of posts.sort((a, b) => a.ts - b.ts)) {
@@ -835,6 +836,25 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       competicoes: Object.keys(st.comps).length, jogos: Object.keys(st.jogos).length, eventos: eventos.length, alvos: alvos().length,
       semJogos: Object.values(st.comps).filter((c) => !Object.values(c.series || {}).some((s) => s.equipas.length)).map((c) => ({ id: c.id, nome: c.nome, org: c.org })).slice(0, 80),
     }));
+    // resumo de tudo o que pode estar a impedir a vista Portugal e a secção Distritais de carregar, numa só página
+    app.get("/api/diagnostico", (req, res) => {
+      const d = distritais.feed({ limite: 1 }).estado;
+      const curto = (a) => (a ? { url: a.url, quando: new Date(a.ts).toISOString(), tamanho: a.tamanho, inicio: a.inicio.slice(0, 1500) } : null);
+      res.json({
+        agora: new Date().toISOString(), arranque: new Date(estado.arranque).toISOString(),
+        portugal: {
+          competicoes: Object.keys(st.comps).length, lidas: Object.values(st.comps).filter((c) => c.lidoEm).length, jogos: Object.keys(st.jogos).length,
+          listas: estado.listas || null, filas: estado.filas,
+          fpf: { pedidos: fpf.estado.pedidos, erros: fpf.estado.erros, ultimoOk: fpf.estado.ultimoOk && new Date(fpf.estado.ultimoOk).toISOString(), ultimoErro: fpf.estado.ultimoErro, bloqueado: fpf.estado.bloqueado },
+          sofascore: { erros: sofa.estado.erros, ultimoErro: sofa.estado.ultimoErro },
+          amostraLista: curto(fpf.amostras.lista), amostraCompeticao: curto(fpf.amostras.competicao),
+        },
+        distritais: { perfis: d.perfis, lidos: d.lidosTotal, instagram: d.lidosInstagram, facebook: d.lidosFacebook, pedidos: d.pedidos, ultimoErro: d.ultimoErro, vias: d.vias, comSessao: d.comSessao },
+        facebookJogos: estado.facebook,
+        ponte: { ligada: !!process.env.PONTE_URL, ...estadoPonte },
+        instagramJogos: ig.estado,
+      });
+    });
     // o que a FPF devolveu ao servidor (o início das últimas respostas), para perceber porque não aparece nada
     app.get("/api/pt/amostra", (req, res) => res.json({ estado: fpf.estado, listas: estado.listas || null, amostras: fpf.amostras }));
     // «Distritais»: posts recentes por associação, e as imagens (que o Instagram não deixa abrir noutros sites)

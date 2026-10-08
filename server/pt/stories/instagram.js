@@ -16,6 +16,7 @@
 // computador de casa, onde o Instagram desconfia menos.
 import { sleep, hash } from "../../util.js";
 import { lerStory } from "./ocr.js";
+import { buscar } from "../../ponte.js";
 
 const APP_ID = "936619743392459";
 const UA = process.env.IG_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -53,7 +54,7 @@ export function createInstagram({ cookie, alvos, entregar, guardar = () => {}, i
     }
     vezes.push(Date.now());
     estado.pedidos++;
-    const res = await fetch(url, {
+    const res = await buscar(url, {
       headers: { "User-Agent": UA, "X-IG-App-ID": APP_ID, "X-Requested-With": "XMLHttpRequest", Accept: "*/*", Referer: "https://www.instagram.com/", Cookie: cookie, ...(csrf ? { "X-CSRFToken": csrf } : {}) },
       redirect: "manual",
       signal: AbortSignal.timeout(20000),

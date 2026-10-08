@@ -160,6 +160,10 @@ Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta
 
 As páginas montadas no browser (como a da Lega Serie A) também se leem pela lista que vem em JSON dentro da própria página; cada fonte pode ter páginas alternativas (`alternativas`, por exemplo a versão italiana) e várias pesquisas do Google News, experimentadas por ordem. As horas escritas sem fuso são lidas no fuso do país da fonte (Roma, Madrid, Paris, Berlim, Londres, São Paulo), e quando a lista só dá o dia, ou não dá data nenhuma, o servidor abre a notícia para ler a hora exata da publicação. As entradas gravadas antes desta correção são datadas de novo, devagar, quando o servidor arranca.
 
+## Ponte no Cloudflare (quando os sites bloqueiam o servidor)
+
+A FPF, o Sofascore, o Instagram e o Facebook bloqueiam muitas vezes os servidores de alojamento (respondem 403 ou 429). O `/api/diagnostico` mostra se é o caso. A solução gratuita, sem computador ligado, é uma ponte num Cloudflare Worker (`deploy/ponte-cloudflare.js`): com `PONTE_URL` e `PONTE_CHAVE` no servidor, os pedidos a esses sites passam a sair pelos endereços do Cloudflare (`server/ponte.js`; a lista de sites troca-se em `PONTE_HOSTS`). O passo a passo está em `deploy/GUIA-PONTE.md`.
+
 ## Destaques sem vídeos pretos
 
 Nos Destaques do Feed ficam de fora os vídeos «todos pretos» e os que só têm o nome do ficheiro como título («video-2026-10-07T12-59-09», «20261007_055402[1]»). O servidor mede o brilho da miniatura com o ffmpeg; se estiver escura, experimenta outros instantes do vídeo (2, 5, 10 e 20 s) e o primeiro com imagem passa a ser a miniatura; se forem todos escuros, o vídeo fica marcado e sai dos Destaques (`VIDEOS_ESCURO_MEDIA`, brilho médio máximo de 0 a 255, 16 por omissão). O site faz a mesma verificação às miniaturas que mostra.

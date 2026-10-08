@@ -102,3 +102,12 @@ test("API: tabela de uma distrital sem resultados aparece com as equipas a zero"
   assert.equal(t[0].linhas.length, 2);
   assert.ok(t[0].linhas.every((l) => l.semJogos && l.pts === 0 && l.j === 0));
 });
+
+test("API: diagnóstico numa só página", () => {
+  const pt = createPortugal({ log: () => {} });
+  const { app, chamar } = falsoApp();
+  pt.rotas(app, { json: () => null });
+  const d = chamar("get", "/api/diagnostico").json;
+  assert.equal(typeof d.portugal.competicoes, "number");
+  assert.ok("fpf" in d.portugal && "distritais" in d);
+});

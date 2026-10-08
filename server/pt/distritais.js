@@ -15,6 +15,7 @@ import fs from "node:fs";
 import { sleep } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
+import { buscar } from "../ponte.js";
 
 const FICHEIRO = new URL("../../data/pt-distritais.json", import.meta.url);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -23,6 +24,9 @@ const POR_CLUBE = 6; // posts guardados de cada clube
 const IDADE_MAX = (Number(process.env.DISTRITAIS_DIAS) || 21) * 86400e3;
 const ATIVO_MS = 45 * 60e3; // clube que publicou nos últimos 3 dias
 const CALMO_MS = 4 * 3600e3;
+// um pedido que fica pendurado não pode parar a via inteira: cada leitura tem um prazo
+const PRAZO_MS = 45e3;
+const comPrazo = (p) => Promise.race([p, new Promise((_, nao) => setTimeout(() => nao(new Error("sem resposta em 45 s")), PRAZO_MS).unref?.())]);
 const CDN = /^https:\/\/[^/]*(cdninstagram\.com|fbcdn\.net)\//;
 
 // O mesmo post publicado no Instagram e no Facebook do clube (muitos clubes partilham para as duas redes): o mesmo
@@ -129,7 +133,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   }
 
   async function lerInstagram(clube) {
-    const res = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(clube.instagram)}`, {
+    const res = await buscar(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(clube.instagram)}`, {
       headers: { "User-Agent": UA, "X-IG-App-ID": APP_ID, Accept: "*/*", Referer: "https://www.instagram.com/", ...(cookie ? { Cookie: cookie } : {}) },
       redirect: "manual", signal: AbortSignal.timeout(20000),
     });
@@ -150,7 +154,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       if (Date.now() < f.castigoAte) continue;
       tentou = true;
       try {
-        const res = await fetch(f.url.replace("{u}", encodeURIComponent(clube.instagram)), { headers: { "User-Agent": UA, Accept: "text/html,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(20000) });
+        const res = await buscar(f.url.replace("{u}", encodeURIComponent(clube.instagram)), { headers: { "User-Agent": UA, Accept: "text/html,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(20000) });
         if (!res.ok) { if (res.status !== 404) f.castigoAte = Date.now() + 15 * 60e3; continue; }
         const posts = lerPerfilAnonimo(await res.text(), clube);
         if (posts.length) return { posts };
@@ -211,7 +215,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       estado.pedidos++;
       estado.ultimo = Date.now();
       try {
-        certo(c, await ler(c));
+        certo(c, await comPrazo(ler(c)));
         v.ok++;
         v.recusas = 0;
         v.ultimoOk = Date.now();
@@ -229,7 +233,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   }
   // Facebook: uma página a cada 8 s (DISTRITAIS_FB_SEGUNDOS); se o Facebook recusar, pausa de meia hora
   const GAP_FB = Math.max(2, Number(process.env.DISTRITAIS_FB_SEGUNDOS) || 8) * 1000;
-  estado.vias.facebook = { ok: 0, erros: 0, pausaAte: 0, paginas: listaFb.length };
+  estado.vias.facebook = { ok: 0, erros: 0, pausaAte: 0, paginas: listaFb.length, aLer: null };
   async function viaFacebook() {
     const v = estado.vias.facebook;
     while (!parar) {
@@ -238,8 +242,9 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       if (!c) { await sleep(30e3); continue; }
       ocupados.add(c.fb);
       estado.pedidos++;
+      v.aLer = { pagina: c.fb, desde: Date.now() };
       try {
-        const r = await lerPaginaFacebook(c);
+        const r = await comPrazo(lerPaginaFacebook(c));
         juntarEm(dados.fb, c.fb, r.posts.map((p) => ({ ...p, handle: `fb:${c.fb}` })));
         v.ok++;
         sujo = true;
@@ -293,7 +298,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   async function imagem(url) {
     if (!CDN.test(url || "")) return null;
     if (imagens.has(url)) return imagens.get(url);
-    const res = await fetch(url, { headers: { "User-Agent": UA, Referer: "https://www.instagram.com/" }, signal: AbortSignal.timeout(15000) });
+    const res = await buscar(url, { headers: { "User-Agent": UA, Referer: "https://www.instagram.com/" }, signal: AbortSignal.timeout(15000) });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > 600e3) return null;
