@@ -1560,7 +1560,7 @@ export default function App() {
   });
   const [showLeagues, setShowLeagues] = useState(false);
   // secção Resultados: «Portugal» (todos os campeonatos, jornadas e tabelas) ou «Em direto» (o quadro de todas as ligas)
-  // a secção Resultados abre sempre em «Em direto · todas as ligas»; «Portugal» fica à direita
+  // a secção Resultados abre sempre em «Em direto»; «Portugal» fica à direita
   const [resVista, setResVista] = useState("direto");
   const [stories, setStories] = useState([]);
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
@@ -2467,7 +2467,7 @@ export default function App() {
               <h1 className={section === "historias" ? "hist" : ""}>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
                 <div className="seg" role="group" aria-label="Vista dos resultados">
-                  <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto · todas as ligas</button>
+                  <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto</button>
                   <button aria-pressed={resVista === "portugal"} onClick={() => setResVista("portugal")}>Portugal</button>
                 </div>
               )}
