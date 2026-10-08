@@ -107,6 +107,8 @@ for (const it of store.all(100000)) {
   }
 }
 const stories = createStories({ broadcast: (e, d) => broadcast(e, d), log });
+// a secção «Possíveis histórias» saiu do site: as pistas só são feitas com HISTORIAS=1 (poupa os pedidos ao Gemini)
+const HISTORIAS = process.env.HISTORIAS === "1";
 const clients = new Set();
 const status = { x: "ligado", fila: 0, publicadas: 0, juntas: 0, ignoradas: 0, semTraducao: 0 };
 
@@ -251,7 +253,7 @@ const nomesDe = (it) => [...new Set([
 ])].filter(Boolean);
 
 function pista(item) {
-  if (!item || item.score || item.pending) return;
+  if (!HISTORIAS || !item || item.score || item.pending) return;
   const fontes = 1 + (item.also?.length || 0);
   if (fontes < 2 && (item.imp || 0) < 4) return;
   if (!desdobraAtivo) return stories.onTrending(item);
@@ -498,10 +500,10 @@ startTelegram(TELEGRAM, onPost, log).catch((e) => log("[Telegram]", e.message));
 startBluesky(BLUESKY, onPost, log).catch((e) => log("[Bluesky]", e.message));
 // resultados: ESPN para as ligas que a têm; GOAL API para as restantes e como reserva se a ESPN bloquear
 const goal = startResults(LIGAS.filter((l) => !l.espn && !l.sofascore), publish, log, { upsert, remove: removeItem });
-const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: stories.onFinal, onJogo: portugal.externo });
+const espnLeagues = startEspn(LIGAS.filter((l) => l.espn), { publish, upsert, remove: removeItem, log, onBlocked: (lg) => goal.add([lg]), onFinal: HISTORIAS ? stories.onFinal : undefined, onJogo: portugal.externo });
 // Liga 2, Liga 3, Next Gen, Liga BPI e supertaças portuguesas: Sofascore, com a GOAL API como reserva
 startSofascore(LIGAS.filter((l) => l.sofascore && !l.espn), { alimentar: espnLeagues.alimentar, log, onBlocked: (ls) => goal.add(ls) });
-stories.watch(espnLeagues);
+if (HISTORIAS) stories.watch(espnLeagues);
 // quando o diretório de emblemas fica pronto, as notícias já guardadas recebem o país de cada clube
 // (serve para pôr cada notícia na coluna certa da página inicial)
 teams.load(espnLeagues).then(() => {
@@ -515,5 +517,5 @@ teams.load(espnLeagues).then(() => {
   }
   if (n) { store.touch(); log(`[Emblemas] país acrescentado a ${n} clubes de notícias guardadas`); }
 }).catch((e) => log(`[Emblemas] ${e.message}`));
-setTimeout(() => stories.backfill(espnLeagues), 15000); // depois de as fontes arrancarem
+if (HISTORIAS) setTimeout(() => stories.backfill(espnLeagues), 15000); // depois de as fontes arrancarem
 portugal.start();

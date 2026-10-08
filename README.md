@@ -106,6 +106,8 @@ As fontes aparecem nas definições do site agrupadas pelo país de origem (o ca
 
 ## Possíveis histórias
 
+**A secção saiu do site.** O servidor deixou de fazer as pistas (e de gastar pedidos ao Gemini com elas); com `HISTORIAS=1` volta a fazê-las e ficam em `/api/stories`. O que está abaixo descreve como funcionam.
+
 A secção junta duas origens, que se filtram no topo:
 
 - **Dos jogos**: sinais nos resultados e nas classificações — surpresas, reviravoltas, goleadas, expulsões, séries de vitórias ou de derrotas, mudanças de líder, entradas na zona de descida.
