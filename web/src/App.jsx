@@ -13,6 +13,7 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 /* ───────── Secções ───────── */
 const CATS = [
   { id: "destaque", pt: "Feed", en: "Feed", es: "Feed", fr: "Feed", it: "Feed", de: "Feed", hl: "dest" },
+  { id: "ligas", pt: "Ligas e Federações", en: "Leagues & Federations", es: "Ligas y Federaciones", fr: "Ligues et Fédérations", it: "Leghe e Federazioni", de: "Ligen und Verbände" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
   { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
@@ -24,7 +25,6 @@ const CATS = [
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
   { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
   { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
-  { id: "historias", pt: "Possíveis histórias", en: "Story leads", es: "Posibles historias", fr: "Pistes d'articles", it: "Possibili storie", de: "Mögliche Geschichten", hl: "hist" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
@@ -68,7 +68,7 @@ const semAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u03
 const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
 
 const inSection = (it, s) => {
-  if (s === "historias" || s === "favoritos" || s === "capas" || s === "efemerides") return false;
+  if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
@@ -835,100 +835,6 @@ function Ficha({ f, lang, ui }) {
   );
 }
 
-// possíveis histórias, da mais recente para a mais antiga, com filtros de nível e de tom
-// cartão de uma pista, usado nas Possíveis histórias e nos Favoritos
-function StoryCard({ s, items, lang, ui, now, onOpen, leagueName, leaguePais, theme, isFav, onFav }) {
-  return (
-    <li className={`story lv-${s.nivel}`}>
-      <div className="mrow">
-        <span className="lvl">{ui.levels[s.nivel]}</span>
-        <span className={`tone t-${toneOf(s)}`}>{toneOf(s) === "positiva" ? "▲" : toneOf(s) === "negativa" ? "▼" : "●"} {ui.tones[toneOf(s)]}</span>
-        <Flag code={s.pais || leaguePais(s.liga)} lang={lang} />
-        {s.ligaNome && <span className="muted">{leagueName(s.liga) || s.ligaNome}</span>}
-        <span className="muted">{agoText(s.ts, now, ui)}</span>
-      </div>
-      <Crests eq={s.crests} theme={theme} lang={lang} />
-      <h3 className="title">{emLingua(s.t, lang)}</h3>
-      {s.ficha && <Ficha f={s.ficha} lang={lang} ui={ui} />}
-      {emLingua(s.narrativa, lang) && <p className="narr"><b>{ui.thread}:</b> {emLingua(s.narrativa, lang)}</p>}
-      {s.possibilidades?.length > 0 && (
-        <div className="block poss">
-          <b>{ui.whatNext}</b> <span className="muted small">{ui.possNote}</span>
-          <ul className="bul">
-            {s.possibilidades.map((p, i) => (
-              <li key={i}>{emLingua(p, lang)}{emLingua(p.se, lang) && <span className="muted"> — {ui.ifWord} {emLingua(p.se, lang).replace(/^(se|if)\s+/i, "")}</span>}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {s.consequencias?.length > 0 && (
-        <div className="block cons">
-          <b>{ui.consequences}</b>
-          <ul className="bul">
-            {s.consequencias.map((c, i) => (
-              <li key={i}>{c.tipo && <span className="chip tipo">{ui.consTypes[c.tipo] || c.tipo}</span>} {emLingua(c, lang)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <p className="angle"><b>{ui.angle}:</b> {emLingua(s.angulo, lang)}</p>
-      {emLingua(s.dados, lang)?.length > 0 && <p className="sdata"><b>{ui.data}:</b> {emLingua(s.dados, lang).join(" · ")}</p>}
-      {emLingua(s.verificar, lang)?.length > 0 && (
-        <div className="check"><b>{ui.check}:</b><ul className="bul">{emLingua(s.verificar, lang).map((v, i) => <li key={i}>{v}</li>)}</ul></div>
-      )}
-      <div className="chips crit">
-        {s.crit.map((c) => <span key={c.id} className="chip">{emLingua(c, lang)}</span>)}
-        {s.noticia && items.some((x) => x.id === s.noticia) && (
-          <button className="textbtn" onClick={() => onOpen(s.noticia)}><ExternalLink size={14} />{ui.seeNews}</button>
-        )}
-      </div>
-    </li>
-  );
-}
-
-function StoriesView({ stories, items, lang, ui, now, onOpen, leagueName, leaguePais, theme, isFavStory, onFavStory }) {
-  const [lvl, setLvl] = useState("todos");
-  const [tone, setTone] = useState("todas");
-  const [orig, setOrig] = useState("todas");
-  const origemDe = (s) => s.origem || (s.noticia ? "noticia" : "dados");
-  const list = stories
-    .filter((s) => lvl === "todos" || s.nivel === lvl)
-    .filter((s) => tone === "todas" || toneOf(s) === tone)
-    .filter((s) => orig === "todas" || origemDe(s) === orig)
-    .sort((a, b) => b.ts - a.ts);
-  return (
-    <div className="stories">
-      <p className="xnote">{ui.storiesNote}</p>
-      <div className="filters">
-        <div className="seg lvls" role="group" aria-label={ui.levelLabel}>
-          {["todos", "alto", "medio", "baixo"].map((k) => (
-            <button key={k} aria-pressed={lvl === k} onClick={() => setLvl(k)}>{k === "todos" ? ui.allLevels : ui.levels[k]}</button>
-          ))}
-        </div>
-        <div className="seg lvls" role="group" aria-label={ui.toneLabel}>
-          {["todas", "positiva", "negativa", "neutra"].map((k) => (
-            <button key={k} aria-pressed={tone === k} onClick={() => setTone(k)}>{k === "todas" ? ui.allTones : ui.tones[k]}</button>
-          ))}
-        </div>
-        <div className="seg lvls" role="group" aria-label={ui.originLabel}>
-          {["todas", "noticia", "dados"].map((k) => (
-            <button key={k} aria-pressed={orig === k} onClick={() => setOrig(k)}>{ui.origins[k] || ui.origins.todas}</button>
-          ))}
-        </div>
-      </div>
-      {list.length === 0 ? <p className="empty">{ui.noStories}</p> : (
-        <ul className="storylist">
-          {list.map((s) => (
-            <StoryCard key={s.id} s={s} items={items} lang={lang} ui={ui} now={now} onOpen={onOpen}
-              leagueName={leagueName} leaguePais={leaguePais} theme={theme}
-              isFav={isFavStory(s.id)} onFav={onFavStory} />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function Rich({ text }) {
   return text.split(/==(.+?)==/g).map((p, i) => (i % 2 ? <mark key={i} className="hl">{p}</mark> : <span key={i}>{p}</span>));
 }
@@ -1028,7 +934,6 @@ const CSS = `
 .apito .tab.hl-live{color:var(--live);--tabc:var(--live)}
 .apito .tab.hl-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--live);animation:apl 1.6s ease-out infinite}
 .apito .tab.hl-dest{color:var(--ink);--tabc:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
-.apito .tab.hl-hist{color:var(--hist);--tabc:var(--hist);background:color-mix(in srgb,var(--hist) 14%,transparent)}
 .apito .tab.hl[aria-pressed="true"]{color:var(--tabc)}
 .apito .tab.hl-dest[aria-pressed="true"]{color:var(--ink)}
 .apito .tab{white-space:nowrap;padding:9px clamp(5px,0.45vw,8px) 10px;font-size:clamp(13px,0.92vw,15px);font-weight:500;color:var(--muted);border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:6px}
@@ -1135,10 +1040,6 @@ const CSS = `
 .apito .match .team.h{justify-content:flex-end}
 .apito .evcrests{display:inline-flex;gap:5px;margin-right:7px;vertical-align:-7px}
 .apito .about{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-right:2px}
-.apito .stories{max-width:820px}
-.apito .feedhead h1.hist{color:var(--hist)}
-.apito .stories .seg button[aria-pressed="true"]{background:var(--hist);color:#fff}
-.apito .story{background:color-mix(in srgb,var(--hist) 5%,var(--raise))}
 .apito .ficha{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:14px;background:var(--bg)}
 .apito .ficha p{margin:4px 0}
 .apito .fres{display:flex;align-items:center;justify-content:center;gap:12px;font-family:var(--display);font-size:20px;font-weight:600}
@@ -1310,8 +1211,11 @@ const CSS = `
 .apito .vdest .vcard.mini .vorig{display:none}
 .apito .vdest .vrow .vcard.mini{flex:0 0 240px}
 .apito .vdest .vrow{scroll-snap-type:none}
-/* notícias e comunicados oficiais das ligas e federações */
-.apito .ofic{margin:26px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+/* sem a barra de deslocamento por baixo dos vídeos do Feed (a faixa anda sozinha e com as setas) */
+.apito .vdest .vrow{scrollbar-width:none;-ms-overflow-style:none}
+.apito .vdest .vrow::-webkit-scrollbar{display:none}
+/* notícias e comunicados oficiais das ligas e federações (secção própria) */
+.apito .ofic{margin:0 0 10px}
 .apito .ofic .livehead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-bottom:10px}
 .apito .ofic .seg{margin:0}
 .apito .ocols{scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding-bottom:6px}
@@ -1562,7 +1466,6 @@ export default function App() {
   // secção Resultados: «Portugal» (todos os campeonatos, jornadas e tabelas) ou «Em direto» (o quadro de todas as ligas)
   // a secção Resultados abre sempre em «Em direto»; «Portugal» fica à direita
   const [resVista, setResVista] = useState("direto");
-  const [stories, setStories] = useState([]);
   const [zapping, setZapping] = useState([]); // grelha de transmissões (que canal dá cada jogo)
   const [diag, setDiag] = useState({}); // estado de cada fonte: por onde é lida, se responde, última notícia
   const [soProblemas, setSoProblemas] = useState(false);
@@ -1594,7 +1497,7 @@ export default function App() {
       </button>
     );
   };
-  // «Ligas e Federações»: notícias e comunicados oficiais (por baixo das notícias do Feed)
+  // «Ligas e Federações»: notícias e comunicados oficiais (secção própria, entre o Feed e os Resultados)
   const [ofic, setOfic] = useState({ grupos: [], itens: [] });
   const [ofTipo, setOfTipo] = useState("todos");
   const [ofN, setOfN] = useState({}); // entradas mostradas por coluna, antes de «Ver mais»
@@ -1681,11 +1584,6 @@ export default function App() {
     document.addEventListener("visibilitychange", onBack);
     return () => document.removeEventListener("visibilitychange", onBack);
   }, []);
-  const isFav = (id) => favs.some((f) => f.id === id);
-  const favStories = useMemo(() => favs.filter((f) => f.kind === "story").sort((a, b) => b.favAt - a.favAt), [favs]);
-  const toggleFavStory = (st) => setFavs((f) => (f.some((x) => x.id === st.id)
-    ? f.filter((x) => x.id !== st.id)
-    : [{ ...st, kind: "story", favAt: Date.now() }, ...f]));
   const toggleFav = (it) => setFavs((f) => (f.some((x) => x.id === it.id)
     ? f.filter((x) => x.id !== it.id)
     : [{ ...it, unread: false, fresh: false, favAt: Date.now() }, ...f]));
@@ -1747,7 +1645,6 @@ export default function App() {
         });
       } catch { /* sem armazenamento */ }
     }).catch(() => {});
-    fetch(`${API}/api/stories`).then((r) => r.json()).then((l) => !stop && setStories(l)).catch(() => {});
     fetch(`${API}/api/videos/latest?limit=150`).then((r) => r.json())
       .then((l) => !stop && Array.isArray(l) && setVideos((cur) => {
         const ids = new Set(cur.map((x) => x.video_id));
@@ -1798,10 +1695,6 @@ export default function App() {
       }
     });
     // o post afinal não era notícia, ou juntou-se a outra: sai do feed
-    es.addEventListener("story", (e) => {
-      const st = JSON.parse(e.data);
-      setStories((l) => (l.some((x) => x.id === st.id) ? l : [st, ...l]));
-    });
     // vídeo novo, ou o mesmo vídeo encontrado noutra fonte (atualiza o cartão em vez de o repetir)
     const vidEntra = (e) => {
       const v = JSON.parse(e.data);
@@ -1816,7 +1709,12 @@ export default function App() {
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
     // «corrigido»: a mesma entrada com a hora certa (não pisca como nova)
-    es.addEventListener("oficial", (e) => { const x = JSON.parse(e.data); ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() }); });
+    // as das associações de futebol seguem para a secção Distritais (coluna da associação)
+    es.addEventListener("oficial", (e) => {
+      const x = JSON.parse(e.data);
+      if (x.grupo === "af") { window.dispatchEvent(new CustomEvent("distrital-noticia", { detail: x })); return; }
+      ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() });
+    });
     // Portugal: o jogo que mudou segue para a vista de Portugal; o acontecimento (golo, final…) entra no feed
     es.addEventListener("distrital", (e) => window.dispatchEvent(new CustomEvent("distrital", { detail: JSON.parse(e.data) })));
     es.addEventListener("pt-jogo", (e) => window.dispatchEvent(new CustomEvent("pt-jogo", { detail: JSON.parse(e.data) })));
@@ -2464,7 +2362,7 @@ export default function App() {
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
           <main>
             <div className="feedhead">
-              <h1 className={section === "historias" ? "hist" : ""}>{emLingua(CAT[section], lang)}</h1>
+              <h1>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
                 <div className="seg" role="group" aria-label="Vista dos resultados">
                   <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto</button>
@@ -2646,61 +2544,59 @@ export default function App() {
                     </section>
                   ))}
                 </div>
-                {ofic.grupos.length > 0 && (() => {
-                  const q = semAcentos(query).trim();
-                  const lista = ofic.itens.filter((x) => (ofTipo === "todos" || x.tipo === ofTipo) && (!q || semAcentos(`${x.org} ${x.titulo} ${x.titulo_pt || ""}`).includes(q)));
-                  const quando = (x) => (x.soDia ? nomeDia(diaLisboa(x.ts), lang) : agoText(x.ts, now, ui));
-                  return (
-                    <section className="ofic" aria-label={ui.oficiais}>
-                      <div className="livehead">
-                        <h2 className="vdesth">{ui.oficiais}</h2>
-                        <div className="seg lvls" role="group" aria-label={ui.oficiais}>
-                          {[["todos", ui.ofTodos], ["noticia", ui.ofNoticias], ["comunicado", ui.ofComunicados]].map(([k, t]) => (
-                            <button key={k} aria-pressed={ofTipo === k} onClick={() => setOfTipo(k)}>{t}</button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="cols ocols">
-                        {ofic.grupos.map((g) => {
-                          const daCol = lista.filter((x) => x.grupo === g.id);
-                          const n = ofN[g.id] || 15;
-                          return (
-                            <section key={g.id} className="col">
-                              <h2 className="colh"><Flag code={g.pais} lang={lang} /> {g.nome}</h2>
-                              {daCol.length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
-                                <ul className="clist" aria-live="polite">
-                                  {daCol.slice(0, n).map((x) => (
-                                    <li key={x.id} className={`citem oitem ${now - (x.vistoEm || 0) < 3000 ? "fresh" : ""}`}>
-                                      <div className="cmeta">
-                                        <span className="src">{x.org}</span>
-                                        <span className={`chip otipo ${x.tipo}`}>{x.tipo === "comunicado" ? ui.ofComunicado : ui.ofNoticia}</span>
-                                        {x.pdf && <span className="chip opdf" translate="no">PDF</span>}
-                                        <span className="muted ctime" translate="no" title={new Date(x.ts).toLocaleString(ui.locale)}>{quando(x)}</span>
-                                      </div>
-                                      <h3 className="ctitle">
-                                        <a href={x.url} target="_blank" rel="noreferrer" title={x.titulo_pt ? x.titulo : undefined}>{x.titulo_pt || x.titulo}</a>
-                                      </h3>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              {daCol.length > n && (
-                                <button className="textbtn vmais omais" onClick={() => setOfN((o) => ({ ...o, [g.id]: n + 15 }))}>{(VTXT[lang] || VTXT.pt).more} ({daCol.length - n})</button>
-                              )}
-                            </section>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })()}
               </>
+            ) : section === "ligas" ? (
+              ofic.grupos.length === 0 ? <p className="empty">{ui.waiting}</p> : (() => {
+                const q = semAcentos(query).trim();
+                const lista = ofic.itens.filter((x) => (ofTipo === "todos" || x.tipo === ofTipo) && (!q || semAcentos(`${x.org} ${x.titulo} ${x.titulo_pt || ""}`).includes(q)));
+                const quando = (x) => (x.soDia ? nomeDia(diaLisboa(x.ts), lang) : agoText(x.ts, now, ui));
+                return (
+                  <section className="ofic" aria-label={ui.oficiais}>
+                    <div className="livehead">
+                      <div className="seg lvls" role="group" aria-label={ui.oficiais}>
+                        {[["todos", ui.ofTodos], ["noticia", ui.ofNoticias], ["comunicado", ui.ofComunicados]].map(([k, t]) => (
+                          <button key={k} aria-pressed={ofTipo === k} onClick={() => setOfTipo(k)}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="cols ocols">
+                      {ofic.grupos.map((g) => {
+                        const daCol = lista.filter((x) => x.grupo === g.id);
+                        const n = ofN[g.id] || 15;
+                        return (
+                          <section key={g.id} className="col">
+                            <h2 className="colh"><Flag code={g.pais} lang={lang} /> {g.nome}</h2>
+                            {daCol.length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
+                              <ul className="clist" aria-live="polite">
+                                {daCol.slice(0, n).map((x) => (
+                                  <li key={x.id} className={`citem oitem ${now - (x.vistoEm || 0) < 3000 ? "fresh" : ""}`}>
+                                    <div className="cmeta">
+                                      <span className="src">{x.org}</span>
+                                      <span className={`chip otipo ${x.tipo}`}>{x.tipo === "comunicado" ? ui.ofComunicado : ui.ofNoticia}</span>
+                                      {x.pdf && <span className="chip opdf" translate="no">PDF</span>}
+                                      <span className="muted ctime" translate="no" title={new Date(x.ts).toLocaleString(ui.locale)}>{quando(x)}</span>
+                                    </div>
+                                    <h3 className="ctitle">
+                                      <a href={x.url} target="_blank" rel="noreferrer" title={x.titulo_pt ? x.titulo : undefined}>{x.titulo_pt || x.titulo}</a>
+                                    </h3>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {daCol.length > n && (
+                              <button className="textbtn vmais omais" onClick={() => setOfN((o) => ({ ...o, [g.id]: n + 15 }))}>{(VTXT[lang] || VTXT.pt).more} ({daCol.length - n})</button>
+                            )}
+                          </section>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })()
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
-            ) : section === "historias" ? (
-              <StoriesView stories={stories} items={items} lang={lang} ui={ui} now={now} theme={theme} leagueName={leagueName} leaguePais={(k) => leagueByKey[k]?.pais} isFavStory={isFav} onFavStory={toggleFavStory} onOpen={(id) => { setSection("destaque"); setQuery(""); setTimeout(() => document.getElementById(`n-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} />
             ) : section === "resultados" && resVista === "portugal" ? (
               <>
               <Portugal API={API} now={now} />
@@ -2727,7 +2623,7 @@ export default function App() {
               )}
               <div className="mobevents">{eventsPanel}</div>
               </>
-            ) : visible.length === 0 && !(section === "favoritos" && favStories.length > 0) ? (
+            ) : visible.length === 0 ? (
               <p className="empty">{section === "favoritos" ? ui.noFavs : items.length === 0 ? ui.waiting : ui.empty}</p>
             ) : (
               <ol className="feed" aria-live="polite">

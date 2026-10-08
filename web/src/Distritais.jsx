@@ -1,6 +1,7 @@
-// Secção «Distritais»: os posts mais recentes dos clubes de cada associação de futebol, uma coluna por associação,
-// à maneira da «Ronda pela atualidade». Os dados vêm de /api/distritais; os posts novos chegam pelo evento
-// «distrital» (o App passa-os como evento da janela «distrital»). As imagens passam pelo servidor.
+// Secção «Distritais»: uma coluna por associação de futebol, à maneira da «Ronda pela atualidade», com as notícias e
+// os comunicados da própria associação, a imprensa que fala dela e os posts mais recentes dos clubes (Instagram e
+// Facebook). Os dados vêm de /api/distritais; o que é novo chega pelos eventos «distrital» (posts) e «oficial»
+// (notícias, que o App passa como evento da janela «distrital-noticia»). As imagens passam pelo servidor.
 import { useEffect, useMemo, useState } from "react";
 
 // o mesmo post no Instagram e no Facebook do clube (a mesma regra do servidor, em server/pt/distritais.js)
@@ -21,6 +22,22 @@ function quando(ts, agora) {
   if (d < 24 * 3600e3) return `há ${Math.floor(d / 3600e3)} h`;
   if (d < 48 * 3600e3) return "ontem";
   return new Date(ts).toLocaleDateString("pt-PT", { day: "numeric", month: "short", timeZone: "Europe/Lisbon" });
+}
+
+const TIPO = { noticia: "Notícia", comunicado: "Comunicado", imprensa: "Imprensa" };
+// notícia ou comunicado da associação, ou notícia da imprensa sobre ela
+function Noticia({ x, agora }) {
+  return (
+    <li className={`citem dnot ${agora - (x.vistoEm || 0) < 4000 ? "fresh" : ""}`}>
+      <div className="cmeta">
+        <span className="src">{x.tipo === "imprensa" ? x.meio || "Imprensa" : x.org}</span>
+        <span className={`chip otipo ${x.tipo}`}>{TIPO[x.tipo] || "Notícia"}</span>
+        {x.pdf && <span className="chip opdf" translate="no">PDF</span>}
+        <span className="muted ctime" title={new Date(x.ts).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" })}>{quando(x.ts, agora)}</span>
+      </div>
+      <h3 className="ctitle"><a href={x.url} target="_blank" rel="noreferrer">{x.titulo}</a></h3>
+    </li>
+  );
 }
 
 function Post({ p, API, agora }) {
@@ -49,10 +66,13 @@ function Post({ p, API, agora }) {
   );
 }
 
+const VER = [["tudo", "Tudo"], ["associacao", "Associação"], ["imprensa", "Imprensa"], ["clubes", "Clubes"]];
+
 export default function Distritais({ API = "", now, query = "" }) {
   const [d, setD] = useState(null);
   const [erro, setErro] = useState(null);
   const [n, setN] = useState({});
+  const [ver, setVer] = useState("tudo");
   const agora = now || Date.now();
   const ler = () => fetch(`${API}/api/distritais`).then((r) => r.json()).then((x) => { setD(x); setErro(null); }).catch(() => setErro("Sem ligação ao servidor"));
   // enquanto ainda há clubes por ler, relê de 20 em 20 s (as colunas vão enchendo); depois, de 2 em 2 min
@@ -72,16 +92,34 @@ export default function Distritais({ API = "", now, query = "" }) {
         return { ...x, posts: { ...x.posts, [p.org]: [{ ...p, vistoEm: Date.now() }, ...lista].slice(0, 80) } };
       });
     };
+    // notícia ou comunicado novo da associação (ou da imprensa): entra no topo da coluna
+    const onNoticia = (e) => {
+      const x = e.detail;
+      if (!x?.assoc) return;
+      setD((y) => {
+        if (!y) return y;
+        const antes = y.noticias?.[x.assoc] || [];
+        const ja = antes.find((z) => z.id === x.id);
+        const nova = ja ? antes.map((z) => (z.id === x.id ? { ...z, ...x, vistoEm: z.vistoEm } : z)) : [{ ...x, vistoEm: x.corrigido ? 0 : Date.now() }, ...antes];
+        return { ...y, noticias: { ...(y.noticias || {}), [x.assoc]: nova.sort((a, b) => b.ts - a.ts).slice(0, 80) } };
+      });
+    };
     window.addEventListener("distrital", on);
-    return () => window.removeEventListener("distrital", on);
+    window.addEventListener("distrital-noticia", onNoticia);
+    return () => { window.removeEventListener("distrital", on); window.removeEventListener("distrital-noticia", onNoticia); };
   }, []);
 
   const q = semAcentos(query.trim());
-  const colunas = useMemo(() => (d?.orgs || []).map((o) => ({
-    ...o, posts: (d.posts[o.key] || []).filter((p) => !q || semAcentos(`${p.clube} ${p.legenda || ""}`).includes(q)),
-  })), [d, q]);
+  // cada coluna: notícias da associação, imprensa e posts dos clubes, do mais recente para o mais antigo
+  const colunas = useMemo(() => (d?.orgs || []).map((o) => {
+    const posts = ver === "tudo" || ver === "clubes" ? (d.posts?.[o.key] || []).filter((p) => !q || semAcentos(`${p.clube} ${p.legenda || ""}`).includes(q)).map((p) => ({ k: `p:${p.id}`, ts: p.ts, p })) : [];
+    const noticias = ver === "clubes" ? [] : (d.noticias?.[o.key] || [])
+      .filter((x) => (ver === "tudo" || (ver === "imprensa" ? x.tipo === "imprensa" : x.tipo !== "imprensa")) && (!q || semAcentos(`${x.org} ${x.meio || ""} ${x.titulo}`).includes(q)))
+      .map((x) => ({ k: `n:${x.id}`, ts: x.ts, x }));
+    return { ...o, entradas: [...noticias, ...posts].sort((a, b) => b.ts - a.ts) };
+  }), [d, q, ver]);
 
-  if (!d) return <p className="empty">{erro || "A carregar os posts dos clubes…"}</p>;
+  if (!d) return <p className="empty">{erro || "A carregar as associações e os clubes…"}</p>;
   const e = d.estado || {};
   const vias = e.vias || {};
   const hora = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
@@ -95,11 +133,17 @@ export default function Distritais({ API = "", now, query = "" }) {
   // nada está a chegar: o Instagram recusa, os visualizadores falham, o Facebook também (ou não há) e não há retransmissor
   const bloqueado = igPausa && anonFalha && !relayVivo && (!fb || fbPausa || fbFalha);
   const total = Object.values(d.posts || {}).reduce((t, l) => t + l.length, 0);
+  const totalNoticias = Object.values(d.noticias || {}).reduce((t, l) => t + l.length, 0);
   const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
   return (
     <div className="dist">
+      <div className="livehead dhead">
+        <div className="seg lvls" role="group" aria-label="O que mostrar">
+          {VER.map(([k, t]) => <button key={k} aria-pressed={ver === k} onClick={() => setVer(k)}>{t}</button>)}
+        </div>
+      </div>
       <p className="muted dnota">
-        Os posts mais recentes do Instagram e do Facebook dos clubes de cada associação.{" "}
+        Notícias e comunicados de cada associação, a imprensa que fala dela e os posts do Instagram e do Facebook dos clubes ({totalNoticias} notícias e comunicados).{" "}
         {porLer ? `A ler as páginas dos clubes: ${e.lidosTotal || 0} de ${e.perfis || e.clubes} já lidas, ${total} posts.` : `${e.perfis || e.clubes} páginas de clubes, relidas ao longo do dia.`}
       </p>
       <ul className="muted dvias">
@@ -112,7 +156,7 @@ export default function Distritais({ API = "", now, query = "" }) {
       </ul>
       {bloqueado && (
         <p className="ptwarn dnota">
-          Neste momento nenhuma das vias está a trazer posts.{" "}
+          Neste momento nenhuma das vias está a trazer posts dos clubes (as notícias das associações e da imprensa continuam a chegar).{" "}
           {ig.comSessao
             ? "O Instagram está a limitar este servidor mesmo com a sessão: costuma acontecer com servidores de alojamento e passa ao fim de algum tempo, mas a forma mais fiável é o retransmissor (npm run instagram-relay) num computador de casa."
             : "Junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou deixa o retransmissor (npm run instagram-relay) a correr num computador de casa."}
@@ -123,13 +167,13 @@ export default function Distritais({ API = "", now, query = "" }) {
           const k = n[c.key] || 12;
           return (
             <section key={c.key} className="col">
-              <h2 className="colh">{c.nome} <span className="muted small">{c.clubes} clubes</span></h2>
-              {c.posts.length === 0 ? <p className="cempty">{q ? "Nada com esta pesquisa." : "Ainda sem posts lidos desta associação."}</p> : (
+              <h2 className="colh">{c.nome} {c.clubes > 0 && <span className="muted small">{c.clubes} clubes</span>}</h2>
+              {c.entradas.length === 0 ? <p className="cempty">{q ? "Nada com esta pesquisa." : "Ainda sem notícias nem posts desta associação."}</p> : (
                 <ul className="clist" aria-live="polite">
-                  {c.posts.slice(0, k).map((p) => <Post key={p.id} p={p} API={API} agora={agora} />)}
+                  {c.entradas.slice(0, k).map((y) => (y.p ? <Post key={y.k} p={y.p} API={API} agora={agora} /> : <Noticia key={y.k} x={y.x} agora={agora} />))}
                 </ul>
               )}
-              {c.posts.length > k && <button className="textbtn vmais" onClick={() => setN((x) => ({ ...x, [c.key]: k + 12 }))}>Ver mais ({c.posts.length - k})</button>}
+              {c.entradas.length > k && <button className="textbtn vmais" onClick={() => setN((x) => ({ ...x, [c.key]: k + 12 }))}>Ver mais ({c.entradas.length - k})</button>}
             </section>
           );
         })}
@@ -140,6 +184,9 @@ export default function Distritais({ API = "", now, query = "" }) {
 
 export const DIST_CSS = `
 .apito .dist .dnota{font-size:12.5px;margin:0 0 12px}
+.apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
+.apito .dnot .ctitle a{color:inherit;text-decoration:none} .apito .dnot .ctitle a:hover{text-decoration:underline}
+.apito .otipo.imprensa{background:var(--raise)}
 .apito .dist .dvias{font-size:12px;margin:-6px 0 12px;padding-left:18px}
 .apito .dpost .drede{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;line-height:16px;color:#fff;flex:none}
 .apito .dpost .drede.ig{background:#C13584} .apito .dpost .drede.fb{background:#1877F2}

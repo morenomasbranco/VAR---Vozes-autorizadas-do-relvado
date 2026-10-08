@@ -106,6 +106,8 @@ As fontes aparecem nas definições do site agrupadas pelo país de origem (o ca
 
 ## Possíveis histórias
 
+**A secção saiu do site.** O servidor deixou de fazer as pistas (e de gastar pedidos ao Gemini com elas); com `HISTORIAS=1` volta a fazê-las e ficam em `/api/stories`. O que está abaixo descreve como funcionam.
+
 A secção junta duas origens, que se filtram no topo:
 
 - **Dos jogos**: sinais nos resultados e nas classificações — surpresas, reviravoltas, goleadas, expulsões, séries de vitórias ou de derrotas, mudanças de líder, entradas na zona de descida.
@@ -154,7 +156,9 @@ Ao contrário do resto do site, isto tem custo: cada dia é um pedido ao Claude 
 
 ## Ligas e Federações (notícias e comunicados oficiais)
 
-No Feed, por baixo dos Destaques, vem a «Ronda pela atualidade» (as colunas de notícias) e, a seguir, a secção «Ligas e Federações», com as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF, Liga Portugal e as 22 associações distritais. Estão no `oficiais.json`, uma coluna por país (a de Portugal chama-se «Futebol profissional»; as associações têm a sua), com um filtro Todos · Notícias · Comunicados.
+A secção **Ligas e Federações** (separador próprio, entre o Feed e os Resultados) tem as notícias e os comunicados oficiais das ligas e federações: Premier League e FA, LALIGA e RFEF, Ligue 1 e FFF, Bundesliga e DFB, Lega Serie A e FIGC, CBF, FIFA, UEFA, CONMEBOL, FPF e Liga Portugal. Estão no `oficiais.json`, uma coluna por país (a primeira, «Portugal», é a da FPF e da Liga), com um filtro Todos · Notícias · Comunicados.
+
+As 22 associações distritais (grupo `af` do `oficiais.json`) não aparecem aqui: as notícias e os comunicados de cada uma vão para a coluna dela na secção **Distritais**. As notícias que a FPF publica sobre uma associação («AF Braga…», «A.F. Lisboa…», «Associação de Futebol do Porto…», «distrital de Leiria…») também saem da coluna «Portugal» e vão para a associação certa (`associacaoDoTexto`, em `server/pt/catalogo.js`). As entradas gravadas antes desta mudança são arrumadas quando o servidor arranca.
 
 Cada fonte é lida a cada 60 segundos (`OFICIAIS_SEGUNDOS`) pela via mais direta que o site oferece: o feed RSS (Bundesliga, CONMEBOL, AF Algarve, AF Lisboa), o sitemap de notícias (Ligue 1, DFB, UEFA), a API pública que a própria página usa (Premier League, FIFA) ou a página da lista (as restantes). As notícias da FPF são numeradas e o servidor vai experimentando o número seguinte. Se um site deixar de responder, ou for montado no browser com JavaScript, a fonte passa para o Google News (com alguns minutos de atraso) e o servidor volta a tentar o site de meia em meia hora. Os títulos que não estão em português são traduzidos pelo Google Tradutor; ao passar o rato fica o título original. O estado de cada fonte está em `/api/oficiais/estado`.
 
@@ -166,11 +170,17 @@ A FPF, o Sofascore, o Instagram e o Facebook bloqueiam muitas vezes os servidore
 
 ## Destaques sem vídeos pretos
 
-Nos Destaques do Feed ficam de fora os vídeos «todos pretos» e os que só têm o nome do ficheiro como título («video-2026-10-07T12-59-09», «20261007_055402[1]»). O servidor mede o brilho da miniatura com o ffmpeg; se estiver escura, experimenta outros instantes do vídeo (2, 5, 10 e 20 s) e o primeiro com imagem passa a ser a miniatura; se forem todos escuros, o vídeo fica marcado e sai dos Destaques (`VIDEOS_ESCURO_MEDIA`, brilho médio máximo de 0 a 255, 16 por omissão). O site faz a mesma verificação às miniaturas que mostra.
+Nos Destaques do Feed ficam de fora os vídeos «todos pretos» e os que só têm o nome do ficheiro como título («video-2026-10-07T12-59-09», «20261007_055402[1]»). O servidor mede o brilho da miniatura com o ffmpeg; se estiver escura, experimenta outros instantes do vídeo (2, 5, 10 e 20 s) e o primeiro com imagem passa a ser a miniatura; se forem todos escuros, o vídeo fica marcado e sai dos Destaques (`VIDEOS_ESCURO_MEDIA`, brilho médio máximo de 0 a 255, 16 por omissão). O site faz a mesma verificação às miniaturas que mostra. A faixa de vídeos do Feed não mostra a barra de deslocamento por baixo: anda sozinha e com as setas.
 
 ## Distritais
 
-A secção **Distritais** (ao lado de «Portugueses pelo mundo») mostra os posts mais recentes do Instagram dos clubes de cada associação de futebol, uma coluna por associação, à maneira da «Ronda pela atualidade». Os clubes e as contas são os do `pt/clubes.json`.
+A secção **Distritais** (ao lado de «Portugueses pelo mundo») tem uma coluna por associação de futebol (as 22), à maneira da «Ronda pela atualidade», com tudo junto e do mais recente para o mais antigo, e um filtro Tudo · Associação · Imprensa · Clubes:
+
+- **as notícias e os comunicados da própria associação** (os sites das associações, lidos como as outras fontes do `oficiais.json`; se um site não responder, passa a ser lido pelo Google News com `site:`);
+- **a imprensa que fala da associação**: uma pesquisa do Google News por associação («AF Braga», «Associação de Futebol de Braga», «distrital de Braga»), de 20 em 20 minutos, com o nome do jornal (`OFICIAIS_IMPRENSA=0` desliga);
+- **os posts mais recentes do Instagram e do Facebook dos clubes** (os do `pt/clubes.json`).
+
+As notícias e a imprensa chegam sempre, porque não dependem do Instagram nem do Facebook; os posts dos clubes dependem de estas redes não bloquearem o servidor (ver abaixo).
 
 O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o servidor percorre os perfis devagar, um de cada vez (`server/pt/distritais.js`):
 
@@ -194,13 +204,21 @@ Há quatro vistas, com filtros de modalidade (futebol, futsal), nível (nacionai
 - **Competição**: a jornada da semana de uma competição e série, com setas para as anteriores e as seguintes, e a classificação ao lado (ao vivo quando há jogos). A jornada atual muda sozinha de semana para semana (segunda a domingo, hora de Lisboa): é a que tem jogos esta semana; numa semana de pausa, a próxima.
 - **Jornadas da semana**: a jornada atual (ou a próxima) de todas as competições ao mesmo tempo, com os jogos, as horas e os resultados que já houver.
 - **Jogos de hoje**: todos os jogos do dia, agrupados por competição, os que estão a decorrer primeiro.
-- **Enquanto o servidor lê as competições**, a vista mostra o progresso (associações e competições já lidas, páginas na fila) e, se a FPF não estiver a responder ao servidor, o erro. As competições aparecem assim que são encontradas, mesmo antes de estarem lidas.
+- **Enquanto o servidor lê as competições**, a vista mostra o progresso (organizadores pesquisados, competições já lidas) e o que estiver a falhar (pesquisa sem chave ou em pausa, ESPN sem resposta). As competições aparecem assim que são encontradas.
 - **Guardar os dados entre arranques**: tudo o que foi lido fica na pasta `data/`. Se o alojamento apagar essa pasta a cada publicação (no Northflank, quando o serviço não tem um volume), a leitura recomeça do zero. Para isso não acontecer, junta ao serviço um volume montado em `/app/data`, se o plano o permitir.
 - **Todas as tabelas**: as classificações de todos os campeonatos, nacionais e distritais, agrupadas por organizador (FPF, Liga Portugal e cada associação, com atalhos para saltar para cada uma) e com pesquisa por equipa. Uma série que ainda não tem resultados nem tabela oficial aparece com as equipas do calendário a zero.
 
 Os golos, intervalos e finais destes jogos entram nos Acontecimentos (o feed da secção Resultados) e no quadro de resultados, com um filtro por organizador no botão «Escolher ligas» («Portugal · AF Porto», etc.).
 
 ### De onde vêm os dados
+
+O resultados.fpf.pt e o Sofascore bloqueiam os servidores de alojamento e não há nenhuma API de futebol que cubra as distritais, por isso a vista Portugal deixou de depender da FPF (`server/pt/web.js`):
+
+- **ESPN** (a mesma dos resultados em direto, sem chave e sem bloqueios): o calendário completo da época, os resultados e a classificação da Liga Portugal Betclic e da Taça de Portugal, relidos de 30 em 30 minutos (`PT_ESPN_MINUTOS`); durante os jogos, o resultado e o minuto chegam pelos resultados em direto. A ESPN não diz a jornada de cada jogo: o servidor deduz as jornadas do calendário (cada equipa joga uma vez por jornada; um jogo adiado volta à jornada a que pertence).
+- **Pesquisa na web pelo Gemini**, com a pesquisa Google e a mesma `GEMINI_API_KEY` gratuita das notícias: um pedido por organizador — Liga Portugal 2, Liga 3, Campeonato de Portugal, futebol feminino, futsal e cada uma das 22 associações — com os resultados da última jornada, os jogos da próxima (datas e horas) e a classificação, tal como estão no zerozero, nos sites das associações, na imprensa e nas páginas dos clubes. Quem vai buscar as páginas é o Google, por isso os bloqueios aos servidores de alojamento não contam. Cada organizador é revisto de 3 em 3 horas nas tardes de jogos (sexta à noite, sábado e domingo), de hora e meia em hora e meia com jogos a decorrer, e de 12 em 12 horas no resto da semana; a classificação, uma vez por dia. Há um limite de pedidos por dia (`PT_PESQUISA_DIA`, 200) e um intervalo entre pedidos (`PT_PESQUISA_SEGUNDOS`, 30 s). Os resultados que vêm daqui têm a etiqueta «web», com a ligação para a página onde foram encontrados, e as classificações dizem a hora da pesquisa. O modelo nunca deve inventar (as instruções obrigam a dados vistos numa fonte, e um «final» sem resultado ou no futuro é recusado), mas é uma pesquisa automática: um resultado errado corrige-se com «Enviar resultado» ou pela API da redação.
+- Quando a mesma competição chega por duas fontes, fica à vista uma só: a lida há menos de três dias, por esta ordem de preferência — ESPN, Sofascore, FPF, pesquisa na web.
+
+A FPF só volta a ser lida com a ponte do Cloudflare (`PONTE_URL`) ou com `PT_FPF=1`:
 
 - **resultados.fpf.pt**: competições de cada associação (os endereços `GetCompetitionsByAssociation?associationId=…&seasonId=106`) e da FPF, séries, jornadas, datas e horas, resultados oficiais e classificações oficiais. O servidor lê tudo uma vez por dia, um pedido de cada vez (1,2 s entre pedidos, `FPF_INTERVALO_MS`). Na primeira vez pode demorar uma a duas horas a ter todas as jornadas de todas as competições; a jornada da semana de cada uma chega primeiro. Durante os jogos, a jornada é relida de 4 em 4 minutos (`FPF_DIRETO_SEGUNDOS`) para apanhar o resultado final assim que a associação o publica; nos três dias seguintes, de 2 em 2 horas.
 - **Sofascore**: as competições da Liga Portugal (que não estão no resultados.fpf.pt), e o minuto ao segundo e os marcadores dos jogos nacionais que o Sofascore acompanha.
@@ -265,6 +283,10 @@ As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incl
 | `IG_POSTS_SEGUNDOS`, `IG_POSTS_VIVO_SEGUNDOS`, `IG_POSTS_POR_CICLO`, `POST_ATRASO_SEGUNDOS` | posts dos clubes durante o jogo: de quanto em quanto tempo (300 s; 120 s nos clubes que atualizam por post), quantos por volta (10) e o atraso de um post para estimar o minuto (180 s) |
 | `STORIES_GEMINI_POR_HORA` | imagens que podem ir ao Gemini por hora (60; 0 desliga) |
 | `STORY_ATRASO_SEGUNDOS` | atraso médio entre o lance e o story (60) |
+| `PT_PESQUISA=0`, `PT_PESQUISA_DIA`, `PT_PESQUISA_SEGUNDOS`, `PT_PESQUISA_MODEL`, `PT_PESQUISA_ALVOS` | pesquisa na web dos campeonatos: desligar, pedidos por dia (200), intervalo entre pedidos (30 s), modelo do Gemini (o `GEMINI_MODEL`) e só alguns organizadores (por exemplo `af-braga,af-porto,cp`) |
+| `PT_ESPN_MINUTOS`, `PT_ESPN_LIGAS` | releitura da Liga e da Taça pela ESPN (30 min) e a lista de competições da ESPN (JSON com `slug`, `nome`, `org`, `tipo`) |
+| `PT_FPF=1` / `PT_FPF=0` | ler o resultados.fpf.pt mesmo sem ponte / nunca ler (por omissão, só com `PONTE_URL`) |
+| `OFICIAIS_IMPRENSA=0` | sem a pesquisa da imprensa sobre cada associação na secção Distritais |
 | `FPF_EPOCA` | época no resultados.fpf.pt (106 = 2026/27) |
 | `FPF_INTERVALO_MS`, `FPF_DIRETO_SEGUNDOS`, `FPF_ESTRUTURA_HORAS` | ritmo das leituras da FPF (1200 ms, 240 s, 20 h) |
 | `PT_RESULTADOS=0` | desliga tudo isto |

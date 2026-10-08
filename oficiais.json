@@ -1,9 +1,9 @@
 {
- "_nota": "Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed). leitor: rss (feed), sitemap (sitemap de notícias), premierleague e fifa (API pública do site), html (lê a página e apanha as ligações que batem certo com «link»; «segue» indica a página verdadeira quando a dada só tem uma ligação para ela), sequencial (vai experimentando os números seguintes das notícias). «alternativas»: outras páginas da mesma lista, experimentadas se a principal não trouxer nada. «google»: pesquisa do Google News (ou lista de pesquisas, por ordem) usada se o site não responder; leitor google: a fonte é lida só pelo Google News. «tz»: fuso das horas escritas no site (por omissão, o do grupo). grupo: coluna (pt, af, en, es, fr, de, it, br, int). tipo: noticia ou comunicado.",
+ "_nota": "Notícias e comunicados oficiais das ligas e federações (secção «Ligas e Federações»; as do grupo af vão para a secção Distritais, na coluna de cada associação). leitor: rss (feed), sitemap (sitemap de notícias), premierleague e fifa (API pública do site), html (lê a página e apanha as ligações que batem certo com «link»; «segue» indica a página verdadeira quando a dada só tem uma ligação para ela), sequencial (vai experimentando os números seguintes das notícias). «alternativas»: outras páginas da mesma lista, experimentadas se a principal não trouxer nada. «google»: pesquisa do Google News (ou lista de pesquisas, por ordem) usada se o site não responder; leitor google: a fonte é lida só pelo Google News. «tz»: fuso das horas escritas no site (por omissão, o do grupo). grupo: coluna (pt, af, en, es, fr, de, it, br, int). tipo: noticia ou comunicado.",
  "grupos": [
   {
    "id": "pt",
-   "nome": "Futebol profissional",
+   "nome": "Portugal",
    "pais": "pt"
   },
   {

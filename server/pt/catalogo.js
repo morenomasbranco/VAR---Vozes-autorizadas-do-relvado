@@ -30,6 +30,15 @@ export const ASSOCIACOES = [
   { id: 236, key: "af-vila-real", nome: "AF Vila Real", longo: "Associação de Futebol de Vila Real" },
   { id: 237, key: "af-viseu", nome: "AF Viseu", longo: "Associação de Futebol de Viseu" },
 ];
+// a associação de que um texto fala: «AF Braga», «A.F. Lisboa», «AFPorto», «Associação de Futebol do Algarve»,
+// «distrital de Leiria». Serve para tirar as notícias das associações das colunas da FPF e da Liga.
+const ALCUNHAS = { "af-angra": ["angra"], "af-viana": ["viana"], "af-ponta-delgada": ["p\\.? ?delgada"] };
+const LUGARES = ASSOCIACOES.map((a) => [a.key, [norm(a.nome.replace(/^AF /, "")).replace(/ /g, "\\s+"), ...(ALCUNHAS[a.key] || [])].join("|")]);
+const RE_ASSOC = LUGARES.map(([key, l]) => [key, new RegExp(`(?:^|[^a-z0-9])(?:a\\.?\\s?f\\.?\\s?(?:(?:de|do|da)\\s+)?|associacao\\s+de\\s+futebol\\s+(?:de|do|da)\\s+|distrita(?:l|is)\\s+(?:de|do|da)\\s+)(?:${l})(?![a-z])`)]);
+export function associacaoDoTexto(t) {
+  const s = norm(t);
+  return RE_ASSOC.find(([, re]) => re.test(s))?.[0] || null;
+}
 export const FPF = { key: "fpf", nome: "FPF", longo: "Federação Portuguesa de Futebol" };
 export const LIGA = { key: "liga", nome: "Liga Portugal", longo: "Liga Portugal" };
 export const ORGS = [LIGA, FPF, ...ASSOCIACOES];
