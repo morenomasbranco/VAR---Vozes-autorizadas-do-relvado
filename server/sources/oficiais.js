@@ -8,15 +8,19 @@
 // Se uma fonte deixar de responder, passa a ser lida pelo Google News (campo «google»), e volta a tentar o
 // site de meia em meia hora. Os títulos que não estão em português são traduzidos pelo Google Tradutor.
 // Tudo fica gravado em data/oficiais.json; o site recebe cada entrada nova no mesmo segundo (evento «oficial»).
+// As notícias e os comunicados das associações de futebol (grupo «af», e as que a FPF publica sobre uma associação)
+// não entram na secção «Ligas e Federações»: vão para a coluna da associação na secção «Distritais», com as notícias
+// da imprensa sobre cada associação (pesquisa do Google News, uma por associação).
 import fs from "node:fs";
 import { sleep, hash, norm, lerTexto, entidades, conserta } from "../util.js";
 import { readFeed } from "./rss.js";
 import { traduzirGoogle } from "../gtradutor.js";
+import { ASSOCIACOES, orgPorNome, associacaoDoTexto } from "../pt/catalogo.js";
 
 const FILE = new URL("../../data/oficiais.json", import.meta.url);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const RITMO = Math.max(20, Number(process.env.OFICIAIS_SEGUNDOS) || 60) * 1000;
-const MAX = Number(process.env.OFICIAIS_MAX) || 2500;
+const MAX = Number(process.env.OFICIAIS_MAX) || 5000; // as associações e a imprensa de cada uma também contam
 const IDADE_MAX = (Number(process.env.OFICIAIS_DIAS) || 30) * 86400e3;
 const PRIMEIRA_DIAS = 21; // na primeira leitura de uma fonte entram as entradas das últimas três semanas
 const NOVA_DIAS = 7; // depois disso, uma entrada «nova» com mais de uma semana é uma antiga que voltou à lista
@@ -402,9 +406,11 @@ const LEITORES = {
     for (const q of [].concat(s.google || [])) {
       try {
         const feed = await readFeed(`${GOOGLE_BASE}?q=${encodeURIComponent(`${q} when:7d`)}&${loc}`, {});
-        const lista = (feed?.items || []).slice(0, 30).map((it) => ({
-          titulo: limpa(it.title).replace(/\s+-\s+[^-]+$/, ""), url: it.link, ts: Date.parse(it.isoDate || it.pubDate || "") || null, dia: false,
-        }));
+        const lista = (feed?.items || []).slice(0, 30).map((it) => {
+          const t = limpa(it.title);
+          const meio = t.match(/\s+-\s+([^-]+)$/)?.[1]?.trim() || undefined;
+          return { titulo: t.replace(/\s+-\s+[^-]+$/, ""), url: it.link, ts: Date.parse(it.isoDate || it.pubDate || "") || null, dia: false, meio };
+        });
         if (lista.length) return lista;
       } catch (e) { erro = e; }
     }
@@ -422,8 +428,38 @@ const canon = (u) => {
   } catch { return String(u || ""); }
 };
 
+// a associação de uma fonte do grupo «af» (pelo nome da organização: «AF Viana do Castelo» → af-viana)
+const assocDe = (s) => s.assoc || (s.grupo === "af" ? orgPorNome(s.org)?.key || associacaoDoTexto(s.org) : null);
+// imprensa sobre cada associação: uma pesquisa do Google News por associação, de 20 em 20 minutos
+export function fontesImprensa() {
+  return ASSOCIACOES.map((a) => {
+    const lugar = a.nome.replace(/^AF /, "");
+    return {
+      id: `imprensa-${a.key}`, org: a.nome, assoc: a.key, grupo: "af", tipo: "imprensa", lang: "pt", leitor: "google", url: "https://news.google.com/", minutos: 20,
+      google: [`"${a.nome}" OR "${a.longo}" OR "distrital de ${lugar}" futebol`, `"${a.nome}" futebol`],
+    };
+  });
+}
+// o grupo e a associação de uma entrada: uma notícia da FPF ou da Liga que fala de uma associação vai para a
+// coluna dessa associação, nas Distritais, e deixa a coluna «Portugal» só com o futebol nacional
+export function arrumar(x, s = null) {
+  const daFonte = s ? assocDe(s) : null;
+  if (x.grupo === "af") { x.assoc ||= daFonte || associacaoDoTexto(`${x.org} ${x.titulo}`) || undefined; return x; }
+  if (x.grupo === "pt") {
+    const a = associacaoDoTexto(x.titulo);
+    if (a) { x.grupo = "af"; x.assoc = a; }
+  }
+  return x;
+}
+
 export function createOficiais({ broadcast = () => {}, log = () => {}, config = {} } = {}) {
-  const FONTES = (config.fontes || []).filter((s) => s.id && s.url && LEITORES[s.leitor]);
+  const FONTES = [...(config.fontes || []), ...(process.env.OFICIAIS_IMPRENSA === "0" ? [] : fontesImprensa())]
+    .filter((s) => s.id && s.url && LEITORES[s.leitor])
+    // as páginas das associações, se deixarem de responder, passam a ser lidas pelo Google News (site:)
+    .map((s) => {
+      if (s.grupo !== "af" || s.google || s.leitor === "google") return s;
+      try { return { ...s, google: `site:${new URL(s.url).hostname.replace(/^www\./, "")}` }; } catch { return s; }
+    });
   const GRUPOS = config.grupos || [];
   let itens = [];
   let vistos = {}; // fonte → endereços já vistos (também os que ficaram de fora, para não voltarem como novos)
@@ -431,6 +467,9 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
     const d = JSON.parse(fs.readFileSync(FILE, "utf8"));
     itens = (d.itens || []).filter((x) => Date.now() - x.ts < IDADE_MAX);
     vistos = d.vistos || {};
+    // as entradas gravadas antes de as associações irem para as Distritais: grupo e associação revistos
+    const porId = new Map((config.fontes || []).map((s) => [s.id, s]));
+    for (const x of itens) arrumar(x, porId.get(x.fonte));
   } catch { /* primeira vez */ }
   const estado = Object.fromEntries(FONTES.map((s) => [s.id, { modo: "site", ok: null, erro: null, ultimo: null, lidos: null, novos: 0 }]));
   let sujo = false;
@@ -514,10 +553,10 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       }
       if (Date.now() - ts > (primeira ? PRIMEIRA_DIAS : NOVA_DIAS) * 86400e3) continue;
       if (porUrl.has(k) || mesmoTitulo(s.org, x.titulo, ts)) continue;
-      const item = {
+      const item = arrumar({
         id: `${s.id}:${hash(k)}`, fonte: s.id, org: s.org, grupo: s.grupo, tipo: s.tipo, lang: s.lang,
-        titulo: x.titulo, url: x.url, ts, soDia: dia || undefined, pdf: ePdf(x.url) || undefined, via: via === "google" ? "Google News" : undefined, v: 2,
-      };
+        titulo: x.titulo, url: x.url, ts, soDia: dia || undefined, pdf: ePdf(x.url) || undefined, via: via === "google" ? "Google News" : undefined, meio: x.meio, v: 2,
+      }, s);
       porUrl.add(k);
       itens.push(item);
       novos.push(item);
@@ -543,7 +582,7 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
     let google = false;
     let voltaAoSite = 0;
     for (;;) {
-      let espera = RITMO;
+      let espera = s.minutos ? s.minutos * 60e3 : RITMO;
       try {
         if (google && Date.now() > voltaAoSite) { google = false; est.modo = "site"; } // de meia em meia hora, volta a tentar o site
         const via = google ? "google" : s.leitor;
@@ -562,7 +601,7 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
           espera = 1000;
         } else {
           if (falhas === 1 || falhas % 10 === 0) log(`[Oficiais] ${s.org} (${s.id}): ${e.message}`);
-          espera = Math.min(15 * 60e3, RITMO * 2 ** Math.min(4, falhas));
+          espera = Math.min(15 * 60e3, (s.minutos ? s.minutos * 60e3 : RITMO) * 2 ** Math.min(4, falhas));
         }
       }
       await sleep(espera);
@@ -577,8 +616,19 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       setTimeout(() => redatar().catch((e) => log(`[Oficiais] correção das horas: ${e.message}`)), 60e3).unref();
       setInterval(() => { const n = itens.length; itens = itens.filter((x) => Date.now() - x.ts < IDADE_MAX); if (itens.length !== n) sujo = true; }, 3600e3).unref();
     },
-    lista: (limit = 1500) => itens.slice(0, limit),
-    grupos: () => GRUPOS,
+    // «Ligas e Federações»: tudo menos as associações (que estão nas Distritais)
+    lista: (limit = 1500) => itens.filter((x) => x.grupo !== "af").slice(0, limit),
+    grupos: () => GRUPOS.filter((g) => g.id !== "af"),
+    // «Distritais»: notícias, comunicados e imprensa de cada associação (associação → entradas, da mais recente)
+    daAssociacao: (assoc = null, limite = 60) => {
+      const out = {};
+      for (const x of itens) {
+        if (x.grupo !== "af" || !x.assoc || (assoc && x.assoc !== assoc)) continue;
+        const l = (out[x.assoc] ||= []);
+        if (l.length < limite) l.push(x);
+      }
+      return out;
+    },
     estado: () => FONTES.map((s) => {
       const { _s, idGuardado, inicio, longe, pagina, ...e } = estado[s.id] || {};
       return { id: s.id, org: s.org, tipo: s.tipo, grupo: s.grupo, leitor: s.leitor, url: s.url, ...e, pagina: pagina || undefined };

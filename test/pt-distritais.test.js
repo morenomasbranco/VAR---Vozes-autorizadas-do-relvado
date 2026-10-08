@@ -28,7 +28,9 @@ test("Distritais: feed por associação; na primeira leitura não anuncia, depoi
   assert.equal(enviados[0][0], "distrital");
   assert.equal(enviados[0][1].legenda, "GOLO! 1-0");
   const f = d.feed();
-  assert.deepEqual(f.orgs.map((o) => [o.key, o.clubes]), [["af-porto", 2]]);
+  // todas as associações têm coluna (as notícias da associação entram mesmo sem clubes com redes)
+  assert.equal(f.orgs.length, 22);
+  assert.deepEqual(f.orgs.filter((o) => o.clubes).map((o) => [o.key, o.clubes]), [["af-porto", 2]]);
   assert.deepEqual(f.posts["af-porto"].map((p) => p.legenda), ["GOLO! 1-0", "Resultado final 2-1 (editado)", "Treino"]);
   d.deEdges("desconhecido", [{ node: node("9", 1, "x") }]);
   assert.equal(d.feed().posts["af-porto"].length, 3);

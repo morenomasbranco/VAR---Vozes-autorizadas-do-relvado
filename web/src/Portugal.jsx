@@ -34,15 +34,22 @@ function Estado({ j, agora }) {
     return <span className="pulse" title={j.min?.fonte === "estimado" ? `Minuto estimado (${j.min.confianca === "alta" ? "a partir dos stories de início/intervalo" : "a partir da hora marcada"})` : "Minuto"}><i />{j.min?.texto || "Em direto"}</span>;
   }
   if (j.estado === "intervalo") return <span className="pulse pausa"><i />Intervalo</span>;
-  if (j.estado === "final") return <span className="muted" title={j.oficial ? "Resultado oficial" : "Resultado dado pelos clubes, à espera do oficial"}>Final{j.oficial ? "" : "*"}</span>;
+  if (j.estado === "final") return <span className="muted" title={j.via === "web" ? "Resultado encontrado na web" : j.oficial ? "Resultado oficial" : "Resultado dado pelos clubes, à espera do oficial"}>Final{j.oficial ? "" : "*"}</span>;
   if (ESTADO[j.estado]) return <span className="ptwarn">{ESTADO[j.estado]}</span>;
   if (j.semInfo) return <span className="muted" title="Já devia ter começado, mas nenhum dos clubes publicou nada">a decorrer?</span>;
-  if (j.porConfirmar) return <span className="muted" title="O jogo já devia ter acabado; o resultado entra quando um dos clubes o publicar ou quando sair na FPF">à espera do resultado</span>;
+  if (j.porConfirmar) return <span className="muted" title="O jogo já devia ter acabado; o resultado entra quando um dos clubes o publicar ou quando aparecer na web">à espera do resultado</span>;
   if (!j.inicio) return <span className="muted">—</span>;
   return <span className="muted">{diaKey(j.inicio) === diaKey(agora) ? (j.semHora ? "hoje" : hora(j.inicio)) : `${dia(j.inicio)}${j.semHora ? "" : ` ${hora(j.inicio)}`}`}</span>;
 }
 
 function Fonte({ j }) {
+  // resultado encontrado pela pesquisa na web (zerozero, site da associação, imprensa): liga para a página
+  if (j.via === "web" && (j.oficial || j.estado === "direto" || j.estado === "intervalo")) {
+    return j.viaUrl
+      ? <a className="ptsrc" href={j.viaUrl} target="_blank" rel="noreferrer" title="Resultado encontrado na web (não é da FPF)">web</a>
+      : <span className="ptsrc" title="Resultado encontrado na web (não é da FPF)">web</span>;
+  }
+  if (j.via === "espn" && j.oficial) return <span className="ptsrc of" title="Resultado da ESPN">ESPN</span>;
   if (j.oficial) return <span className="ptsrc of" title="Resultado oficial (FPF, Liga ou transmissão)">oficial</span>;
   if (j.confirmado?.h && j.confirmado?.a) return <span className="ptsrc ok" title="Os dois clubes publicaram o mesmo resultado">✓✓ confirmado pelos 2 clubes</span>;
   const f = [...(j.fontes || [])].reverse().find((x) => x.tipo === "story" || x.tipo === "post");
@@ -145,25 +152,35 @@ function Tabela({ linhas, compacta = false, destaque = null }) {
 function Progresso({ p, agora, API = "", curto = false }) {
   if (!p) return <p className="empty">A ligar ao servidor…</p>;
   const min = (ms) => Math.max(1, Math.round(ms / 60000));
+  const hora = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
   const listas = p.listas;
   const erros = Object.entries(listas?.erros || {});
-  const fpfErro = p.fpf?.ultimoErro && (!p.fpf.ultimoOk || p.fpf.ultimoErro.ts > p.fpf.ultimoOk) ? p.fpf.ultimoErro : null;
+  const fpfAtiva = p.fpf?.ativa !== false;
+  const fpfErro = fpfAtiva && p.fpf?.ultimoErro && (!p.fpf.ultimoOk || p.fpf.ultimoErro.ts > p.fpf.ultimoOk) ? p.fpf.ultimoErro : null;
   const fila = (p.filas?.alta || 0) + (p.filas?.normal || 0) + (p.filas?.baixa || 0);
+  const pq = p.pesquisa;
+  const espnErros = Object.entries(p.espn?.erros || {});
   return (
     <div className={`ptprog ${curto ? "curto" : ""}`} role="status">
-      {!curto && <p className="ptprogt">A ler os campeonatos no resultados.fpf.pt…</p>}
+      {!curto && <p className="ptprogt">A procurar os campeonatos: Liga e Taça pela ESPN, os restantes nacionais e as distritais pela pesquisa na web…</p>}
       <p className="muted">
-        {listas ? `Associações lidas: ${listas.lidas} de ${listas.total}` : `À espera da primeira leitura (o servidor arrancou há ${min(agora - (p.arranque || agora))} min)`}
+        {pq?.ativo ? `Organizadores pesquisados: ${pq.lidos} de ${pq.alvos}` : ""}
+        {fpfAtiva && listas ? `${pq?.ativo ? " · " : ""}associações lidas na FPF: ${listas.lidas} de ${listas.total}` : ""}
         {p.total ? ` · competições: ${p.lidas} de ${p.total} lidas` : ""}
         {p.jogos ? ` · ${p.jogos} jogos` : ""}
         {fila ? ` · ${fila} páginas na fila` : ""}
+        {!pq?.ativo && !(fpfAtiva && listas) ? `À espera da primeira leitura (o servidor arrancou há ${min(agora - (p.arranque || agora))} min)` : ""}
       </p>
+      {pq && !pq.ativo && <p className="ptwarn">A pesquisa na web está desligada: falta a GEMINI_API_KEY no servidor (é a mesma, gratuita, das notícias). Sem ela, só aparecem a Liga e a Taça (ESPN).</p>}
+      {pq?.ativo && pq.pausaAte > agora && <p className="ptwarn">A pesquisa na web está em pausa até às {hora(pq.pausaAte)} ({pq.ultimoErro?.erro || "limite do plano gratuito"}).</p>}
+      {pq?.ativo && pq.ultimoErro && !(pq.pausaAte > agora) && !curto && <p className="muted small">Último erro da pesquisa ({pq.ultimoErro.alvo}): {pq.ultimoErro.erro}</p>}
+      {espnErros.length > 0 && !curto && <p className="muted small">ESPN sem resposta: {espnErros.map(([k, e]) => `${k} (${e})`).join(", ")}</p>}
       {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}</p>}
-      {erros.length > 0 && !curto && <p className="muted small">Sem lista de competições: {erros.map(([k]) => k).join(", ")}</p>}
-      {listas && listas.lidas > 0 && !p.total && !curto && (
+      {fpfAtiva && erros.length > 0 && !curto && <p className="muted small">Sem lista de competições da FPF: {erros.map(([k]) => k).join(", ")}</p>}
+      {fpfAtiva && listas && listas.lidas > 0 && !p.total && !curto && (
         <p className="ptwarn">A FPF respondeu, mas não reconheci nenhuma competição na resposta. O que ela devolveu está em <a href={`${API}/api/pt/amostra`} target="_blank" rel="noreferrer">/api/pt/amostra</a>.</p>
       )}
-      {!curto && <p className="muted small">Na primeira vez (ou depois de o servidor recomeçar sem os dados guardados), as competições vão aparecendo ao longo de uns minutos e as jornadas todas em uma a duas horas.</p>}
+      {!curto && <p className="muted small">Na primeira vez (ou depois de o servidor recomeçar sem os dados guardados), as competições vão aparecendo ao longo de uns minutos: um organizador a cada meio minuto, as 22 associações em cerca de um quarto de hora.</p>}
     </div>
   );
 }
@@ -321,7 +338,9 @@ export default function Portugal({ API = "", now }) {
               <aside>
                 <h3 className="ptth">Classificação {dados.tabela?.some((l) => l.aoVivo) ? <span className="pulse"><i />ao vivo</span> : null}</h3>
                 <Tabela linhas={dados.tabela} />
-                {dados.oficialTs && <p className="ptnota muted">Acertada com a tabela oficial de {new Date(dados.oficialTs).toLocaleString("pt-PT", { ...LISBOA, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>}
+                {dados.oficialTs && (dados.comp?.fonte === "web"
+                  ? <p className="ptnota muted">Classificação encontrada na web{dados.comp.fonteUrl ? <> (<a href={dados.comp.fonteUrl} target="_blank" rel="noreferrer">fonte</a>)</> : ""} a {new Date(dados.oficialTs).toLocaleString("pt-PT", { ...LISBOA, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}, atualizada com os resultados que chegaram depois</p>
+                  : <p className="ptnota muted">Acertada com a tabela {dados.comp?.fonte === "espn" ? "da ESPN" : "oficial"} de {new Date(dados.oficialTs).toLocaleString("pt-PT", { ...LISBOA, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>)}
               </aside>
             </div>
           ) : <p className="muted">A carregar…</p>}

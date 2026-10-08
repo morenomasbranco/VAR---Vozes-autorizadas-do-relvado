@@ -303,12 +303,13 @@ const capas = createCapas({ log, broadcast: (e, d) => broadcast(e, d) });
 // «Nesta semana»: o que aconteceu no desporto no dia de hoje, há 1, 2, 3, 4, 5, 10, 15… 100 anos
 const efemerides = createEfemerides({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS });
 
-// Notícias e comunicados oficiais das ligas e federações (secção por baixo das notícias do Feed)
+// Notícias e comunicados oficiais das ligas e federações (secção «Ligas e Federações»; os das associações de
+// futebol vão para a secção «Distritais»)
 const oficiais = createOficiais({ log, broadcast: (e, d) => broadcast(e, d), config: OFICIAIS });
 
 // Resultados de Portugal: todos os campeonatos seniores (nacionais e distritais), jornadas, tabelas ao vivo e
 // tempo real pelos stories dos clubes (server/pt/)
-const portugal = createPortugal({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS });
+const portugal = createPortugal({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS, noticiasDistritais: (org) => oficiais.daAssociacao(org) });
 
 const app = express();
 const ORIGINS = (process.env.ALLOWED_ORIGIN || "").split(",").map((o) => o.trim()).filter(Boolean);

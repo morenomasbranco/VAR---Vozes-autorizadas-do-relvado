@@ -324,7 +324,8 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     // clubes de cada associação com Instagram ou Facebook
     const nomes = (o) => new Set([...lista, ...listaFb].filter((c) => c.org === o).map((c) => c.nome)).size;
     return {
-      orgs: ASSOCIACOES.map((a) => ({ key: a.key, nome: a.nome, clubes: nomes(a.key) })).filter((a) => a.clubes),
+      // todas as associações: as que não têm clubes com redes também têm as notícias e os comunicados da associação
+      orgs: ASSOCIACOES.filter((a) => !org || a.key === org).map((a) => ({ key: a.key, nome: a.nome, clubes: nomes(a.key) })),
       posts: porOrg,
       // só contam as páginas lidas de facto (as tentativas que falharam não)
       estado: {

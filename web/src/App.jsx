@@ -13,6 +13,7 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 /* ───────── Secções ───────── */
 const CATS = [
   { id: "destaque", pt: "Feed", en: "Feed", es: "Feed", fr: "Feed", it: "Feed", de: "Feed", hl: "dest" },
+  { id: "ligas", pt: "Ligas e Federações", en: "Leagues & Federations", es: "Ligas y Federaciones", fr: "Ligues et Fédérations", it: "Leghe e Federazioni", de: "Ligen und Verbände" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
   { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
@@ -68,7 +69,7 @@ const semAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u03
 const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
 
 const inSection = (it, s) => {
-  if (s === "historias" || s === "favoritos" || s === "capas" || s === "efemerides") return false;
+  if (s === "historias" || s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
@@ -1310,8 +1311,11 @@ const CSS = `
 .apito .vdest .vcard.mini .vorig{display:none}
 .apito .vdest .vrow .vcard.mini{flex:0 0 240px}
 .apito .vdest .vrow{scroll-snap-type:none}
-/* notícias e comunicados oficiais das ligas e federações */
-.apito .ofic{margin:26px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+/* sem a barra de deslocamento por baixo dos vídeos do Feed (a faixa anda sozinha e com as setas) */
+.apito .vdest .vrow{scrollbar-width:none;-ms-overflow-style:none}
+.apito .vdest .vrow::-webkit-scrollbar{display:none}
+/* notícias e comunicados oficiais das ligas e federações (secção própria) */
+.apito .ofic{margin:0 0 10px}
 .apito .ofic .livehead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-bottom:10px}
 .apito .ofic .seg{margin:0}
 .apito .ocols{scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding-bottom:6px}
@@ -1594,7 +1598,7 @@ export default function App() {
       </button>
     );
   };
-  // «Ligas e Federações»: notícias e comunicados oficiais (por baixo das notícias do Feed)
+  // «Ligas e Federações»: notícias e comunicados oficiais (secção própria, entre o Feed e os Resultados)
   const [ofic, setOfic] = useState({ grupos: [], itens: [] });
   const [ofTipo, setOfTipo] = useState("todos");
   const [ofN, setOfN] = useState({}); // entradas mostradas por coluna, antes de «Ver mais»
@@ -1816,7 +1820,12 @@ export default function App() {
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
     // «corrigido»: a mesma entrada com a hora certa (não pisca como nova)
-    es.addEventListener("oficial", (e) => { const x = JSON.parse(e.data); ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() }); });
+    // as das associações de futebol seguem para a secção Distritais (coluna da associação)
+    es.addEventListener("oficial", (e) => {
+      const x = JSON.parse(e.data);
+      if (x.grupo === "af") { window.dispatchEvent(new CustomEvent("distrital-noticia", { detail: x })); return; }
+      ofEntra(x.corrigido ? x : { ...x, vistoEm: Date.now() });
+    });
     // Portugal: o jogo que mudou segue para a vista de Portugal; o acontecimento (golo, final…) entra no feed
     es.addEventListener("distrital", (e) => window.dispatchEvent(new CustomEvent("distrital", { detail: JSON.parse(e.data) })));
     es.addEventListener("pt-jogo", (e) => window.dispatchEvent(new CustomEvent("pt-jogo", { detail: JSON.parse(e.data) })));
@@ -2646,55 +2655,55 @@ export default function App() {
                     </section>
                   ))}
                 </div>
-                {ofic.grupos.length > 0 && (() => {
-                  const q = semAcentos(query).trim();
-                  const lista = ofic.itens.filter((x) => (ofTipo === "todos" || x.tipo === ofTipo) && (!q || semAcentos(`${x.org} ${x.titulo} ${x.titulo_pt || ""}`).includes(q)));
-                  const quando = (x) => (x.soDia ? nomeDia(diaLisboa(x.ts), lang) : agoText(x.ts, now, ui));
-                  return (
-                    <section className="ofic" aria-label={ui.oficiais}>
-                      <div className="livehead">
-                        <h2 className="vdesth">{ui.oficiais}</h2>
-                        <div className="seg lvls" role="group" aria-label={ui.oficiais}>
-                          {[["todos", ui.ofTodos], ["noticia", ui.ofNoticias], ["comunicado", ui.ofComunicados]].map(([k, t]) => (
-                            <button key={k} aria-pressed={ofTipo === k} onClick={() => setOfTipo(k)}>{t}</button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="cols ocols">
-                        {ofic.grupos.map((g) => {
-                          const daCol = lista.filter((x) => x.grupo === g.id);
-                          const n = ofN[g.id] || 15;
-                          return (
-                            <section key={g.id} className="col">
-                              <h2 className="colh"><Flag code={g.pais} lang={lang} /> {g.nome}</h2>
-                              {daCol.length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
-                                <ul className="clist" aria-live="polite">
-                                  {daCol.slice(0, n).map((x) => (
-                                    <li key={x.id} className={`citem oitem ${now - (x.vistoEm || 0) < 3000 ? "fresh" : ""}`}>
-                                      <div className="cmeta">
-                                        <span className="src">{x.org}</span>
-                                        <span className={`chip otipo ${x.tipo}`}>{x.tipo === "comunicado" ? ui.ofComunicado : ui.ofNoticia}</span>
-                                        {x.pdf && <span className="chip opdf" translate="no">PDF</span>}
-                                        <span className="muted ctime" translate="no" title={new Date(x.ts).toLocaleString(ui.locale)}>{quando(x)}</span>
-                                      </div>
-                                      <h3 className="ctitle">
-                                        <a href={x.url} target="_blank" rel="noreferrer" title={x.titulo_pt ? x.titulo : undefined}>{x.titulo_pt || x.titulo}</a>
-                                      </h3>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              {daCol.length > n && (
-                                <button className="textbtn vmais omais" onClick={() => setOfN((o) => ({ ...o, [g.id]: n + 15 }))}>{(VTXT[lang] || VTXT.pt).more} ({daCol.length - n})</button>
-                              )}
-                            </section>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })()}
               </>
+            ) : section === "ligas" ? (
+              ofic.grupos.length === 0 ? <p className="empty">{ui.waiting}</p> : (() => {
+                const q = semAcentos(query).trim();
+                const lista = ofic.itens.filter((x) => (ofTipo === "todos" || x.tipo === ofTipo) && (!q || semAcentos(`${x.org} ${x.titulo} ${x.titulo_pt || ""}`).includes(q)));
+                const quando = (x) => (x.soDia ? nomeDia(diaLisboa(x.ts), lang) : agoText(x.ts, now, ui));
+                return (
+                  <section className="ofic" aria-label={ui.oficiais}>
+                    <div className="livehead">
+                      <div className="seg lvls" role="group" aria-label={ui.oficiais}>
+                        {[["todos", ui.ofTodos], ["noticia", ui.ofNoticias], ["comunicado", ui.ofComunicados]].map(([k, t]) => (
+                          <button key={k} aria-pressed={ofTipo === k} onClick={() => setOfTipo(k)}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="cols ocols">
+                      {ofic.grupos.map((g) => {
+                        const daCol = lista.filter((x) => x.grupo === g.id);
+                        const n = ofN[g.id] || 15;
+                        return (
+                          <section key={g.id} className="col">
+                            <h2 className="colh"><Flag code={g.pais} lang={lang} /> {g.nome}</h2>
+                            {daCol.length === 0 ? <p className="cempty">{ui.colEmpty}</p> : (
+                              <ul className="clist" aria-live="polite">
+                                {daCol.slice(0, n).map((x) => (
+                                  <li key={x.id} className={`citem oitem ${now - (x.vistoEm || 0) < 3000 ? "fresh" : ""}`}>
+                                    <div className="cmeta">
+                                      <span className="src">{x.org}</span>
+                                      <span className={`chip otipo ${x.tipo}`}>{x.tipo === "comunicado" ? ui.ofComunicado : ui.ofNoticia}</span>
+                                      {x.pdf && <span className="chip opdf" translate="no">PDF</span>}
+                                      <span className="muted ctime" translate="no" title={new Date(x.ts).toLocaleString(ui.locale)}>{quando(x)}</span>
+                                    </div>
+                                    <h3 className="ctitle">
+                                      <a href={x.url} target="_blank" rel="noreferrer" title={x.titulo_pt ? x.titulo : undefined}>{x.titulo_pt || x.titulo}</a>
+                                    </h3>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {daCol.length > n && (
+                              <button className="textbtn vmais omais" onClick={() => setOfN((o) => ({ ...o, [g.id]: n + 15 }))}>{(VTXT[lang] || VTXT.pt).more} ({daCol.length - n})</button>
+                            )}
+                          </section>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })()
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
             ) : section === "efemerides" ? (

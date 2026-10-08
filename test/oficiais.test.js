@@ -34,3 +34,25 @@ test("oficiais: lista de notícias que vem no JSON da página (sites feitos no b
   const h = lerLista('<li><a href="/serie-a/news/derby-della-capitale">Lazio beat Roma in the derby, 2-1</a><span>07/10/2026 11:00</span></li>', "https://en.legaseriea.it/serie-a/news", "/serie-a/news/[a-z0-9-]{6,}", "Europe/Rome");
   assert.equal(new Date(h[0].ts).toISOString(), "2026-10-07T09:00:00.000Z");
 });
+
+test("oficiais: as notícias das associações vão para as Distritais, com a associação certa", async () => {
+  const { arrumar, fontesImprensa, createOficiais } = await import("../server/sources/oficiais.js");
+  const { associacaoDoTexto } = await import("../server/pt/catalogo.js");
+  assert.equal(associacaoDoTexto("Comunicado Oficial da A.F. Lisboa n.º 12"), "af-lisboa");
+  assert.equal(associacaoDoTexto("Associação de Futebol do Porto distingue árbitros"), "af-porto");
+  assert.equal(associacaoDoTexto("SC Braga vence em Guimarães"), null);
+  // uma notícia da FPF sobre uma associação sai da coluna «Portugal»
+  const fpf = arrumar({ grupo: "pt", org: "FPF", titulo: "AF Viseu recebe ação de formação de treinadores" });
+  assert.deepEqual([fpf.grupo, fpf.assoc], ["af", "af-viseu"]);
+  const nacional = arrumar({ grupo: "pt", org: "FPF", titulo: "Seleção Nacional convocada para a Liga das Nações" });
+  assert.equal(nacional.grupo, "pt");
+  // as das fontes das associações ficam com a associação da fonte
+  assert.equal(arrumar({ grupo: "af", org: "AF Viana do Castelo", titulo: "Calendários" }, { grupo: "af", org: "AF Viana do Castelo" }).assoc, "af-viana");
+  const imp = fontesImprensa();
+  assert.equal(imp.length, 22);
+  assert.ok(imp.every((s) => s.grupo === "af" && s.tipo === "imprensa" && s.leitor === "google" && s.assoc));
+  // a secção «Ligas e Federações» já não tem a coluna das associações
+  const o = createOficiais({ config: { grupos: [{ id: "pt", nome: "Portugal" }, { id: "af", nome: "Associações de Futebol" }], fontes: [] } });
+  assert.deepEqual(o.grupos().map((g) => g.id), ["pt"]);
+  assert.deepEqual(o.lista().filter((x) => x.grupo === "af"), []);
+});
