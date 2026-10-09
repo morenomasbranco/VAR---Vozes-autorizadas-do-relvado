@@ -473,7 +473,7 @@ app.get("/api/retransmissor/testar", async (req, res) => {
   if (emFila >= 3) return res.status(429).json({ erro: "há testes a correr; tenta daqui a um minuto" });
   emFila++;
   const u = String(req.query.u || "https://www.fpf.pt/");
-  const vez = filaTestes.then(() => testarCaminhos(u));
+  const vez = filaTestes.then(() => testarCaminhos(u, { so: req.query.via ? String(req.query.via) : null }));
   filaTestes = vez.catch(() => {});
   try { res.json({ endereco: u, resultados: await vez }); }
   catch (e) { res.status(400).json({ erro: e.message }); }
