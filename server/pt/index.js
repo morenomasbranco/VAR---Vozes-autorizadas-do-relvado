@@ -30,7 +30,8 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
-import { estadoPonte } from "../ponte.js";
+import { estadoPonte, estadoEncaminhamento } from "../ponte.js";
+import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
 
@@ -45,8 +46,9 @@ const DURACAO = { futebol: 115 * 60000, futsal: 95 * 60000 }; // do apito inicia
 const POSTS_MS = Math.max(120, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000; // posts de cada clube durante o jogo
 const POSTS_VIVO_MS = Math.max(60, Number(process.env.IG_POSTS_VIVO_SEGUNDOS) || 120) * 1000; // clubes que atualizam por post
 const ATIVO = process.env.PT_RESULTADOS !== "0";
-// a FPF bloqueia os servidores de alojamento: só é lida com a ponte (PONTE_URL) ou se for pedida (PT_FPF=1)
-const USAR_FPF = process.env.PT_FPF === "1" || (process.env.PT_FPF !== "0" && !!process.env.PONTE_URL);
+// a FPF bloqueia os servidores de alojamento: só é lida com o retransmissor de casa ligado, com a ponte (PONTE_URL)
+// ou se for pedida (PT_FPF=1)
+const USAR_FPF = () => process.env.PT_FPF === "1" || (process.env.PT_FPF !== "0" && (!!process.env.PONTE_URL || retransmissorLigado()));
 const ESPN_MS = Math.max(5, Number(process.env.PT_ESPN_MINUTOS) || 30) * 60e3;
 
 // semana de Lisboa (segunda 00:00 → segunda seguinte), para a «jornada da semana»
@@ -761,8 +763,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       const k = `${comp.id}|${j.serie}|${j.jornada}`;
       if (vistas.has(k)) continue;
       vistas.add(k);
-      if (comp.fonte === "fpf" && USAR_FPF && jr?.fpfId && agora - (jr.lidaEm || 0) > DIRETO_MS) agenda("alta", `j:${comp.id}:${serie.id}:${jr.n}`, () => lerJornadaFpf(comp, serie, jr));
-      else if (comp.fonte === "fpf" && USAR_FPF && !jr?.fpfId && agora - (comp.lidoEm || 0) > DIRETO_MS) agenda("alta", `c:${comp.id}`, () => estruturaFpf(comp));
+      if (comp.fonte === "fpf" && USAR_FPF() && jr?.fpfId && agora - (jr.lidaEm || 0) > DIRETO_MS) agenda("alta", `j:${comp.id}:${serie.id}:${jr.n}`, () => lerJornadaFpf(comp, serie, jr));
+      else if (comp.fonte === "fpf" && USAR_FPF() && !jr?.fpfId && agora - (comp.lidoEm || 0) > DIRETO_MS) agenda("alta", `c:${comp.id}`, () => estruturaFpf(comp));
       if (comp.fonte === "sofa" && comp.sofa?.season && agora - (jr?.lidaEm || 0) > DIRETO_MS) {
         agenda("alta", `sj:${comp.id}:${j.jornada}`, async () => {
           for (const ev of await sofa.jogosDaJornada(comp.sofa.ut, comp.sofa.season, j.jornada)) {
@@ -776,7 +778,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     // jogos dos últimos 3 dias ainda sem resultado oficial: a jornada é relida de 2 em 2 horas
     for (const j of jogosPerto(agora - 40 * 3600e3, 32)) {
       const comp = st.comps[j.comp];
-      if (!comp || comp.fonte !== "fpf" || !USAR_FPF || j.oficial || !j.inicio || agora < j.inicio + 8 * 3600e3 || agora > j.inicio + 72 * 3600e3) continue;
+      if (!comp || comp.fonte !== "fpf" || !USAR_FPF() || j.oficial || !j.inicio || agora < j.inicio + 8 * 3600e3 || agora > j.inicio + 72 * 3600e3) continue;
       const serie = comp.series?.[j.serie];
       const jr = serie?.jornadas?.[j.jornada];
       if (jr?.fpfId && agora - (jr.lidaEm || 0) > 2 * 3600e3) agenda("normal", `j:${comp.id}:${serie.id}:${jr.n}`, () => lerJornadaFpf(comp, serie, jr));
@@ -794,7 +796,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     // estrutura de cada competição, uma vez por dia (datas remarcadas, jornadas novas)
     for (const comp of Object.values(st.comps)) {
       if (Date.now() - (comp.lidoEm || 0) < ESTRUTURA_MS) continue;
-      if (comp.fonte === "fpf" && USAR_FPF) agenda("baixa", `c:${comp.id}`, () => estruturaFpf(comp));
+      if (comp.fonte === "fpf" && USAR_FPF()) agenda("baixa", `c:${comp.id}`, () => estruturaFpf(comp));
       else if (comp.fonte === "sofa") agenda("baixa", `s:${comp.id}`, () => estruturaSofa(comp));
     }
   }
@@ -804,12 +806,26 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     if (!ATIVO) { log("[PT] resultados de Portugal desligados (PT_RESULTADOS=0)"); return; }
     for (const j of Object.values(st.jogos)) if (!j.nomes) ligarClubes(j);
     trabalhador();
+    let aDescobrir = false;
     const descobrir = async () => {
-      if (USAR_FPF) await descobrirFpf().catch((e) => log(`[PT] descoberta FPF: ${e.message}`));
-      await descobrirSofa().catch((e) => log(`[PT] descoberta Sofascore: ${e.message}`));
-      revisao();
+      if (aDescobrir) return;
+      aDescobrir = true;
+      try {
+        if (USAR_FPF()) await descobrirFpf().catch((e) => log(`[PT] descoberta FPF: ${e.message}`));
+        await descobrirSofa().catch((e) => log(`[PT] descoberta Sofascore: ${e.message}`));
+        revisao();
+      } finally { aDescobrir = false; }
     };
-    if (!USAR_FPF) log("[PT] resultados.fpf.pt desligado (bloqueia os servidores): os campeonatos chegam pela ESPN e pela pesquisa na web. Com a ponte (PONTE_URL) ou PT_FPF=1 volta a ser lido");
+    if (!USAR_FPF()) log("[PT] resultados.fpf.pt à espera do retransmissor de casa (npm run retransmissor): a FPF bloqueia os servidores. Até lá, os campeonatos chegam pela ESPN e pela pesquisa na web");
+    // o retransmissor de casa ligou-se: se as listas da FPF falharam (ou nunca foram lidas), lê-se tudo já,
+    // sem esperar pela volta diária
+    aoLigarRetransmissor(() => {
+      const falhou = !estado.listas || Object.keys(estado.listas.erros || {}).length > 0 || estado.listas.lidas < estado.listas.total;
+      if (falhou || !fpf.estado.ultimoOk || Date.now() - fpf.estado.ultimoOk > ESTRUTURA_MS) {
+        log("[PT] retransmissor ligado: a ler as competições da FPF e das associações por ele");
+        setTimeout(() => descobrir(), 3000);
+      }
+    });
     vigiarEspn();
     pesquisa.start(); // PT_PESQUISA=0 desliga
     const ultima = Math.max(0, ...Object.values(st.comps).filter((c) => c.fonte === "fpf" || c.fonte === "sofa").map((c) => c.lidoEm || 0));
@@ -907,7 +923,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       // e o progresso da leitura, para o site dizer o que se passa enquanto não há jogos
       // a mesma competição vinda de duas fontes aparece uma vez só; as da FPF que já não são lidas e não têm
       // jogos (FPF desligada) ficam de fora
-      const comps = Object.values(st.comps).filter((c) => visivel(c) && (c.fonte !== "fpf" || USAR_FPF || temJogos(c)));
+      const comps = Object.values(st.comps).filter((c) => visivel(c) && (c.fonte !== "fpf" || USAR_FPF() || temJogos(c)));
       const p = pesquisa.estado();
       res.json({
         orgs: ORGS.map((o) => ({ key: o.key, nome: o.nome, longo: o.longo })),
@@ -915,7 +931,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         progresso: {
           arranque: estado.arranque, listas: estado.listas || null, descoberta: estado.descoberta, filas: estado.filas,
           lidas: comps.filter((c) => c.lidoEm).length, total: comps.length, jogos: Object.keys(st.jogos).length,
-          fpf: { ativa: USAR_FPF, pedidos: fpf.estado.pedidos, erros: fpf.estado.erros, ultimoOk: fpf.estado.ultimoOk, ultimoErro: fpf.estado.ultimoErro, bloqueado: fpf.estado.bloqueado },
+          retransmissor: { ligado: retransmissorLigado(), ultimoOk: resumoRetransmissor().ultimoOk },
+          fpf: { ativa: USAR_FPF(), pedidos: fpf.estado.pedidos, erros: fpf.estado.erros, ultimoOk: fpf.estado.ultimoOk, ultimoErro: fpf.estado.ultimoErro, bloqueado: fpf.estado.bloqueado },
           sofascore: { ultimoErro: sofa.estado?.ultimoErro || null },
           espn: { ...estado.espn },
           pesquisa: { ativo: p.ativo, modelo: p.modelo, alvos: p.alvos, lidos: p.lidos, pedidos: p.pedidos, limiteDia: p.limiteDia, pausaAte: p.pausaAte, ultimoErro: p.ultimoErro, aPesquisar: p.aPesquisar },
@@ -986,7 +1003,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       res.json({ ...compacto(j), fontes: j.fontes, relogio: j.relogio, nomes: j.nomes, fb: { h: j.fbCasa, a: j.fbFora } });
     });
     app.get("/api/pt/estado", (req, res) => res.json({
-      ...estado, fpf: { ...fpf.estado, ativa: USAR_FPF }, sofascore: sofa.estado, pesquisa: pesquisa.estado(), ocr: ocr.estado, instagram: ig.estado,
+      ...estado, fpf: { ...fpf.estado, ativa: USAR_FPF() }, sofascore: sofa.estado, pesquisa: pesquisa.estado(), ocr: ocr.estado, instagram: ig.estado,
       competicoes: Object.keys(st.comps).length, jogos: Object.keys(st.jogos).length, eventos: eventos.length, alvos: alvos().length,
       semJogos: Object.values(st.comps).filter((c) => !Object.values(c.series || {}).some((s) => s.equipas.length)).map((c) => ({ id: c.id, nome: c.nome, org: c.org })).slice(0, 80),
     }));
@@ -1001,12 +1018,14 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
           listas: estado.listas || null, filas: estado.filas,
           fpf: { pedidos: fpf.estado.pedidos, erros: fpf.estado.erros, ultimoOk: fpf.estado.ultimoOk && new Date(fpf.estado.ultimoOk).toISOString(), ultimoErro: fpf.estado.ultimoErro, bloqueado: fpf.estado.bloqueado },
           sofascore: { erros: sofa.estado.erros, ultimoErro: sofa.estado.ultimoErro },
-          espn: estado.espn, pesquisa: pesquisa.estado(), fpfAtiva: USAR_FPF,
+          espn: estado.espn, pesquisa: pesquisa.estado(), fpfAtiva: USAR_FPF(),
           amostraLista: curto(fpf.amostras.lista), amostraCompeticao: curto(fpf.amostras.competicao),
         },
         distritais: { perfis: d.perfis, lidos: d.lidosTotal, instagram: d.lidosInstagram, facebook: d.lidosFacebook, pedidos: d.pedidos, ultimoErro: d.ultimoErro, vias: d.vias, comSessao: d.comSessao },
         facebookJogos: estado.facebook,
         ponte: { ligada: !!process.env.PONTE_URL, ...estadoPonte },
+        retransmissor: resumoRetransmissor(),
+        encaminhamento: estadoEncaminhamento(),
         instagramJogos: ig.estado,
       });
     });

@@ -60,10 +60,82 @@ export function jogoEspn(ev) {
     fase: c.notes?.[0]?.headline || ev.season?.slug || null,
   };
 }
+// A ESPN deixou de aceitar a época inteira num só pedido (respondia 400 a «dates=20260701-20270630»): o calendário
+// pede-se em blocos de 28 dias e, se um bloco for recusado, em semanas. Os blocos que já passaram (mais de dois
+// dias atrás) guardam-se durante 12 horas, por isso cada volta só pede de novo as semanas com jogos por acabar.
+const ymd = (t) => new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
+const doYmd = (s) => Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
+export function blocos(de, ate, dias = 28) {
+  const out = [];
+  for (let t = doYmd(de); t <= doYmd(ate); t += dias * 86400e3) out.push([ymd(t), ymd(Math.min(doYmd(ate), t + (dias - 1) * 86400e3))]);
+  return out;
+}
+const cacheBlocos = new Map(); // `${slug}|${de}-${ate}` → { ts, eventos }
+async function eventosDoBloco(lg, de, ate, agora) {
+  const k = `${lg.slug}|${de}-${ate}`;
+  const c = cacheBlocos.get(k);
+  // o que já passou (há mais de dois dias) muda pouco: 12 h; o que está a mais de dez dias: 6 h; o resto, sempre
+  const validade = doYmd(ate) + 86400e3 < agora - 2 * 86400e3 ? 12 * 3600e3 : doYmd(de) > agora + 10 * 86400e3 ? 6 * 3600e3 : 0;
+  if (c && agora - c.ts < validade) return c.eventos;
+  const datas = de === ate ? de : `${de}-${ate}`; // um dia só vai sem intervalo
+  let j;
+  try { j = await json(`${ESPN}/soccer/${lg.slug}/scoreboard?dates=${datas}&limit=300`); }
+  catch (e) {
+    if (e.status !== 400) throw e;
+    j = await json(`${ESPN}/soccer/${lg.slug}/scoreboard?dates=${datas}`); // sem o «limit»
+  }
+  const eventos = j.events || [];
+  cacheBlocos.set(k, { ts: agora, eventos });
+  return eventos;
+}
+// os dias com jogos que o scoreboard da semana traz em «calendar» (texto ISO ou objetos com startDate/entries)
+export function diasDoCalendario(j, de, ate) {
+  const out = new Set();
+  const junta = (v) => { const t = Date.parse(v); if (t) { const d = ymd(t); if (d >= de && d <= ate) out.add(d); } };
+  for (const c of j?.leagues?.[0]?.calendar || []) {
+    if (typeof c === "string") junta(c);
+    else { if (c?.startDate && !c?.entries) junta(c.startDate); for (const x of c?.entries || []) junta(x.startDate); }
+  }
+  return [...out].sort();
+}
+const modoEspn = {}; // slug → "dias" quando a ESPN recusa intervalos de datas
 export async function jogosEspn(lg, ts = Date.now()) {
   const e = epoca(ts);
-  const j = await json(`${ESPN}/soccer/${lg.slug}/scoreboard?dates=${e.de}-${e.ate}&limit=1000`);
-  return (j.events || []).map(jogoEspn).filter((x) => x.casa && x.fora);
+  const vistos = new Map();
+  if (modoEspn[lg.slug] === "dias") {
+    // dia a dia, só os dias com jogos (os já passados ficam guardados)
+    const semana = await json(`${ESPN}/soccer/${lg.slug}/scoreboard`);
+    for (const ev of semana.events || []) vistos.set(String(ev.id), ev);
+    for (const d of diasDoCalendario(semana, e.de, e.ate)) {
+      try { for (const ev of await eventosDoBloco(lg, d, d, ts)) vistos.set(String(ev.id), ev); } catch { /* fica o resto */ }
+    }
+    return [...vistos.values()].map(jogoEspn).filter((x) => x.casa && x.fora);
+  }
+  let recusados = 0, ultimoErro = null;
+  for (const [de, ate] of blocos(e.de, e.ate, 28)) {
+    let eventos = null;
+    try { eventos = await eventosDoBloco(lg, de, ate, ts); }
+    catch (err) {
+      ultimoErro = err;
+      if (err.status !== 400) throw err;
+      // bloco recusado: semana a semana
+      eventos = [];
+      let falhou = 0;
+      const semanas = blocos(de, ate, 7);
+      for (const [d2, a2] of semanas) {
+        try { eventos.push(...await eventosDoBloco(lg, d2, a2, ts)); } catch (e2) { ultimoErro = e2; recusados++; falhou++; }
+      }
+      // nem as semanas passam: não vale a pena insistir nos outros blocos
+      if (falhou === semanas.length && !vistos.size) break;
+    }
+    for (const ev of eventos) vistos.set(String(ev.id), ev);
+  }
+  // tudo recusado: a ESPN não aceita intervalos; passa a pedir dia a dia, pelos dias do calendário
+  if (!vistos.size && recusados) {
+    modoEspn[lg.slug] = "dias";
+    try { return await jogosEspn(lg, ts); } catch { throw ultimoErro; }
+  }
+  return [...vistos.values()].map(jogoEspn).filter((x) => x.casa && x.fora);
 }
 export function tabelaDeEspn(j) {
   const grupos = j?.children?.length ? j.children : j?.standings ? [j] : [];
@@ -115,6 +187,27 @@ export function rondas(jogos, tipo = "liga") {
 /* ───────── pesquisa na web (Gemini com a pesquisa Google) ───────── */
 const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 const MODELO = () => process.env.PT_PESQUISA_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+// Cada modelo do Gemini tem a sua quota gratuita (pedidos por minuto e por dia). As notícias do site gastam a do
+// GEMINI_MODEL; quando a de um modelo acaba (429), a pesquisa passa ao seguinte desta lista em vez de parar.
+// PT_PESQUISA_MODELOS troca a lista (separada por vírgulas). Os que não existirem (404) ficam de lado um dia.
+export const MODELOS = () => [...new Set([MODELO(), ...(process.env.PT_PESQUISA_MODELOS || "gemini-3.5-flash,gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash,gemini-2.5-flash-lite").split(/[\s,]+/)].filter(Boolean))];
+
+// A quota gratuita do Gemini volta à meia-noite da Califórnia (8 ou 9 da manhã em Lisboa)
+export function proximaMeiaNoitePacifico(agora = Date.now()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(agora)).map((x) => [x.type, x.value]));
+  const passou = ((+p.hour * 60 + +p.minute) * 60 + +p.second) * 1000;
+  return agora - passou + 86400e3 + 60e3; // e um minuto de margem
+}
+// o que diz um 429 do Gemini: quanto esperar (RetryInfo) e se foi a quota do dia que acabou
+export function lerRecusa(texto, agora = Date.now()) {
+  let j = null;
+  try { j = JSON.parse(texto); } catch { /* texto simples */ }
+  const det = j?.error?.details || [];
+  const espera = det.map((d) => String(d.retryDelay || "").match(/^([\d.]+)s$/)?.[1]).find(Boolean);
+  const quotas = det.flatMap((d) => d.violations || []).map((v) => `${v.quotaId || ""} ${v.quotaMetric || ""}`).join(" ");
+  const diaria = /PerDay|per_day|daily/i.test(quotas) || (/quota/i.test(texto) && !espera && !/PerMinute/i.test(quotas));
+  return { diaria, ate: diaria ? proximaMeiaNoitePacifico(agora) : agora + Math.max(60e3, (Number(espera) || 60) * 1000) };
+}
 
 // o que se pesquisa: um pedido por organizador
 export const ALVOS = [
@@ -202,11 +295,11 @@ export function lerPesquisa(texto, agora = Date.now()) {
   return out;
 }
 
-export async function pesquisar(alvo, { tabela = true, agora = Date.now() } = {}) {
+export async function pesquisar(alvo, { tabela = true, agora = Date.now(), modelo = MODELO() } = {}) {
   const hoje = new Date(agora).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon", weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const pedido = `Hoje é ${hoje}. Procura ${alvo.pedido}, na época ${epoca(agora).ano}/${String(epoca(agora).ano + 1).slice(2)}.
 Para cada competição (e série): os jogos da jornada mais recente já disputada, com os resultados, e os jogos da próxima jornada, com data e hora (se houver jogos a decorrer hoje, também esses).${tabela ? " E a classificação atual completa." : " Não é preciso a classificação."}`;
-  const res = await fetch(`${GEMINI_API}/models/${MODELO()}:generateContent`, {
+  const res = await fetch(`${GEMINI_API}/models/${modelo}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
     body: JSON.stringify({
@@ -217,7 +310,11 @@ Para cada competição (e série): os jogos da jornada mais recente já disputad
     }),
     signal: AbortSignal.timeout(4 * 60e3),
   });
-  if (!res.ok) throw Object.assign(new Error(`Gemini respondeu ${res.status}: ${(await res.text()).slice(0, 200)}`), { status: res.status });
+  if (!res.ok) {
+    const txt = await res.text();
+    const msg = (() => { try { return JSON.parse(txt).error?.message || txt; } catch { return txt; } })();
+    throw Object.assign(new Error(`Gemini (${modelo}) respondeu ${res.status}: ${String(msg).replace(/\s+/g, " ").slice(0, 160)}`), { status: res.status, recusa: res.status === 429 ? lerRecusa(txt) : null });
+  }
   const j = await res.json();
   const texto = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
   if (!texto && j.promptFeedback?.blockReason) throw new Error(`pedido recusado pelo Gemini (${j.promptFeedback.blockReason})`);
@@ -250,7 +347,9 @@ export function createPesquisa({ log = () => {}, guardar = () => {}, dados = {} 
   const LIMITE = Math.max(10, Number(process.env.PT_PESQUISA_DIA) || 200);
   const INTERVALO = Math.max(5, Number(process.env.PT_PESQUISA_SEGUNDOS) || 30) * 1000;
   // dados: alvo → { proxima, tabelaEm, ok, erro, competicoes, jogos } (guardado com o resto, em data/pt.json)
-  const estado = { ativo, modelo: ativo ? MODELO() : null, limiteDia: LIMITE, pedidos: [], pausaAte: 0, ultimoErro: null, aPesquisar: null };
+  const estado = { ativo, modelo: ativo ? MODELO() : null, limiteDia: LIMITE, pedidos: [], pausaAte: 0, ultimoErro: null, aPesquisar: null, modelos: {} };
+  // modelo → { pausaAte, motivo }: o primeiro da lista que não esteja em pausa é o que se usa
+  const modeloLivre = (agora) => MODELOS().find((m) => (estado.modelos[m]?.pausaAte || 0) <= agora) || null;
   const al = (id) => (dados[id] ||= { proxima: 0, tabelaEm: 0 });
 
   async function correr() {
@@ -260,6 +359,9 @@ export function createPesquisa({ log = () => {}, guardar = () => {}, dados = {} 
       const agora = Date.now();
       estado.pedidos = estado.pedidos.filter((t) => agora - t < 86400e3);
       if (agora < estado.pausaAte) { await sleep(Math.min(60e3, estado.pausaAte - agora)); continue; }
+      const modelo = modeloLivre(agora);
+      if (!modelo) { estado.pausaAte = Math.min(...MODELOS().map((m) => estado.modelos[m]?.pausaAte || agora + 60e3)); continue; }
+      estado.modelo = modelo;
       if (estado.pedidos.length >= LIMITE) { await sleep(Math.min(30 * 60e3, estado.pedidos[0] + 86400e3 - agora + 1000)); continue; }
       // o organizador mais atrasado (os nunca lidos primeiro, pela ordem da lista)
       const alvo = ALVOS.map((a) => [a, al(a.id)]).filter(([, d]) => d.proxima <= agora).sort((x, y) => x[1].proxima - y[1].proxima)[0]?.[0];
@@ -269,19 +371,29 @@ export function createPesquisa({ log = () => {}, guardar = () => {}, dados = {} 
       estado.pedidos.push(agora);
       estado.aPesquisar = { alvo: alvo.id, desde: agora };
       try {
-        const comps = await pesquisar(alvo, { tabela, agora });
+        const comps = await pesquisar(alvo, { tabela, agora, modelo });
         const r = guardar(alvo, comps, { tabela }) || {};
         Object.assign(d, { ok: Date.now(), erro: null, falhas: 0, competicoes: comps.length, jogos: comps.reduce((t, c) => t + c.jornadas.reduce((u, jr) => u + jr.jogos.length, 0), 0) });
         if (tabela && comps.some((c) => c.classificacao.length)) d.tabelaEm = Date.now();
         d.proxima = Date.now() + proximaPesquisa(Date.now(), { aDecorrer: !!r.aDecorrer, jogosHoje: !!r.jogosHoje }) * (0.9 + Math.random() * 0.2);
         log(`[PT] pesquisa ${alvo.nome}: ${comps.length} competições, ${d.jogos} jogos${tabela ? " (com classificações)" : ""}`);
       } catch (e) {
+        estado.ultimoErro = { alvo: alvo.id, erro: e.message, ts: Date.now(), modelo };
+        log(`[PT] pesquisa ${alvo.nome}: ${e.message}`);
+        if (e.status === 429 || e.status === 404 || (e.status === 400 && /model|not found|not supported/i.test(e.message))) {
+          // a quota deste modelo acabou (ou o modelo não existe): o organizador volta já, com o modelo seguinte
+          const ate = e.status === 429 ? e.recusa?.ate || Date.now() + 15 * 60e3 : Date.now() + 86400e3;
+          estado.modelos[modelo] = { pausaAte: ate, motivo: e.status === 429 ? (e.recusa?.diaria ? "quota do dia esgotada" : "pedidos por minuto") : "modelo indisponível" };
+          if (e.status === 429 && modeloLivre(Date.now())) log(`[PT] pesquisa: ${modelo} sem quota até às ${new Date(ate).toLocaleTimeString("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" })}; passo ao ${modeloLivre(Date.now())}`);
+          if (!modeloLivre(Date.now())) estado.pausaAte = Math.min(...MODELOS().map((m) => estado.modelos[m]?.pausaAte || Date.now() + 60e3));
+          estado.pedidos.pop(); // um pedido recusado não conta para o limite diário
+          estado.aPesquisar = null;
+          await sleep(3000);
+          continue;
+        }
         d.falhas = (d.falhas || 0) + 1;
         d.erro = e.message;
-        estado.ultimoErro = { alvo: alvo.id, erro: e.message, ts: Date.now() };
-        log(`[PT] pesquisa ${alvo.nome}: ${e.message}`);
         if (e.status === 401 || e.status === 403) { estado.pausaAte = Date.now() + 6 * 3600e3; } // chave errada ou sem acesso
-        else if (e.status === 429) estado.pausaAte = Date.now() + 15 * 60e3; // limite do plano gratuito
         d.proxima = Date.now() + Math.min(6 * 3600e3, 20 * 60e3 * 2 ** Math.min(4, d.falhas - 1));
       }
       estado.aPesquisar = null;
@@ -293,6 +405,7 @@ export function createPesquisa({ log = () => {}, guardar = () => {}, dados = {} 
     start: () => { correr().catch((e) => log(`[PT] pesquisa: ${e.message}`)); },
     estado: () => ({
       ...estado, pedidos: estado.pedidos.length, alvos: ALVOS.length,
+      modelos: MODELOS().map((m) => ({ modelo: m, pausaAte: estado.modelos[m]?.pausaAte > Date.now() ? estado.modelos[m].pausaAte : null, motivo: estado.modelos[m]?.pausaAte > Date.now() ? estado.modelos[m].motivo : null })),
       lidos: ALVOS.filter((a) => dados[a.id]?.ok).length,
       porAlvo: ALVOS.map((a) => ({ id: a.id, nome: a.nome, ok: dados[a.id]?.ok || null, erro: dados[a.id]?.erro || null, competicoes: dados[a.id]?.competicoes ?? null, jogos: dados[a.id]?.jogos ?? null, proxima: dados[a.id]?.proxima || null })),
     }),

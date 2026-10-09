@@ -175,7 +175,9 @@ function Progresso({ p, agora, API = "", curto = false }) {
       {pq?.ativo && pq.pausaAte > agora && <p className="ptwarn">A pesquisa na web está em pausa até às {hora(pq.pausaAte)} ({pq.ultimoErro?.erro || "limite do plano gratuito"}).</p>}
       {pq?.ativo && pq.ultimoErro && !(pq.pausaAte > agora) && !curto && <p className="muted small">Último erro da pesquisa ({pq.ultimoErro.alvo}): {pq.ultimoErro.erro}</p>}
       {espnErros.length > 0 && !curto && <p className="muted small">ESPN sem resposta: {espnErros.map(([k, e]) => `${k} (${e})`).join(", ")}</p>}
-      {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}</p>}
+      {fpfErro && <p className="ptwarn">A FPF não está a responder ao servidor: {fpfErro.erro} (há {min(agora - fpfErro.ts)} min). {p.fpf.bloqueado ? "O site pediu uma pausa; o servidor volta a tentar sozinho." : ""}{!p.retransmissor?.ligado ? " A FPF bloqueia os servidores de alojamento (e muitas vezes o Cloudflare): liga o retransmissor de casa (npm run retransmissor) e as associações começam a ser lidas no mesmo minuto." : ""}</p>}
+      {!fpfAtiva && !curto && <p className="muted small">As competições, os jogos e as classificações oficiais da FPF e das 22 associações são lidos quando o retransmissor de casa (npm run retransmissor) estiver ligado: a FPF bloqueia este servidor.</p>}
+      {p.retransmissor?.ligado && !curto && <p className="muted small">Retransmissor de casa ligado: a FPF e as associações são lidas por ele.</p>}
       {fpfAtiva && erros.length > 0 && !curto && <p className="muted small">Sem lista de competições da FPF: {erros.map(([k]) => k).join(", ")}</p>}
       {fpfAtiva && listas && listas.lidas > 0 && !p.total && !curto && (
         <p className="ptwarn">A FPF respondeu, mas não reconheci nenhuma competição na resposta. O que ela devolveu está em <a href={`${API}/api/pt/amostra`} target="_blank" rel="noreferrer">/api/pt/amostra</a>.</p>

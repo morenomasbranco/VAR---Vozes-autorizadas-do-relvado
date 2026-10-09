@@ -26,6 +26,8 @@ import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
 import { createPortugal } from "./pt/index.js";
+import { ligarRetransmissor, resumoRetransmissor } from "./retransmissor.js";
+import { estadoEncaminhamento } from "./ponte.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
@@ -463,6 +465,7 @@ app.get("/api/efemerides", (req, res) => res.json(efemerides.para(String(req.que
 app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
+app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
@@ -484,7 +487,10 @@ if (fs.existsSync(dist)) {
   });
 }
 
-app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
+const servidor = app.listen(PORT, () => log(`[VAR] servidor em http://localhost:${PORT}`));
+// retransmissor de casa (scripts/retransmissor.js): liga-se aqui por WebSocket e faz os pedidos aos sites que
+// bloqueiam o servidor (FPF, associações, Instagram, Facebook, Sofascore)
+ligarRetransmissor(servidor, { log }).catch((e) => log(`[Retransmissor] não arrancou: ${e.message}`));
 
 startRss(RSS, onPost, log, ESTADO_RSS);
 zapping.start();

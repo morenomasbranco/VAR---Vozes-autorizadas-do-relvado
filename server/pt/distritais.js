@@ -16,6 +16,7 @@ import { sleep } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
 import { buscar } from "../ponte.js";
+import { aoLigarRetransmissor, retransmissorLigado } from "../retransmissor.js";
 
 const FICHEIRO = new URL("../../data/pt-distritais.json", import.meta.url);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -261,6 +262,15 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     }
   }
 
+  // o retransmissor de casa ligou-se: as pausas que o Instagram e o Facebook impuseram ao servidor deixam de contar,
+  // porque os pedidos passam a sair pela ligação de casa
+  aoLigarRetransmissor(() => {
+    const ig = estado.vias.instagram, fb = estado.vias.facebook;
+    if (ig) { ig.pausaAte = 0; ig.recusas = 0; }
+    if (fb) fb.pausaAte = 0;
+    for (const f of ANONIMOS) f.castigoAte = 0;
+  });
+
   async function correr() {
     log(`[Distritais] ${lista.length} clubes das associações com Instagram; pelo Instagram (um a cada ${GAP_IG / 1000} s) e pelos visualizadores anónimos (um a cada ${GAP_ANON / 1000} s)`);
     const vias = [via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)];
@@ -332,7 +342,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
         ...estado, perfis: lista.length + listaFb.length,
         lidosTotal: Object.values(dados.lido).filter((l) => l.ok || l.naoExiste).length + Object.values(dados.fb.lido).filter((l) => l.ok).length,
         lidosInstagram: Object.values(dados.lido).filter((l) => l.ok).length, lidosFacebook: Object.values(dados.fb.lido).filter((l) => l.ok).length,
-        paginasInstagram: lista.length, paginasFacebook: listaFb.length,
+        paginasInstagram: lista.length, paginasFacebook: listaFb.length, casa: retransmissorLigado(),
       },
     };
   }

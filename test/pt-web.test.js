@@ -112,3 +112,47 @@ test("Distritais: a API junta às colunas as notícias e os comunicados de cada 
   assert.equal(out.orgs.length, 22, "uma coluna por associação, mesmo sem clubes com redes");
   assert.deepEqual(out.noticias["af-braga"].map((x) => x.titulo), ["Comunicado Oficial n.º 20"]);
 });
+
+test("ESPN: a época pede-se em blocos; se a ESPN recusar intervalos, dia a dia pelos dias do calendário", async () => {
+  const { jogosEspn, blocos, diasDoCalendario } = await import("../server/pt/web.js");
+  assert.equal(blocos("20260701", "20270630", 28).length, 14);
+  assert.deepEqual(diasDoCalendario({ leagues: [{ calendar: ["2026-08-09T07:00Z", "2025-05-01T07:00Z", { entries: [{ startDate: "2026-08-16T07:00Z" }] }] }] }, "20260701", "20270630"), ["20260809", "20260816"]);
+  const ev = (id, data) => ({ id, date: data, status: { type: { state: "post", completed: true } }, competitions: [{ competitors: [{ homeAway: "home", score: "1", team: { shortDisplayName: `C${id}` } }, { homeAway: "away", score: "0", team: { shortDisplayName: `F${id}` } }] }] });
+  const original = globalThis.fetch;
+  const pedidos = [];
+  try {
+    // 1) blocos de 28 dias aceites
+    globalThis.fetch = async (url) => {
+      pedidos.push(url);
+      const d = new URL(url).searchParams.get("dates");
+      const ok = d && d.split("-").length === 2 && d.split("-")[0] <= "20261004" && d.split("-")[1] >= "20261004";
+      return new Response(JSON.stringify({ events: ok ? [ev("1", "2026-10-04T15:00Z")] : [] }), { status: 200 });
+    };
+    const j1 = await jogosEspn({ slug: "teste.blocos" }, Date.parse("2026-10-09T12:00:00Z"));
+    assert.equal(j1.length, 1);
+    assert.ok(pedidos.every((u) => !/20260701-20270630/.test(u)));
+    // 2) intervalos recusados (400): passa ao calendário, dia a dia
+    pedidos.length = 0;
+    globalThis.fetch = async (url) => {
+      pedidos.push(url);
+      const d = new URL(url).searchParams.get("dates");
+      if (d && d.includes("-")) return new Response("{}", { status: 400 });
+      if (!d) return new Response(JSON.stringify({ events: [ev("9", "2026-10-11T15:00Z")], leagues: [{ calendar: ["2026-10-04T07:00Z", "2026-10-11T07:00Z"] }] }), { status: 200 });
+      return new Response(JSON.stringify({ events: d === "20261004" ? [ev("1", "2026-10-04T15:00Z")] : [] }), { status: 200 });
+    };
+    const j2 = await jogosEspn({ slug: "teste.dias" }, Date.parse("2026-10-09T12:00:00Z"));
+    assert.deepEqual(j2.map((x) => x.espnId).sort(), ["1", "9"]);
+    assert.ok(pedidos.length < 20, `pedidos a mais: ${pedidos.length}`);
+  } finally { globalThis.fetch = original; }
+});
+
+test("pesquisa na web: um 429 do Gemini diz quanto esperar; a quota do dia volta à meia-noite da Califórnia", async () => {
+  const { lerRecusa, MODELOS } = await import("../server/pt/web.js");
+  const t = Date.parse("2026-10-09T07:25:00Z");
+  const dia = JSON.stringify({ error: { code: 429, message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }, { retryDelay: "40s" }] } });
+  const minuto = JSON.stringify({ error: { code: 429, details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: "90s" }] } });
+  assert.equal(lerRecusa(dia, t).diaria, true);
+  assert.equal(new Date(lerRecusa(dia, t).ate).toISOString().slice(0, 16), "2026-10-10T07:01"); // 00:00 em Los Angeles
+  assert.deepEqual(lerRecusa(minuto, t), { diaria: false, ate: t + 90e3 });
+  assert.ok(MODELOS().length > 1);
+});
