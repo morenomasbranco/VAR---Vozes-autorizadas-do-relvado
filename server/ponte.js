@@ -30,8 +30,23 @@ function pontes() {
     return { id: i ? `ponte${i + 1}` : "ponte", tipo: "worker", url, nome: netlify ? "Netlify" : /workers\.dev/i.test(url) ? "Cloudflare" : "ponte", limite: Number(process.env[`PONTE${i ? i + 1 : ""}_DIA`]) || (netlify ? 3500 : 90000) };
   });
   if (process.env.PONTE_GOOGLE_URL) out.push({ id: "google", tipo: "google", url: process.env.PONTE_GOOGLE_URL, nome: "Google Apps Script", limite: Number(process.env.PONTE_GOOGLE_DIA) || 18000 });
+  // Jina Reader (r.jina.ai): serviço público e gratuito que abre a página num browser verdadeiro, nos servidores
+  // deles, e devolve o HTML. Passa alguns bloqueios que recusam programas. Sem chave: 20 pedidos por minuto (com
+  // JINA_API_KEY, gratuita em jina.ai, mais). Só para páginas (não para as APIs em JSON do Instagram e do
+  // Sofascore). PONTE_JINA=0 desliga.
+  if (process.env.PONTE_JINA !== "0") {
+    out.push({
+      id: "jina", tipo: "jina", url: (process.env.JINA_BASE || "https://r.jina.ai/").replace(/\/?$/, "/"), nome: "Jina Reader",
+      limite: Number(process.env.PONTE_JINA_DIA) || 8000, porMinuto: Number(process.env.PONTE_JINA_MINUTO) || (process.env.JINA_API_KEY ? 150 : 18),
+      hosts: (process.env.JINA_HOSTS || "*.fpf.pt,www.facebook.com,m.facebook.com,imginn.com,www.picnob.com,www.pixwox.com,www.ligaportugal.pt,www.zerozero.pt").split(/[\s,]+/).filter(Boolean),
+    });
+  }
   return out;
 }
+// os pontes que contam como «configuradas» (o Jina vem sempre, por isso não conta)
+const pontesProprias = () => pontes().filter((p) => p.tipo !== "jina");
+const usosJina = []; // instantes dos pedidos ao Jina no último minuto
+const jinaLivre = (p, agora = Date.now()) => { while (usosJina.length && agora - usosJina[0] > 60e3) usosJina.shift(); return usosJina.length < p.porMinuto; };
 
 export const estadoPonte = { pedidos: 0, erros: 0, ultimoErro: null };
 // por caminho: pedidos, recusas, falhas e pedidos de hoje; por site: o último caminho que funcionou
@@ -50,7 +65,7 @@ export const estadoEncaminhamento = () => ({
   erros: Object.fromEntries(Object.entries(erros).filter(([, e]) => Date.now() - Date.parse(e.ts) < 6 * 3600e3)),
 });
 
-export const temPontes = () => pontes().length > 0;
+export const temPontes = () => pontesProprias().length > 0;
 export const passaPelaPonte = (url) => temPontes() && bloqueado(hostDe(url));
 // a FPF (notícias, comunicados, resultados) é o que mais importa: o Instagram, o Facebook e os outros sites só
 // podem gastar 70% do limite diário de cada ponte, e os outros 30% ficam guardados para a FPF
@@ -64,7 +79,7 @@ const CASTIGO_MS = 15 * 60e3;
 const PRAZO_CAMINHO_MS = Math.max(3, Number(process.env.PONTE_PRAZO_SEGUNDOS) || 8) * 1000;
 // o Google Apps Script é mais lento a arrancar (o pedido passa por dois servidores da Google antes de sair)
 const PRAZO_GOOGLE_MS = Math.max(5, Number(process.env.PONTE_GOOGLE_PRAZO_SEGUNDOS) || 20) * 1000;
-const prazoDe = (c) => (c.tipo === "google" ? PRAZO_GOOGLE_MS : PRAZO_CAMINHO_MS);
+const prazoDe = (c) => (c.tipo === "google" || c.tipo === "jina" ? PRAZO_GOOGLE_MS : PRAZO_CAMINHO_MS);
 const erroPonte = (msg, extra = {}) => Object.assign(new Error(msg), { daPonte: true, ...extra });
 const cabecalhos = (h) => (!h ? {} : typeof h.entries === "function" && !Array.isArray(h) ? Object.fromEntries(h.entries()) : Array.isArray(h) ? Object.fromEntries(h) : { ...h });
 
@@ -97,8 +112,13 @@ async function peloGoogle(p, url, opcoes) {
       method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow", signal: opcoes.signal,
       body: JSON.stringify({ chave: process.env.PONTE_GOOGLE_CHAVE || process.env.PONTE_CHAVE || "", u: url, metodo, cabecalhos: cabecalhos(opcoes.headers), corpo, redirect: opcoes.redirect || "follow" }),
     });
-    const j = await r.json().catch(() => null);
-    if (!j) throw erroPonte(`a ponte do Google respondeu ${r.status} sem JSON (está publicada como «Aplicação Web», com acesso «Qualquer pessoa»?)`, { longo: r.status === 404 || r.status === 401 });
+    const txt = await r.text(); // (se o prazo acabar aqui, o erro é de prazo, não de resposta estranha)
+    let j = null;
+    try { j = JSON.parse(txt); } catch { /* não é JSON */ }
+    if (!j) {
+      const pedaco = txt.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+      throw erroPonte(`a ponte do Google respondeu ${r.status} sem JSON («${pedaco}»; está publicada como «Aplicação Web», com acesso «Qualquer pessoa»?)`, { longo: r.status === 404 || r.status === 401 || /sign in|iniciar sess|login/i.test(pedaco) });
+    }
     if (j.erro === "chave") throw erroPonte("a ponte do Google recusou a chave (PONTE_GOOGLE_CHAVE diferente da CHAVE do script)", { longo: true });
     if (j.erro === "site") throw erroPonte("a ponte do Google não tem este site na lista (atualiza o script)", { longo: true });
     if (j.erro) throw erroPonte(`ponte do Google: ${j.erro}`, { quota: /quota|limit|too many/i.test(j.erro) });
@@ -110,14 +130,39 @@ async function peloGoogle(p, url, opcoes) {
   }
 }
 
+// Jina Reader: GET à página pelo r.jina.ai, em JSON; o estado que o site deu vem no aviso («returned error 403»)
+async function peloJina(p, url, opcoes) {
+  usosJina.push(Date.now());
+  const r = await fetch(`${p.url}${url}`, {
+    headers: { Accept: "application/json", "X-Return-Format": "html", "X-No-Cache": "true", "X-Timeout": "15", ...(process.env.JINA_API_KEY ? { Authorization: `Bearer ${process.env.JINA_API_KEY}` } : {}) },
+    signal: opcoes.signal,
+  });
+  const txt = await r.text();
+  if (r.status === 429) { usosJina.push(...Array(p.porMinuto).fill(Date.now())); throw erroPonte("o Jina pediu para esperar (limite por minuto)"); }
+  let j = null;
+  try { j = JSON.parse(txt); } catch { /* veio a página em texto */ }
+  const d = j?.data || null;
+  if (!r.ok && !d) throw erroPonte(`o Jina respondeu ${r.status}: ${String(j?.readableMessage || j?.message || txt).replace(/\s+/g, " ").slice(0, 140)}`);
+  const html = String(d ? d.html || d.content || "" : txt);
+  const aviso = String(d?.warning || j?.warning || "");
+  let estado = +(aviso.match(/returned error (\d{3})/i)?.[1] || 0) || 200;
+  // a página de bloqueio do site, entregue como se fosse a página
+  if (estado === 200 && html.length < 600 && /request (was|is) blocked|access denied|forbidden|attention required/i.test(html)) estado = 403;
+  const res = new Response(html, { status: estado, headers: { "content-type": "text/html; charset=utf-8" } });
+  Object.defineProperty(res, "url", { value: d?.url || url });
+  return res;
+}
+
 // os caminhos possíveis para este endereço, pela ordem de preferência, sem os que estão de lado nem os que já
 // gastaram o limite do dia
-export function caminhos(url, agora = Date.now()) {
+export function caminhos(url, agora = Date.now(), opcoes = {}) {
   const host = hostDe(url);
   if (!bloqueado(host)) return [{ id: "direto" }];
+  const soPaginas = String(opcoes.method || "GET").toUpperCase() === "GET" && opcoes.redirect !== "manual";
   const todos = [
     retransmissorAceita(url) && { id: "casa" },
-    ...pontes().filter((p) => usadosHoje(p.id) < p.limite * (eFpf(host) ? 1 : 1 - RESERVA_FPF)),
+    ...pontes().filter((p) => usadosHoje(p.id) < p.limite * (eFpf(host) ? 1 : 1 - RESERVA_FPF))
+      .filter((p) => p.tipo !== "jina" || (soPaginas && p.hosts.some((h) => hostBate(host, h)) && jinaLivre(p, agora))),
     { id: "direto" },
   ].filter(Boolean);
   const livres = todos.filter((r) => (castigo.get(`${host}|${r.id}`) || 0) <= agora);
@@ -129,12 +174,12 @@ function fazer(c, url, opcoes) {
   if (c.id === "casa") return pedirPeloRetransmissor(url, opcoes);
   if (c.id === "direto") return fetch(url, opcoes);
   rota(c.id).hoje = usadosHoje(c.id) + 1;
-  return c.tipo === "google" ? peloGoogle(c, url, opcoes) : pelaPonte(c, url, opcoes);
+  return c.tipo === "google" ? peloGoogle(c, url, opcoes) : c.tipo === "jina" ? peloJina(c, url, opcoes) : pelaPonte(c, url, opcoes);
 }
 
 export async function buscar(url, opcoes = {}) {
   const host = hostDe(url);
-  const lista = caminhos(url);
+  const lista = caminhos(url, Date.now(), opcoes);
   let ultimaResposta = null, ultimoErro = null;
   for (let i = 0; i < lista.length; i++) {
     const c = lista[i];
@@ -182,12 +227,12 @@ export async function testarCaminhos(url) {
   for (const c of todos) {
     const t = Date.now();
     try {
-      const res = await fazer(c, url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/json,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(30000) });
+      const res = await fazer(c, url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/json,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(45000) });
       const texto = await res.text();
       const titulo = texto.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
       out.push({ via: c.nome || c.id, estado: res.status, ok: res.ok, ms: Date.now() - t, tamanho: texto.length, titulo: titulo?.slice(0, 120) || undefined, inicio: titulo ? undefined : texto.replace(/\s+/g, " ").slice(0, 160) });
     } catch (e) {
-      out.push({ via: c.nome || c.id, erro: e.message, ms: Date.now() - t });
+      out.push({ via: c.nome || c.id, erro: /abort|timeout/i.test(`${e.name} ${e.message}`) ? "sem resposta em 45 s" : e.message, ms: Date.now() - t });
     }
   }
   return out;

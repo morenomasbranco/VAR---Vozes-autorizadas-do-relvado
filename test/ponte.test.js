@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buscar, passaPelaPonte } from "../server/ponte.js";
 
+process.env.PONTE_JINA = "0"; // o Jina Reader tem o seu próprio teste
+
 test("ponte: os sites que bloqueiam servidores passam pelo Worker, com a chave; os outros vão diretos", async () => {
   process.env.PONTE_URL = "https://var-ponte.exemplo.workers.dev/";
   process.env.PONTE_CHAVE = "segredo";
@@ -109,5 +111,42 @@ test("pontes: o teste à mão diz o que cada via respondeu, e os erros ficam ano
   } finally {
     globalThis.fetch = original;
     delete process.env.PONTE_GOOGLE_URL;
+  }
+});
+
+test("pontes: o Jina Reader lê as páginas da FPF (só GET, só sites de páginas) e respeita o limite por minuto", async () => {
+  delete process.env.PONTE_JINA;
+  process.env.PONTE_JINA_MINUTO = "2";
+  const { buscar, caminhos } = await import(`../server/ponte.js?jina`);
+  const original = globalThis.fetch;
+  const pedidos = [];
+  globalThis.fetch = async (url, op = {}) => {
+    pedidos.push(String(url));
+    if (String(url).startsWith("https://r.jina.ai/")) {
+      assert.equal(op.headers["X-Return-Format"], "html");
+      const alvo = String(url).slice("https://r.jina.ai/".length);
+      if (alvo.includes("bloqueada")) return new Response(JSON.stringify({ code: 200, data: { url: alvo, html: "<html><body>Your request was blocked.</body></html>" } }));
+      return new Response(JSON.stringify({ code: 200, data: { url: `${alvo}#final`, title: "FPF", html: "<html><title>FPF</title><a href='/news/1'>Notícia</a></html>" } }));
+    }
+    return new Response("Your request was blocked.", { status: 403 });
+  };
+  try {
+    const ids = (u, op) => caminhos(u, Date.now(), op).map((c) => c.id);
+    assert.deepEqual(ids("https://www.fpf.pt/noticias"), ["jina", "direto"]);
+    assert.deepEqual(ids("https://www.instagram.com/api/v1/x"), ["direto"]); // APIs em JSON não vão pelo Jina
+    assert.deepEqual(ids("https://www.fpf.pt/x", { method: "POST" }), ["direto"]);
+    const r = await buscar("https://www.fpf.pt/noticias");
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /news\/1/);
+    assert.equal(r.url, "https://www.fpf.pt/noticias#final");
+    // a página de bloqueio entregue pelo Jina conta como recusa (403) e passa-se ao pedido direto
+    const r2 = await buscar("https://afporto.fpf.pt/bloqueada");
+    assert.equal(r2.status, 403);
+    // 2 por minuto: o terceiro já não vai pelo Jina
+    assert.deepEqual(ids("https://afbraga.fpf.pt/x"), ["direto"]);
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.PONTE_JINA_MINUTO;
+    process.env.PONTE_JINA = "0";
   }
 });
