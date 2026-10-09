@@ -30,7 +30,7 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./facebook.js";
-import { buscar, buscarPor } from "../ponte.js";
+import { buscar, buscarPor, motivo } from "../ponte.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
@@ -1059,7 +1059,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
           marcas: [...new Set((html.match(/\b(?:data-[a-z-]+|class="[^"]{0,40})/g) || []).slice(0, 4000))].slice(0, 60),
           inicioHtml: html.slice(0, 4000),
         });
-      } catch (e) { res.status(502).json({ erro: e.message }); }
+      } catch (e) { res.status(502).json({ erro: motivo(e) }); }
     });
     app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
     app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {

@@ -124,7 +124,7 @@ test("pontes: o Jina Reader lê as páginas da FPF (só GET, só sites de págin
     pedidos.push(String(url));
     if (String(url).startsWith("https://r.jina.ai/")) {
       assert.equal(op.headers["X-Return-Format"], "html");
-      const alvo = String(url).slice("https://r.jina.ai/".length);
+      const alvo = op.body ? JSON.parse(op.body).url : String(url).slice("https://r.jina.ai/".length);
       if (alvo.includes("bloqueada")) return new Response(JSON.stringify({ code: 200, data: { url: alvo, html: "<html><body>Your request was blocked.</body></html>" } }));
       return new Response(JSON.stringify({ code: 200, data: { url: `${alvo}#final`, title: "FPF", html: "<html><title>FPF</title><a href='/news/1'>Notícia</a></html>" } }));
     }
@@ -147,6 +147,27 @@ test("pontes: o Jina Reader lê as páginas da FPF (só GET, só sites de págin
   } finally {
     globalThis.fetch = original;
     delete process.env.PONTE_JINA_MINUTO;
+    process.env.PONTE_JINA = "0";
+  }
+});
+
+test("pontes: «fetch failed» mostra o motivo; o Jina tenta outra vez pelo endereço colado se o POST falhar", async () => {
+  delete process.env.PONTE_JINA;
+  const { buscarPor, motivo } = await import(`../server/ponte.js?jina2`);
+  assert.equal(motivo(Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }) })), "fetch failed (ECONNRESET)");
+  const original = globalThis.fetch;
+  const pedidos = [];
+  globalThis.fetch = async (url, op = {}) => {
+    pedidos.push(`${op.method || "GET"} ${url}`);
+    if (op.method === "POST") throw Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } });
+    return new Response(JSON.stringify({ code: 200, data: { url: "https://www.facebook.com/x", html: "<abbr data-utime='1'>1</abbr>" } }));
+  };
+  try {
+    const r = await buscarPor("jina", "https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2FFCPorto%2F&tabs=timeline");
+    assert.match(await r.text(), /data-utime/);
+    assert.deepEqual(pedidos.map((p) => p.split(" ")[0]), ["POST", "GET"]);
+  } finally {
+    globalThis.fetch = original;
     process.env.PONTE_JINA = "0";
   }
 });
