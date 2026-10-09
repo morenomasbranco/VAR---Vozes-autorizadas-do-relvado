@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { registar, retransmissorLigado, hostBate, respostaDe } from "../server/retransmissor.js";
 import { buscar, caminhos, bloqueado } from "../server/ponte.js";
 
+process.env.PONTE_JINA = "0"; // o Jina Reader tem o seu próprio teste
+
 // um retransmissor a fingir: guarda os pedidos e responde com o que o teste mandar
 function falso(responder) {
   const enviados = [];

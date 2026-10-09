@@ -466,14 +466,18 @@ app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));
-// teste à mão das pontes para um site (só os da lista; um teste de cada vez, no máximo um a cada 10 s)
-let ultimoTeste = 0;
+// teste à mão das pontes para um site (só os da lista); os testes correm um de cada vez, em fila (no máximo 3)
+let filaTestes = Promise.resolve();
+let emFila = 0;
 app.get("/api/retransmissor/testar", async (req, res) => {
-  if (Date.now() - ultimoTeste < 10e3) return res.status(429).json({ erro: "espera 10 segundos entre testes" });
-  ultimoTeste = Date.now();
+  if (emFila >= 3) return res.status(429).json({ erro: "há testes a correr; tenta daqui a um minuto" });
+  emFila++;
   const u = String(req.query.u || "https://www.fpf.pt/");
-  try { res.json({ endereco: u, resultados: await testarCaminhos(u) }); }
+  const vez = filaTestes.then(() => testarCaminhos(u));
+  filaTestes = vez.catch(() => {});
+  try { res.json({ endereco: u, resultados: await vez }); }
   catch (e) { res.status(400).json({ erro: e.message }); }
+  finally { emFila--; }
 });
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
