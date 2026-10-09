@@ -2,6 +2,10 @@
 
 A FPF, o Sofascore, o Instagram e o Facebook bloqueiam os servidores de alojamento, como o Northflank (respondem 403 ou 429). A ponte é um pequeno programa que corre nos servidores do Cloudflare, de graça: o VAR passa a pedir as páginas através dela, e os pedidos chegam aos sites com os endereços do Cloudflare, que estes sites bloqueiam muito menos. O teu computador não precisa de estar ligado.
 
+> A FPF e o Instagram recusam muitas vezes também o Cloudflare (o Worker não consegue esconder que é um Worker). Junta também a ponte do Google Apps Script e a do Netlify, que saem por outros endereços e também são gratuitas (`deploy/GUIA-PONTE-GOOGLE.md`): o servidor experimenta-as todas e fica, para cada site, com a que ele aceitar.
+>
+> Se já tinhas a ponte, cola outra vez o `deploy/ponte-cloudflare.js` no Worker (mantendo a tua `CHAVE`): passou a aceitar todos os sites `*.fpf.pt` (as associações) e a dizer o endereço final das páginas.
+
 Tempo: cerca de 10 minutos.
 
 ## 1. Criar a conta no Cloudflare

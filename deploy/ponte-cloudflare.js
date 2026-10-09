@@ -6,11 +6,14 @@
 // 2. Cola este ficheiro inteiro no editor do Worker e carrega em «Deploy». Ver deploy/GUIA-PONTE.md.
 const CHAVE = "muda-esta-chave";
 
+// «.fpf.pt» serve para todos os sites da FPF: resultados.fpf.pt, www.fpf.pt e os das associações (afporto.fpf.pt…)
 const SITES = [
-  "resultados.fpf.pt", "www.fpf.pt", "api.sofascore.com", "www.sofascore.com",
-  "www.instagram.com", "i.instagram.com", "www.facebook.com",
+  ".fpf.pt", "api.sofascore.com", "www.sofascore.com",
+  "www.instagram.com", "i.instagram.com", "www.facebook.com", "m.facebook.com",
   "imginn.com", "www.picnob.com", "www.pixwox.com", "anonyig.com", "storiesig.info", "fastdl.app",
+  "www.ligaportugal.pt", "www.zerozero.pt",
 ];
+const permitido = (h) => SITES.some((s) => (s.startsWith(".") ? h === s.slice(1) || h.endsWith(s) : h === s));
 
 export default {
   async fetch(pedido) {
@@ -21,7 +24,7 @@ export default {
     }
     let url;
     try { url = new URL(alvo); } catch { return new Response("endereço inválido", { status: 400 }); }
-    if (!SITES.includes(url.hostname)) return new Response("site não permitido", { status: 403, headers: { "x-ponte": "site" } });
+    if (!permitido(url.hostname)) return new Response("site não permitido", { status: 403, headers: { "x-ponte": "site" } });
     // os cabeçalhos do servidor (navegador, idioma, sessão do Instagram…) seguem; os da ponte e do Cloudflare não
     const cab = new Headers();
     for (const [k, v] of pedido.headers) {
@@ -37,6 +40,7 @@ export default {
     const h = new Headers(r.headers);
     h.delete("set-cookie");
     h.set("x-ponte", "ok");
+    h.set("x-ponte-url", r.url || url.toString()); // o endereço final, depois dos redirecionamentos
     return new Response(r.body, { status: r.status, headers: h });
   },
 };

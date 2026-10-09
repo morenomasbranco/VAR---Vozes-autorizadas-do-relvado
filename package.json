@@ -13,6 +13,7 @@
     "arrumar-fontes": "node scripts/verificar-fontes.js --corrigir",
     "test": "node --test test/*.test.js",
     "instagram-relay": "node scripts/instagram-relay.js",
+    "retransmissor": "node scripts/retransmissor.js",
     "procurar-redes": "node scripts/procurar-redes.js",
     "fpf-sonda": "node scripts/fpf-sonda.js",
     "importar-clubes": "python3 scripts/importar_clubes.py"

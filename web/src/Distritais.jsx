@@ -131,7 +131,7 @@ export default function Distritais({ API = "", now, query = "" }) {
   const fbPausa = fb && agora < (fb.pausaAte || 0);
   const fbFalha = fb && fb.erros > 0 && !fb.ok;
   // nada está a chegar: o Instagram recusa, os visualizadores falham, o Facebook também (ou não há) e não há retransmissor
-  const bloqueado = igPausa && anonFalha && !relayVivo && (!fb || fbPausa || fbFalha);
+  const bloqueado = igPausa && anonFalha && !relayVivo && !e.casa && (!fb || fbPausa || fbFalha);
   const total = Object.values(d.posts || {}).reduce((t, l) => t + l.length, 0);
   const totalNoticias = Object.values(d.noticias || {}).reduce((t, l) => t + l.length, 0);
   const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
@@ -152,14 +152,14 @@ export default function Distritais({ API = "", now, query = "" }) {
           {igPausa ? ` · o Instagram está a limitar os pedidos deste servidor (${ig.ultimoErro || "recusa"}); volta a tentar às ${hora(ig.pausaAte)}, mais devagar` : ig.ultimoOk ? " · a ler" : ""}
         </li>
         {fb && <li>Facebook: {e.lidosFacebook ?? 0} de {e.paginasFacebook ?? fb.paginas} páginas lidas{fbPausa ? ` · o Facebook está a recusar os pedidos (${fb.ultimoErro || "recusa"}); volta a tentar às ${hora(fb.pausaAte)}` : fbFalha ? ` · ainda sem leituras certas (${fb.ultimoErro || "erro"})` : fb.ok ? " · a ler" : ""}</li>}
-        {relayVivo && <li>Retransmissor de casa: {vias.retransmissor.ok} perfis recebidos</li>}
+        {e.casa && <li>Retransmissor de casa ligado: o Instagram e o Facebook dos clubes são lidos pela ligação de casa, em tempo real</li>}
+        {relayVivo && <li>Retransmissor dos stories: {vias.retransmissor.ok} perfis recebidos</li>}
       </ul>
       {bloqueado && (
         <p className="ptwarn dnota">
           Neste momento nenhuma das vias está a trazer posts dos clubes (as notícias das associações e da imprensa continuam a chegar).{" "}
-          {ig.comSessao
-            ? "O Instagram está a limitar este servidor mesmo com a sessão: costuma acontecer com servidores de alojamento e passa ao fim de algum tempo, mas a forma mais fiável é o retransmissor (npm run instagram-relay) num computador de casa."
-            : "Junta ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) ou deixa o retransmissor (npm run instagram-relay) a correr num computador de casa."}
+          O Instagram e o Facebook recusam os servidores de alojamento. O servidor experimenta sozinho as pontes gratuitas configuradas (Google, Cloudflare, Netlify); se nenhuma passar, a via que nunca falha é um telemóvel antigo ligado ao carregador com o retransmissor (npm run retransmissor).
+          {ig.comSessao ? "" : " Também ajuda juntar ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém)."}
         </p>
       )}
       <div className="cols dcols">

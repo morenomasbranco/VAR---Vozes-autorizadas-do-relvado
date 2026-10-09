@@ -16,6 +16,10 @@ import { sleep, hash, norm, lerTexto, entidades, conserta } from "../util.js";
 import { readFeed } from "./rss.js";
 import { traduzirGoogle } from "../gtradutor.js";
 import { ASSOCIACOES, orgPorNome, associacaoDoTexto } from "../pt/catalogo.js";
+// a FPF e os sites das associações (*.fpf.pt) bloqueiam os servidores de alojamento: estes pedidos passam pelo
+// retransmissor de casa ou pela ponte do Cloudflare, quando os há (server/ponte.js); os outros sites vão diretos
+import { buscar, bloqueado } from "../ponte.js";
+import { aoLigarRetransmissor } from "../retransmissor.js";
 
 const FILE = new URL("../../data/oficiais.json", import.meta.url);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -141,7 +145,7 @@ export function dataDoUrl(u, tz = LISBOA) {
 
 /* ───────── Pedidos ───────── */
 async function pedir(url, { lang = "pt", accept = "text/html,application/xhtml+xml,*/*;q=0.8", json = false } = {}) {
-  const r = await fetch(url, {
+  const r = await buscar(url, {
     headers: { "User-Agent": UA, Accept: json ? "application/json,*/*;q=0.5" : accept, "Accept-Language": `${lang === "pt-br" ? "pt-BR" : lang},pt;q=0.8,en;q=0.7` },
     redirect: "follow", signal: AbortSignal.timeout(15000),
   });
@@ -403,9 +407,11 @@ const LEITORES = {
   async google(s) {
     const loc = LOCALES[s.locale] || LOCALES[s.lang === "pt-br" ? "br" : s.lang] || LOCALES.pt;
     let erro = null;
-    for (const q of [].concat(s.google || [])) {
+    // primeiro só as do último dia (o Google News dá as mais recentes primeiro só assim); sem nada, a semana
+    const pesquisas = [].concat(s.google || []).flatMap((q) => [`${q} when:1d`, `${q} when:7d`]);
+    for (const q of pesquisas) {
       try {
-        const feed = await readFeed(`${GOOGLE_BASE}?q=${encodeURIComponent(`${q} when:7d`)}&${loc}`, {});
+        const feed = await readFeed(`${GOOGLE_BASE}?q=${encodeURIComponent(q)}&${loc}`, {});
         const lista = (feed?.items || []).slice(0, 30).map((it) => {
           const t = limpa(it.title);
           const meio = t.match(/\s+-\s+([^-]+)$/)?.[1]?.trim() || undefined;
@@ -581,6 +587,10 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
     let falhas = 0;
     let google = false;
     let voltaAoSite = 0;
+    let host = "";
+    try { host = new URL(s.url).hostname; } catch { /* */ }
+    // o retransmissor de casa ligou-se: um site que bloqueava o servidor (FPF, associações) volta a ser lido já
+    if (bloqueado(host)) aoLigarRetransmissor(() => { if (google) voltaAoSite = 0; });
     for (;;) {
       let espera = s.minutos ? s.minutos * 60e3 : RITMO;
       try {

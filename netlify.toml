@@ -1,7 +1,11 @@
-# O Netlify aloja só o site. O servidor (pasta server/) corre noutro serviço — ver README.
+# O Netlify aloja o site e uma ponte gratuita (netlify/functions/ponte.mjs, em /ponte) para os sites que bloqueiam
+# o servidor. O servidor (pasta server/) corre noutro serviço — ver README.
 [build]
   command = "npm run build"
   publish = "web/dist"
 
 [build.environment]
   NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
