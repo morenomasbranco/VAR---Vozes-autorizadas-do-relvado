@@ -29,7 +29,8 @@ import { lerTexto } from "./stories/parser.js";
 import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
-import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
+import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./facebook.js";
+import { buscar } from "../ponte.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
@@ -1035,6 +1036,30 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     // com as notícias e os comunicados de cada associação e a imprensa sobre ela (server/sources/oficiais.js)
     app.get("/api/distritais", (req, res) => res.json({ ...distritais.feed({ org: req.query.org || null, limite: Math.min(Number(req.query.limite) || 40, 120) }), noticias: noticiasDistritais(req.query.org || null) }));
     // retransmissor de casa: pede perfis de clubes para ler e devolve os posts (chave PT_TOKEN)
+    // o que o Facebook devolve ao servidor para uma página (para perceber porque não aparecem posts)
+    let testeFb = 0;
+    app.get("/api/distritais/teste-facebook", async (req, res) => {
+      if (Date.now() - testeFb < 15e3) return res.status(429).json({ erro: "espera 15 segundos entre testes" });
+      testeFb = Date.now();
+      const pagina = paginaFacebook(String(req.query.pagina || "https://www.facebook.com/FCPorto/"));
+      if (!pagina) return res.status(400).json({ erro: "endereço de página de Facebook inválido" });
+      const url = urlPlugin(pagina.url);
+      try {
+        const r = await buscar(url, { headers: { "User-Agent": process.env.FB_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.7", Referer: "https://www.google.com/" }, redirect: "follow", signal: AbortSignal.timeout(45000) });
+        const html = await r.text();
+        const texto = html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        const posts = lerPlugin(html, { nome: "teste", org: "teste", facebook: pagina.url });
+        res.json({
+          pagina: pagina.url, estado: r.status, enderecoFinal: r.url, tamanho: html.length,
+          titulo: html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || null,
+          horas: (html.match(/data-utime=/g) || []).length, pedeLogin: /login_form|\/login\/\?next=|checkpoint/i.test(html),
+          postsLidos: posts.length, posts: posts.slice(0, 3).map((p) => ({ quando: new Date(p.ts).toISOString(), texto: p.legenda.slice(0, 120), url: p.url })),
+          texto: texto.slice(0, 1500),
+          marcas: [...new Set((html.match(/\b(?:data-[a-z-]+|class="[^"]{0,40})/g) || []).slice(0, 4000))].slice(0, 60),
+          inicioHtml: html.slice(0, 4000),
+        });
+      } catch (e) { res.status(502).json({ erro: e.message }); }
+    });
     app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
     app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {
       if (!autorizado(req)) return res.status(401).json({ erro: "chave PT_TOKEN em falta ou errada" });
