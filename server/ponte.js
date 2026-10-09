@@ -173,9 +173,13 @@ export function caminhos(url, agora = Date.now(), opcoes = {}) {
   const host = hostDe(url);
   if (!bloqueado(host)) return [{ id: "direto" }];
   const soPaginas = String(opcoes.method || "GET").toUpperCase() === "GET" && opcoes.redirect !== "manual";
+  // Um pedido com sessão (o cookie de uma conta de Instagram ou de Facebook) nunca passa pelas pontes: a mesma conta
+  // a aparecer ora pelo Cloudflare, ora pelo Google, ora pelo servidor é o que o Instagram vigia para travar contas.
+  // Vai sempre pelo mesmo sítio: o retransmissor de casa, se houver, ou o servidor.
+  const comSessao = Object.keys(opcoes.headers || {}).some((k) => /^cookie$/i.test(k));
   const todos = [
     retransmissorAceita(url) && { id: "casa" },
-    ...pontes().filter((p) => usadosHoje(p.id) < p.limite * (eFpf(host) ? 1 : 1 - RESERVA_FPF))
+    ...(comSessao ? [] : pontes()).filter((p) => usadosHoje(p.id) < p.limite * (eFpf(host) ? 1 : 1 - RESERVA_FPF))
       .filter((p) => p.tipo !== "jina" || (soPaginas && p.hosts.some((h) => hostBate(host, h)) && jinaLivre(p, agora))),
     { id: "direto" },
   ].filter(Boolean);

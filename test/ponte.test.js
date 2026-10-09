@@ -171,3 +171,17 @@ test("pontes: «fetch failed» mostra o motivo; o Jina tenta outra vez pelo ende
     process.env.PONTE_JINA = "0";
   }
 });
+
+test("pontes: um pedido com a sessão de uma conta (Cookie) nunca passa pelas pontes, só pelo servidor", async () => {
+  process.env.PONTE_URL = "https://x.workers.dev";
+  process.env.PONTE_GOOGLE_URL = "https://script.google.com/macros/s/S/exec";
+  const { caminhos } = await import(`../server/ponte.js?sessao`);
+  try {
+    const ids = (op) => caminhos("https://www.instagram.com/api/v1/users/web_profile_info/?username=x", Date.now(), op).map((c) => c.id);
+    assert.deepEqual(ids({ headers: { Cookie: "sessionid=abc" } }), ["direto"]);
+    assert.deepEqual(ids({ headers: { "User-Agent": "X" } }), ["ponte", "google", "direto"]);
+  } finally {
+    delete process.env.PONTE_URL;
+    delete process.env.PONTE_GOOGLE_URL;
+  }
+});
