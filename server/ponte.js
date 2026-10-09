@@ -56,6 +56,9 @@ const eFpf = (host) => hostBate(host, "*.fpf.pt");
 
 const RECUSA = new Set([401, 403, 429, 503]);
 const CASTIGO_MS = 15 * 60e3;
+// um caminho que não responde (alguns sites deixam os pedidos pendurados em vez de recusar) não pode gastar o prazo
+// todo de quem pediu: cada caminho tem o seu prazo e, se o passar, fica de lado e passa-se ao seguinte
+const PRAZO_CAMINHO_MS = Math.max(3, Number(process.env.PONTE_PRAZO_SEGUNDOS) || 8) * 1000;
 const erroPonte = (msg, extra = {}) => Object.assign(new Error(msg), { daPonte: true, ...extra });
 const cabecalhos = (h) => (!h ? {} : typeof h.entries === "function" && !Array.isArray(h) ? Object.fromEntries(h.entries()) : Array.isArray(h) ? Object.fromEntries(h) : { ...h });
 
@@ -131,8 +134,14 @@ export async function buscar(url, opcoes = {}) {
     const c = lista[i];
     const haMais = i + 1 < lista.length;
     rota(c.id).pedidos++;
+    // o último caminho fica com o prazo de quem pediu; os outros, com o seu
+    // (o temporizador para assim que a resposta chega, para não cortar a leitura de uma página grande)
+    const ctl = haMais ? new AbortController() : null;
+    const temporizador = ctl && setTimeout(() => ctl.abort(Object.assign(new Error("sem resposta"), { name: "TimeoutError" })), PRAZO_CAMINHO_MS);
+    const prazo = ctl?.signal;
+    const signal = prazo ? (opcoes.signal ? AbortSignal.any([opcoes.signal, prazo]) : prazo) : opcoes.signal;
     try {
-      const res = await fazer(c, url, opcoes);
+      const res = await fazer(c, url, { ...opcoes, signal }).finally(() => clearTimeout(temporizador));
       if (RECUSA.has(res.status) && haMais) {
         rota(c.id).recusas++;
         castigo.set(`${host}|${c.id}`, Date.now() + CASTIGO_MS);
@@ -144,9 +153,9 @@ export async function buscar(url, opcoes = {}) {
       else { castigo.delete(`${host}|${c.id}`); porSite[host] = { caminho: c.nome || c.id, ts: Date.now() }; }
       return res;
     } catch (e) {
-      if (e?.name === "AbortError" || e?.name === "TimeoutError" || opcoes.signal?.aborted) throw e; // o prazo de quem pediu acabou
+      if (opcoes.signal?.aborted) throw e; // o prazo de quem pediu acabou
       rota(c.id).falhas++;
-      ultimoErro = e;
+      ultimoErro = prazo?.aborted ? Object.assign(new Error(`${c.nome || c.id}: sem resposta em ${PRAZO_CAMINHO_MS / 1000} s`), { status: 0 }) : e;
       if (e?.quota && c.id !== "casa" && c.id !== "direto") rota(c.id).hoje = Infinity; // a quota do dia acabou nesse serviço
       else if (!e?.semRetransmissor) castigo.set(`${host}|${c.id}`, Date.now() + (e?.longo ? 6 * 3600e3 : CASTIGO_MS));
     }
