@@ -56,6 +56,12 @@ const rota = (id) => (rotas[id] ||= { pedidos: 0, recusas: 0, falhas: 0, hoje: 0
 const porSite = {};
 const castigo = new Map(); // `${host}|${rota}` → até quando fica de lado
 const erros = {}; // `${host}|${rota}` → a última coisa que correu mal (para o /api/retransmissor dizer porquê)
+// «fetch failed» esconde o motivo (ligação recusada, prazo, certificado…), que vem em e.cause
+export const motivo = (e) => {
+  const c = e?.cause;
+  const extra = c ? (c.code || c.message || "") + (c.code && c.message && !String(c.message).includes(c.code) ? `: ${c.message}` : "") : "";
+  return `${e?.message || e}${extra ? ` (${extra})` : ""}`;
+};
 const anotar = (host, id, erro) => { erros[`${host}|${id}`] = { erro: String(erro).slice(0, 200), ts: new Date().toISOString() }; };
 const diaHoje = () => new Date().toISOString().slice(0, 10);
 const usadosHoje = (id) => { const r = rota(id); if (r.dia !== diaHoje()) { r.dia = diaHoje(); r.hoje = 0; } return r.hoje; };
@@ -134,10 +140,17 @@ async function peloGoogle(p, url, opcoes) {
 // Jina Reader: GET à página pelo r.jina.ai, em JSON; o estado que o site deu vem no aviso («returned error 403»)
 async function peloJina(p, url, opcoes) {
   usosJina.push(Date.now());
-  const r = await fetch(`${p.url}${url}`, {
-    headers: { Accept: "application/json", "X-Return-Format": "html", "X-No-Cache": "true", "X-Timeout": "15", ...(process.env.JINA_API_KEY ? { Authorization: `Bearer ${process.env.JINA_API_KEY}` } : {}) },
-    signal: opcoes.signal,
-  });
+  const cab = { Accept: "application/json", "X-Return-Format": "html", "X-No-Cache": "true", "X-Timeout": "20", ...(process.env.JINA_API_KEY ? { Authorization: `Bearer ${process.env.JINA_API_KEY}` } : {}) };
+  // o endereço vai no corpo (POST), e não colado ao do Jina: os endereços com outro endereço lá dentro (o plugin do
+  // Facebook) chegavam-lhe trocados. Se a ligação cair, tenta-se outra vez, pelo endereço colado (GET).
+  let r;
+  try {
+    r = await fetch(p.url, { method: "POST", headers: { ...cab, "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal: opcoes.signal });
+    if (r.status === 404 || r.status === 405) throw Object.assign(new Error(`POST respondeu ${r.status}`), { tentarGet: true });
+  } catch (e) {
+    if (opcoes.signal?.aborted) throw e;
+    r = await fetch(`${p.url}${url}`, { headers: cab, signal: opcoes.signal }).catch((e2) => { throw Object.assign(new Error(`ligação ao Jina falhou: ${motivo(e2)}; antes: ${motivo(e)}`), { daPonte: true }); });
+  }
   const txt = await r.text();
   if (r.status === 429) { usosJina.push(...Array(p.porMinuto).fill(Date.now())); throw erroPonte("o Jina pediu para esperar (limite por minuto)"); }
   let j = null;
@@ -193,7 +206,7 @@ export async function buscarPor(id, url, opcoes = {}) {
     return res;
   } catch (e) {
     rota(c.id).falhas++;
-    anotar(hostDe(url), c.id, e.message);
+    anotar(hostDe(url), c.id, motivo(e));
     throw e;
   }
 }
@@ -229,7 +242,7 @@ export async function buscar(url, opcoes = {}) {
       if (opcoes.signal?.aborted) { anotar(host, c.id, "acabou o prazo de quem pediu antes de esta via responder"); throw e; }
       rota(c.id).falhas++;
       ultimoErro = prazo?.aborted ? Object.assign(new Error(`${c.nome || c.id}: sem resposta em ${prazoDe(c) / 1000} s`), { status: 0 }) : e;
-      anotar(host, c.id, ultimoErro.message);
+      anotar(host, c.id, motivo(ultimoErro));
       if (e?.quota && c.id !== "casa" && c.id !== "direto") rota(c.id).hoje = Infinity; // a quota do dia acabou nesse serviço
       else if (!e?.semRetransmissor) castigo.set(`${host}|${c.id}`, Date.now() + (e?.longo ? 6 * 3600e3 : CASTIGO_MS));
     }
@@ -262,7 +275,7 @@ export async function testarCaminhos(url, { so = null } = {}) {
         texto: limpo.slice(0, 600),
       });
     } catch (e) {
-      out.push({ via: c.nome || c.id, erro: /abort|timeout/i.test(`${e.name} ${e.message}`) ? "sem resposta em 45 s" : e.message, ms: Date.now() - t });
+      out.push({ via: c.nome || c.id, erro: /abort|timeout/i.test(`${e.name} ${e.message}`) ? "sem resposta em 45 s" : motivo(e), ms: Date.now() - t });
     }
   }
   return out;

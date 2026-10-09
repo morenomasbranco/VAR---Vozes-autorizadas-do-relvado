@@ -61,7 +61,7 @@ test("Facebook: sem sessão vem só o cabeçalho da página; os posts vêm pelo 
   const original = globalThis.fetch;
   const t = Math.floor(Date.now() / 1000) - 3600;
   globalThis.fetch = async (url) => {
-    if (String(url).startsWith("https://r.jina.ai/")) {
+    if (String(url).startsWith("https://r.jina.ai")) {
       return new Response(JSON.stringify({ code: 200, data: { url: "x", html: `<div><a href="https://www.facebook.com/FCPorto/posts/123"><abbr data-utime="${t}">1 h</abbr></a><div class="userContent"><p>Vitória por 2-0 frente ao Braga</p></div></div>` } }));
     }
     return new Response('<html><title>Facebook</title><div>FC Porto Seguir Página 4,6 M seguidores</div><a class="pluginConnectButton">Seguir</a></html>', { status: 200 });
