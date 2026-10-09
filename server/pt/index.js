@@ -30,7 +30,7 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./facebook.js";
-import { buscar } from "../ponte.js";
+import { buscar, buscarPor } from "../ponte.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
@@ -1045,12 +1045,13 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       if (!pagina) return res.status(400).json({ erro: "endereço de página de Facebook inválido" });
       const url = urlPlugin(pagina.url);
       try {
-        const r = await buscar(url, { headers: { "User-Agent": process.env.FB_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.7", Referer: "https://www.google.com/" }, redirect: "follow", signal: AbortSignal.timeout(45000) });
+        const via = req.query.via ? String(req.query.via) : null;
+        const r = await (via ? (u, o) => buscarPor(via, u, o) : buscar)(url, { headers: { "User-Agent": process.env.FB_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.7", Referer: "https://www.google.com/" }, redirect: "follow", signal: AbortSignal.timeout(45000) });
         const html = await r.text();
         const texto = html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
         const posts = lerPlugin(html, { nome: "teste", org: "teste", facebook: pagina.url });
         res.json({
-          pagina: pagina.url, estado: r.status, enderecoFinal: r.url, tamanho: html.length,
+          pagina: pagina.url, via: via || "a primeira que respondeu", estado: r.status, enderecoFinal: r.url, tamanho: html.length,
           titulo: html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || null,
           horas: (html.match(/data-utime=/g) || []).length, pedeLogin: /login_form|\/login\/\?next=|checkpoint/i.test(html),
           postsLidos: posts.length, posts: posts.slice(0, 3).map((p) => ({ quando: new Date(p.ts).toISOString(), texto: p.legenda.slice(0, 120), url: p.url })),

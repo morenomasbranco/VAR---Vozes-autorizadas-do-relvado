@@ -9,7 +9,7 @@
 // Se o Facebook passar a pedir sessão, o FB_COOKIE (os cookies c_user e xs de uma conta qualquer, copiados do
 // browser) é enviado com o pedido. Isto não é uma API oficial e pode mudar.
 import { hash, entidades, conserta } from "../util.js";
-import { buscar } from "../ponte.js";
+import { buscar, buscarPor, viaDisponivel } from "../ponte.js";
 
 const UA = process.env.FB_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 // botões e rodapés do plugin que não fazem parte do texto do post
@@ -76,12 +76,23 @@ export function lerPlugin(html, clube, agora = Date.now()) {
 export async function lerPaginaFacebook(clube, { cookie = process.env.FB_COOKIE || null } = {}) {
   const p = paginaFacebook(clube.facebook);
   if (!p) return { posts: [] };
-  const res = await buscar(urlPlugin(p.url), {
+  const url = urlPlugin(p.url);
+  const opcoes = {
     headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.7", Referer: "https://www.google.com/", ...(cookie ? { Cookie: cookie } : {}) },
     redirect: "follow", signal: AbortSignal.timeout(20000),
-  });
+  };
+  let res = await buscar(url, opcoes);
   if (!res.ok) throw Object.assign(new Error(`Facebook respondeu ${res.status}`), { status: res.status });
-  const html = await res.text();
-  if (/id=["']login_form["']|\/login\/\?next=|checkpoint/i.test(html) && !/data-utime/.test(html)) throw Object.assign(new Error("Facebook pediu sessão"), { status: 401 });
+  let html = await res.text();
+  // Sem sessão, o Facebook manda só o cabeçalho da página (nome e seguidores) e os posts, se vierem, são montados no
+  // browser. Nesse caso tenta-se o Jina Reader, que abre a página num browser verdadeiro.
+  if (!/data-utime/.test(html) && !cookie && viaDisponivel("jina", url)) {
+    try {
+      const r2 = await buscarPor("jina", url, { signal: AbortSignal.timeout(30000) });
+      const h2 = r2.ok ? await r2.text() : "";
+      if (/data-utime/.test(h2)) html = h2;
+    } catch { /* fica o que veio */ }
+  }
+  if (!/data-utime/.test(html) && /id=["']login_form["']|\/login\/\?next=|checkpoint|pluginConnectButton/i.test(html)) throw Object.assign(new Error("o Facebook só mostra os posts com sessão iniciada (veio só o cabeçalho da página)"), { status: 401 });
   return { posts: lerPlugin(html, clube) };
 }
