@@ -27,7 +27,7 @@ import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
 import { createPortugal } from "./pt/index.js";
 import { ligarRetransmissor, resumoRetransmissor } from "./retransmissor.js";
-import { estadoEncaminhamento } from "./ponte.js";
+import { estadoEncaminhamento, testarCaminhos } from "./ponte.js";
 
 const readJson = (url, fallback) => { try { return JSON.parse(fs.readFileSync(url, "utf8")); } catch { return fallback; } };
 const FONTES = readJson(new URL("../fontes.json", import.meta.url), {});
@@ -466,6 +466,15 @@ app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));
+// teste à mão das pontes para um site (só os da lista; um teste de cada vez, no máximo um a cada 10 s)
+let ultimoTeste = 0;
+app.get("/api/retransmissor/testar", async (req, res) => {
+  if (Date.now() - ultimoTeste < 10e3) return res.status(429).json({ erro: "espera 10 segundos entre testes" });
+  ultimoTeste = Date.now();
+  const u = String(req.query.u || "https://www.fpf.pt/");
+  try { res.json({ endereco: u, resultados: await testarCaminhos(u) }); }
+  catch (e) { res.status(400).json({ erro: e.message }); }
+});
 app.get("/api/status", (req, res) => res.json({ ...status, clientes: clients.size, noticias: store.count() }));
 app.get("/api/stream", (req, res) => {
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });

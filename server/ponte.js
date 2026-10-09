@@ -39,12 +39,15 @@ const rotas = {};
 const rota = (id) => (rotas[id] ||= { pedidos: 0, recusas: 0, falhas: 0, hoje: 0, dia: null });
 const porSite = {};
 const castigo = new Map(); // `${host}|${rota}` → até quando fica de lado
+const erros = {}; // `${host}|${rota}` → a última coisa que correu mal (para o /api/retransmissor dizer porquê)
+const anotar = (host, id, erro) => { erros[`${host}|${id}`] = { erro: String(erro).slice(0, 200), ts: new Date().toISOString() }; };
 const diaHoje = () => new Date().toISOString().slice(0, 10);
 const usadosHoje = (id) => { const r = rota(id); if (r.dia !== diaHoje()) { r.dia = diaHoje(); r.hoje = 0; } return r.hoje; };
 export const estadoEncaminhamento = () => ({
   pontes: pontes().map((p) => ({ id: p.id, nome: p.nome, limiteDia: p.limite, hoje: usadosHoje(p.id) })),
   rotas, porSite,
   deLado: Object.fromEntries([...castigo].filter(([, t]) => t > Date.now()).map(([k, t]) => [k, new Date(t).toISOString()])),
+  erros: Object.fromEntries(Object.entries(erros).filter(([, e]) => Date.now() - Date.parse(e.ts) < 6 * 3600e3)),
 });
 
 export const temPontes = () => pontes().length > 0;
@@ -59,6 +62,9 @@ const CASTIGO_MS = 15 * 60e3;
 // um caminho que não responde (alguns sites deixam os pedidos pendurados em vez de recusar) não pode gastar o prazo
 // todo de quem pediu: cada caminho tem o seu prazo e, se o passar, fica de lado e passa-se ao seguinte
 const PRAZO_CAMINHO_MS = Math.max(3, Number(process.env.PONTE_PRAZO_SEGUNDOS) || 8) * 1000;
+// o Google Apps Script é mais lento a arrancar (o pedido passa por dois servidores da Google antes de sair)
+const PRAZO_GOOGLE_MS = Math.max(5, Number(process.env.PONTE_GOOGLE_PRAZO_SEGUNDOS) || 20) * 1000;
+const prazoDe = (c) => (c.tipo === "google" ? PRAZO_GOOGLE_MS : PRAZO_CAMINHO_MS);
 const erroPonte = (msg, extra = {}) => Object.assign(new Error(msg), { daPonte: true, ...extra });
 const cabecalhos = (h) => (!h ? {} : typeof h.entries === "function" && !Array.isArray(h) ? Object.fromEntries(h.entries()) : Array.isArray(h) ? Object.fromEntries(h) : { ...h });
 
@@ -137,11 +143,12 @@ export async function buscar(url, opcoes = {}) {
     // o último caminho fica com o prazo de quem pediu; os outros, com o seu
     // (o temporizador para assim que a resposta chega, para não cortar a leitura de uma página grande)
     const ctl = haMais ? new AbortController() : null;
-    const temporizador = ctl && setTimeout(() => ctl.abort(Object.assign(new Error("sem resposta"), { name: "TimeoutError" })), PRAZO_CAMINHO_MS);
+    const temporizador = ctl && setTimeout(() => ctl.abort(Object.assign(new Error("sem resposta"), { name: "TimeoutError" })), prazoDe(c));
     const prazo = ctl?.signal;
     const signal = prazo ? (opcoes.signal ? AbortSignal.any([opcoes.signal, prazo]) : prazo) : opcoes.signal;
     try {
       const res = await fazer(c, url, { ...opcoes, signal }).finally(() => clearTimeout(temporizador));
+      if (RECUSA.has(res.status)) anotar(host, c.id, `o site respondeu ${res.status}`);
       if (RECUSA.has(res.status) && haMais) {
         rota(c.id).recusas++;
         castigo.set(`${host}|${c.id}`, Date.now() + CASTIGO_MS);
@@ -153,13 +160,35 @@ export async function buscar(url, opcoes = {}) {
       else { castigo.delete(`${host}|${c.id}`); porSite[host] = { caminho: c.nome || c.id, ts: Date.now() }; }
       return res;
     } catch (e) {
-      if (opcoes.signal?.aborted) throw e; // o prazo de quem pediu acabou
+      if (opcoes.signal?.aborted) { anotar(host, c.id, "acabou o prazo de quem pediu antes de esta via responder"); throw e; }
       rota(c.id).falhas++;
-      ultimoErro = prazo?.aborted ? Object.assign(new Error(`${c.nome || c.id}: sem resposta em ${PRAZO_CAMINHO_MS / 1000} s`), { status: 0 }) : e;
+      ultimoErro = prazo?.aborted ? Object.assign(new Error(`${c.nome || c.id}: sem resposta em ${prazoDe(c) / 1000} s`), { status: 0 }) : e;
+      anotar(host, c.id, ultimoErro.message);
       if (e?.quota && c.id !== "casa" && c.id !== "direto") rota(c.id).hoje = Infinity; // a quota do dia acabou nesse serviço
       else if (!e?.semRetransmissor) castigo.set(`${host}|${c.id}`, Date.now() + (e?.longo ? 6 * 3600e3 : CASTIGO_MS));
     }
   }
   if (ultimaResposta) return ultimaResposta;
   throw ultimoErro || new Error("sem caminho para o site");
+}
+
+// Teste à mão (/api/retransmissor/testar?u=…): experimenta cada caminho para um endereço, sem mexer no que fica de
+// lado, e diz o que cada um respondeu e quanto demorou
+export async function testarCaminhos(url) {
+  const host = hostDe(url);
+  if (!bloqueado(host)) throw new Error(`${host || "esse endereço"} não está na lista dos sites que passam pelas pontes`);
+  const todos = [retransmissorAceita(url) && { id: "casa", nome: "retransmissor de casa" }, ...pontes(), { id: "direto", nome: "direto do servidor" }].filter(Boolean);
+  const out = [];
+  for (const c of todos) {
+    const t = Date.now();
+    try {
+      const res = await fazer(c, url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/json,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(30000) });
+      const texto = await res.text();
+      const titulo = texto.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
+      out.push({ via: c.nome || c.id, estado: res.status, ok: res.ok, ms: Date.now() - t, tamanho: texto.length, titulo: titulo?.slice(0, 120) || undefined, inicio: titulo ? undefined : texto.replace(/\s+/g, " ").slice(0, 160) });
+    } catch (e) {
+      out.push({ via: c.nome || c.id, erro: e.message, ms: Date.now() - t });
+    }
+  }
+  return out;
 }
