@@ -24,7 +24,8 @@ const CICLO_MS = Math.max(20, Number(process.env.IG_SEGUNDOS) || 45) * 1000;
 const DIRETO_MS = Math.max(45, Number(process.env.IG_DIRETO_SEGUNDOS) || 60) * 1000; // clubes que a conta não segue
 const POSTS_MS = Math.max(60, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000;
 const POSTS_POR_CICLO = Math.max(1, Number(process.env.IG_POSTS_POR_CICLO) || 10); // não deixar os posts comer os pedidos dos stories
-const POR_MINUTO = Math.max(5, Number(process.env.IG_PEDIDOS_MINUTO) || 40);
+// (com a sessão a ser usada também pela secção Distritais, 40 por minuto era demais e o Instagram travava a conta)
+const POR_MINUTO = Math.max(3, Number(process.env.IG_PEDIDOS_MINUTO) || 12);
 
 export function cookieDoEnv(env = process.env) {
   if (env.IG_COOKIE) return env.IG_COOKIE.trim();

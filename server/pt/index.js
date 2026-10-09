@@ -1061,6 +1061,40 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         });
       } catch (e) { res.status(502).json({ erro: motivo(e) }); }
     });
+    // o que o Instagram responde à sessão (IG_SESSIONID) do servidor: um pedido só, direto (nunca pelas pontes), sem
+    // mostrar a sessão; e o estado das duas partes do site que a usam
+    let testeIg = 0;
+    app.get("/api/distritais/teste-instagram", async (req, res) => {
+      if (Date.now() - testeIg < 15e3) return res.status(429).json({ erro: "espera 15 segundos entre testes" });
+      testeIg = Date.now();
+      const conta = String(req.query.conta || "fcporto").replace(/[^a-z0-9._]/gi, "").slice(0, 40) || "fcporto";
+      const cookie = cookieDoEnv();
+      const sessao = cookie
+        ? { sessionid: /sessionid=/.test(cookie), tamanhoSessionid: (cookie.match(/sessionid=([^;]*)/)?.[1] || "").length, csrftoken: /csrftoken=/.test(cookie), ds_user_id: /ds_user_id=/.test(cookie), dica: /%3A|:/.test(cookie.match(/sessionid=([^;]*)/)?.[1] || "") ? undefined : "o sessionid costuma ter «%3A» lá dentro; confirma se o copiaste inteiro" }
+        : null;
+      const vias = distritais.feed({ limite: 1 }).estado.vias || {};
+      const estadoSite = {
+        distritais: vias.instagram ? { lidos: vias.instagram.ok, erros: vias.instagram.erros, recusasSeguidas: vias.instagram.recusas, pausaAte: vias.instagram.pausaAte > Date.now() ? new Date(vias.instagram.pausaAte).toISOString() : null, ultimoErro: vias.instagram.ultimoErro || null } : null,
+        stories: { ativo: !!ig.estado.ativo, pedidos: ig.estado.pedidos, erros: ig.estado.erros, pausaAte: ig.estado.pausaAte > Date.now() ? new Date(ig.estado.pausaAte).toISOString() : null, ultimoErro: ig.estado.ultimoErro || null },
+      };
+      if (!cookie) return res.json({ conta, sessao: "o servidor não tem IG_SESSIONID (nem IG_COOKIE): confirma o nome da variável no Northflank", estadoSite });
+      try {
+        const r = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(conta)}`, {
+          headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "X-IG-App-ID": "936619743392459", "X-Requested-With": "XMLHttpRequest", Accept: "*/*", Referer: "https://www.instagram.com/", Cookie: cookie, ...(cookie.match(/csrftoken=([^;]+)/) ? { "X-CSRFToken": cookie.match(/csrftoken=([^;]+)/)[1] } : {}) },
+          redirect: "manual", signal: AbortSignal.timeout(20000),
+        });
+        const txt = await r.text();
+        let j = null;
+        try { j = JSON.parse(txt); } catch { /* não é JSON */ }
+        const edges = j?.data?.user?.edge_owner_to_timeline_media?.edges || [];
+        res.json({
+          conta, sessao, estado: r.status, redirecionaPara: r.headers.get("location") || undefined,
+          resposta: j ? { status: j.status, mensagem: j.message || undefined, pedeLogin: j.require_login || undefined, encontrouConta: !!j?.data?.user, posts: edges.length, ultimoPost: edges[0]?.node?.taken_at_timestamp ? new Date(edges[0].node.taken_at_timestamp * 1000).toISOString() : undefined } : undefined,
+          inicio: j ? undefined : txt.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 300),
+          estadoSite,
+        });
+      } catch (e) { res.status(502).json({ conta, sessao, erro: motivo(e), estadoSite }); }
+    });
     app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
     app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {
       if (!autorizado(req)) return res.status(401).json({ erro: "chave PT_TOKEN em falta ou errada" });
