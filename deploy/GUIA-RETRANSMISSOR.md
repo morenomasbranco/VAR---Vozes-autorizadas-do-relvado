@@ -1,4 +1,6 @@
-# Retransmissor de casa (a API própria do VAR)
+# Retransmissor de casa (opcional)
+
+> Primeiro experimenta as pontes gratuitas, que não precisam de nenhum aparelho ligado: `deploy/GUIA-PONTE-GOOGLE.md`. O retransmissor só é preciso se um site recusar também todas as pontes; nesse caso, a forma mais simples é um telemóvel Android antigo, ligado ao carregador e ao Wi-Fi (passo 3), sem computador.
 
 A FPF (resultados.fpf.pt, www.fpf.pt e os sites das 22 associações), o Instagram e o Facebook bloqueiam os servidores de alojamento como o Northflank (respondem 403 ou 429), e muitas vezes bloqueiam também o Cloudflare. A partir de uma ligação de casa, respondem normalmente.
 

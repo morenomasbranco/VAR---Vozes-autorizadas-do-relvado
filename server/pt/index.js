@@ -5,7 +5,7 @@
 //   - calendário, resultados e classificações, sem depender da FPF (server/pt/web.js): ESPN para a Liga Portugal
 //     Betclic e a Taça de Portugal, e a pesquisa na web pelo Gemini (pesquisa Google) para a Liga 2, a Liga 3, o
 //     Campeonato de Portugal, o feminino, o futsal e os distritais das 22 associações;
-//   - resultados.fpf.pt, só com a ponte do Cloudflare (PONTE_URL) ou com PT_FPF=1: a FPF bloqueia os servidores de
+//   - resultados.fpf.pt, só com uma ponte gratuita (Google, Cloudflare, Netlify), o retransmissor ou PT_FPF=1: a FPF bloqueia os servidores de
 //     alojamento. Sofascore (competições da Liga Portugal e minuto ao segundo dos nacionais que acompanha);
 //   - tempo real dos jogos sem transmissão (distritais e não só): stories e posts dos clubes no Instagram,
 //     lidos sem conta (visualizadores anónimos) ou com a sessão de uma conta qualquer, e enviados por quem está
@@ -30,7 +30,7 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
-import { estadoPonte, estadoEncaminhamento } from "../ponte.js";
+import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
 import * as ocr from "./stories/ocr.js";
@@ -46,9 +46,9 @@ const DURACAO = { futebol: 115 * 60000, futsal: 95 * 60000 }; // do apito inicia
 const POSTS_MS = Math.max(120, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000; // posts de cada clube durante o jogo
 const POSTS_VIVO_MS = Math.max(60, Number(process.env.IG_POSTS_VIVO_SEGUNDOS) || 120) * 1000; // clubes que atualizam por post
 const ATIVO = process.env.PT_RESULTADOS !== "0";
-// a FPF bloqueia os servidores de alojamento: só é lida com o retransmissor de casa ligado, com a ponte (PONTE_URL)
-// ou se for pedida (PT_FPF=1)
-const USAR_FPF = () => process.env.PT_FPF === "1" || (process.env.PT_FPF !== "0" && (!!process.env.PONTE_URL || retransmissorLigado()));
+// a FPF bloqueia os servidores de alojamento: só é lida com uma ponte gratuita (PONTE_URL, PONTE_GOOGLE_URL), com o
+// retransmissor de casa ligado, ou se for pedida (PT_FPF=1)
+const USAR_FPF = () => process.env.PT_FPF === "1" || (process.env.PT_FPF !== "0" && (temPontes() || retransmissorLigado()));
 const ESPN_MS = Math.max(5, Number(process.env.PT_ESPN_MINUTOS) || 30) * 60e3;
 
 // semana de Lisboa (segunda 00:00 → segunda seguinte), para a «jornada da semana»
@@ -816,7 +816,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         revisao();
       } finally { aDescobrir = false; }
     };
-    if (!USAR_FPF()) log("[PT] resultados.fpf.pt à espera do retransmissor de casa (npm run retransmissor): a FPF bloqueia os servidores. Até lá, os campeonatos chegam pela ESPN e pela pesquisa na web");
+    if (!USAR_FPF()) log("[PT] resultados.fpf.pt desligado: a FPF bloqueia os servidores. Configura uma ponte gratuita (PONTE_GOOGLE_URL ou PONTE_URL, ver deploy/) para a ler; até lá, os campeonatos chegam pela ESPN e pela pesquisa na web");
     // o retransmissor de casa ligou-se: se as listas da FPF falharam (ou nunca foram lidas), lê-se tudo já,
     // sem esperar pela volta diária
     aoLigarRetransmissor(() => {
@@ -1023,7 +1023,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         },
         distritais: { perfis: d.perfis, lidos: d.lidosTotal, instagram: d.lidosInstagram, facebook: d.lidosFacebook, pedidos: d.pedidos, ultimoErro: d.ultimoErro, vias: d.vias, comSessao: d.comSessao },
         facebookJogos: estado.facebook,
-        ponte: { ligada: !!process.env.PONTE_URL, ...estadoPonte },
+        ponte: { ligada: temPontes(), ...estadoPonte },
         retransmissor: resumoRetransmissor(),
         encaminhamento: estadoEncaminhamento(),
         instagramJogos: ig.estado,

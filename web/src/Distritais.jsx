@@ -158,7 +158,7 @@ export default function Distritais({ API = "", now, query = "" }) {
       {bloqueado && (
         <p className="ptwarn dnota">
           Neste momento nenhuma das vias está a trazer posts dos clubes (as notícias das associações e da imprensa continuam a chegar).{" "}
-          O Instagram e o Facebook recusam os servidores de alojamento: liga o retransmissor de casa (npm run retransmissor, num computador, Raspberry Pi ou telemóvel Android) e os posts começam a chegar no mesmo minuto, sem conta.
+          O Instagram e o Facebook recusam os servidores de alojamento. O servidor experimenta sozinho as pontes gratuitas configuradas (Google, Cloudflare, Netlify); se nenhuma passar, a via que nunca falha é um telemóvel antigo ligado ao carregador com o retransmissor (npm run retransmissor).
           {ig.comSessao ? "" : " Também ajuda juntar ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém)."}
         </p>
       )}
