@@ -153,6 +153,7 @@ test("pesquisa na web: um 429 do Gemini diz quanto esperar; a quota do dia volta
   const minuto = JSON.stringify({ error: { code: 429, details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: "90s" }] } });
   assert.equal(lerRecusa(dia, t).diaria, true);
   assert.equal(new Date(lerRecusa(dia, t).ate).toISOString().slice(0, 16), "2026-10-10T07:01"); // 00:00 em Los Angeles
-  assert.deepEqual(lerRecusa(minuto, t), { diaria: false, ate: t + 90e3 });
+  assert.deepEqual(lerRecusa(minuto, t), { diaria: false, semQuota: false, ate: t + 90e3 });
+  assert.equal(lerRecusa(JSON.stringify({ error: { code: 429, message: "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-3.5-flash" } }), t).semQuota, true);
   assert.ok(MODELOS().length > 1);
 });

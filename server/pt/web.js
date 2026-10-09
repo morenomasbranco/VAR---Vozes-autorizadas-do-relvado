@@ -186,11 +186,14 @@ export function rondas(jogos, tipo = "liga") {
 
 /* ───────── pesquisa na web (Gemini com a pesquisa Google) ───────── */
 const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
-const MODELO = () => process.env.PT_PESQUISA_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+// A pesquisa Google do Gemini («grounding») não faz parte do plano gratuito nos modelos 3.x: com eles, a pesquisa
+// responde sempre 429. Os 2.5 Flash e Flash-Lite têm uma quota gratuita de pesquisas por dia, por isso são os
+// primeiros (o GEMINI_MODEL das notícias não conta aqui; PT_PESQUISA_MODEL escolhe outro à mão).
+const MODELO = () => process.env.PT_PESQUISA_MODEL || "gemini-2.5-flash";
 // Cada modelo do Gemini tem a sua quota gratuita (pedidos por minuto e por dia). As notícias do site gastam a do
 // GEMINI_MODEL; quando a de um modelo acaba (429), a pesquisa passa ao seguinte desta lista em vez de parar.
 // PT_PESQUISA_MODELOS troca a lista (separada por vírgulas). Os que não existirem (404) ficam de lado um dia.
-export const MODELOS = () => [...new Set([MODELO(), ...(process.env.PT_PESQUISA_MODELOS || "gemini-3.5-flash,gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash,gemini-2.5-flash-lite").split(/[\s,]+/)].filter(Boolean))];
+export const MODELOS = () => [...new Set([MODELO(), ...(process.env.PT_PESQUISA_MODELOS || "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-flash-latest,gemini-flash-lite-latest").split(/[\s,]+/)].filter(Boolean))];
 
 // A quota gratuita do Gemini volta à meia-noite da Califórnia (8 ou 9 da manhã em Lisboa)
 export function proximaMeiaNoitePacifico(agora = Date.now()) {
@@ -206,7 +209,9 @@ export function lerRecusa(texto, agora = Date.now()) {
   const espera = det.map((d) => String(d.retryDelay || "").match(/^([\d.]+)s$/)?.[1]).find(Boolean);
   const quotas = det.flatMap((d) => d.violations || []).map((v) => `${v.quotaId || ""} ${v.quotaMetric || ""}`).join(" ");
   const diaria = /PerDay|per_day|daily/i.test(quotas) || (/quota/i.test(texto) && !espera && !/PerMinute/i.test(quotas));
-  return { diaria, ate: diaria ? proximaMeiaNoitePacifico(agora) : agora + Math.max(60e3, (Number(espera) || 60) * 1000) };
+  // «limit: 0»: este modelo não tem quota gratuita nenhuma (por exemplo, a pesquisa Google nos 3.x)
+  const semQuota = /limit:\s*0\b/i.test(texto) || det.flatMap((d) => d.violations || []).some((v) => String(v.quotaValue ?? "") === "0");
+  return { diaria: diaria || semQuota, semQuota, ate: semQuota ? agora + 86400e3 : diaria ? proximaMeiaNoitePacifico(agora) : agora + Math.max(60e3, (Number(espera) || 60) * 1000) };
 }
 
 // o que se pesquisa: um pedido por organizador
@@ -383,7 +388,7 @@ export function createPesquisa({ log = () => {}, guardar = () => {}, dados = {} 
         if (e.status === 429 || e.status === 404 || (e.status === 400 && /model|not found|not supported/i.test(e.message))) {
           // a quota deste modelo acabou (ou o modelo não existe): o organizador volta já, com o modelo seguinte
           const ate = e.status === 429 ? e.recusa?.ate || Date.now() + 15 * 60e3 : Date.now() + 86400e3;
-          estado.modelos[modelo] = { pausaAte: ate, motivo: e.status === 429 ? (e.recusa?.diaria ? "quota do dia esgotada" : "pedidos por minuto") : "modelo indisponível" };
+          estado.modelos[modelo] = { pausaAte: ate, motivo: e.status === 429 ? (e.recusa?.semQuota ? "sem quota gratuita de pesquisa" : e.recusa?.diaria ? "quota do dia esgotada" : "pedidos por minuto") : "modelo indisponível" };
           if (e.status === 429 && modeloLivre(Date.now())) log(`[PT] pesquisa: ${modelo} sem quota até às ${new Date(ate).toLocaleTimeString("pt-PT", { timeZone: "Europe/Lisbon", hour: "2-digit", minute: "2-digit" })}; passo ao ${modeloLivre(Date.now())}`);
           if (!modeloLivre(Date.now())) estado.pausaAte = Math.min(...MODELOS().map((m) => estado.modelos[m]?.pausaAte || Date.now() + 60e3));
           estado.pedidos.pop(); // um pedido recusado não conta para o limite diário

@@ -64,3 +64,25 @@ test("pontes gratuitas: Google Apps Script e Netlify; uma ponte recusada pelo si
     for (const k of ["PONTE_URL", "PONTE_CHAVE", "PONTE_GOOGLE_URL", "PONTE_GOOGLE_CHAVE", "PONTE_DIA"]) delete process.env[k];
   }
 });
+
+test("pontes: uma ponte pendurada não gasta o prazo todo; passa-se à seguinte e ela fica de lado", async () => {
+  process.env.PONTE_URL = "https://pendurada.workers.dev";
+  process.env.PONTE_PRAZO_SEGUNDOS = "3";
+  const { buscar, caminhos } = await import(`../server/ponte.js?pendurada`);
+  const original = globalThis.fetch;
+  globalThis.fetch = (url, op = {}) => {
+    if (String(url).startsWith("https://pendurada.workers.dev")) return new Promise((_, nao) => op.signal?.addEventListener("abort", () => nao(op.signal.reason)));
+    return Promise.resolve(new Response("direto", { status: 200 }));
+  };
+  try {
+    const t = Date.now();
+    const r = await buscar("https://resultados.fpf.pt/x", { signal: AbortSignal.timeout(20000) });
+    assert.equal(await r.text(), "direto");
+    assert.ok(Date.now() - t < 5000);
+    assert.deepEqual(caminhos("https://resultados.fpf.pt/y").map((c) => c.id), ["direto"]);
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.PONTE_URL;
+    delete process.env.PONTE_PRAZO_SEGUNDOS;
+  }
+});
