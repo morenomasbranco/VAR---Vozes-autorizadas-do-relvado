@@ -15,6 +15,7 @@
 // fica de lado para esse site durante 15 minutos. O site de cada caminho que funcionou fica em porSite.
 // Os outros sites vão sempre diretos. PONTE_HOSTS troca a lista de sites (aceita «*.fpf.pt»).
 import { pedirPeloRetransmissor, retransmissorAceita, hostBate, respostaDe } from "./retransmissor.js";
+const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const HOSTS = (process.env.PONTE_HOSTS || "*.fpf.pt,api.sofascore.com,www.sofascore.com,www.instagram.com,i.instagram.com,www.facebook.com,m.facebook.com,imginn.com,www.picnob.com,www.pixwox.com,anonyig.com,storiesig.info,fastdl.app,www.ligaportugal.pt,www.zerozero.pt")
   .split(/[\s,]+/).filter(Boolean);
@@ -219,10 +220,13 @@ export async function buscar(url, opcoes = {}) {
 
 // Teste à mão (/api/retransmissor/testar?u=…): experimenta cada caminho para um endereço, sem mexer no que fica de
 // lado, e diz o que cada um respondeu e quanto demorou
-export async function testarCaminhos(url) {
+export async function testarCaminhos(url, { so = null } = {}) {
   const host = hostDe(url);
   if (!bloqueado(host)) throw new Error(`${host || "esse endereço"} não está na lista dos sites que passam pelas pontes`);
-  const todos = [retransmissorAceita(url) && { id: "casa", nome: "retransmissor de casa" }, ...pontes(), { id: "direto", nome: "direto do servidor" }].filter(Boolean);
+  let todos = [retransmissorAceita(url) && { id: "casa", nome: "retransmissor de casa" }, ...pontes(), { id: "direto", nome: "direto do servidor" }].filter(Boolean);
+  // «so=jina», «so=google», «so=direto»…: só essa via (mais rápido)
+  if (so) todos = todos.filter((c) => c.id === so || norm(c.nome || "").includes(norm(so)));
+  if (!todos.length) throw new Error(`não há nenhuma via «${so}» (as que há: casa, ponte, google, jina, direto)`);
   const out = [];
   for (const c of todos) {
     const t = Date.now();
@@ -230,7 +234,13 @@ export async function testarCaminhos(url) {
       const res = await fazer(c, url, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/json,*/*", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(45000) });
       const texto = await res.text();
       const titulo = texto.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
-      out.push({ via: c.nome || c.id, estado: res.status, ok: res.ok, ms: Date.now() - t, tamanho: texto.length, titulo: titulo?.slice(0, 120) || undefined, inicio: titulo ? undefined : texto.replace(/\s+/g, " ").slice(0, 160) });
+      const limpo = texto.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      out.push({
+        via: c.nome || c.id, estado: res.status, ok: res.ok, ms: Date.now() - t, tamanho: texto.length, titulo: titulo?.slice(0, 120) || undefined,
+        // posts do Facebook (as horas de cada post) e um pedaço do texto da página, para se ver se trouxe o conteúdo
+        postsFacebook: /facebook\.com/.test(host) ? (texto.match(/data-utime=/g) || []).length : undefined,
+        texto: limpo.slice(0, 600),
+      });
     } catch (e) {
       out.push({ via: c.nome || c.id, erro: /abort|timeout/i.test(`${e.name} ${e.message}`) ? "sem resposta em 45 s" : e.message, ms: Date.now() - t });
     }
