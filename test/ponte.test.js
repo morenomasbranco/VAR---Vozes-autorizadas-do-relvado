@@ -86,3 +86,28 @@ test("pontes: uma ponte pendurada não gasta o prazo todo; passa-se à seguinte 
     delete process.env.PONTE_PRAZO_SEGUNDOS;
   }
 });
+
+test("pontes: o teste à mão diz o que cada via respondeu, e os erros ficam anotados por site", async () => {
+  process.env.PONTE_GOOGLE_URL = "https://script.google.com/macros/s/T/exec";
+  const { testarCaminhos, buscar, estadoEncaminhamento } = await import(`../server/ponte.js?teste`);
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith("https://script.google.com/")) return new Response(JSON.stringify({ erro: "Exception: Address unavailable: https://www.fpf.pt/" }));
+    return new Response("<html><title>FPF</title></html>", { status: 403 });
+  };
+  try {
+    const r = await testarCaminhos("https://www.fpf.pt/");
+    assert.equal(r[0].via, "Google Apps Script");
+    assert.match(r[0].erro, /Address unavailable/);
+    assert.equal(r[1].estado, 403);
+    assert.equal(r[1].titulo, "FPF");
+    await assert.rejects(testarCaminhos("https://www.record.pt/"), /não está na lista/);
+    await buscar("https://www.fpf.pt/x");
+    const e = estadoEncaminhamento().erros;
+    assert.match(e["www.fpf.pt|google"].erro, /Address unavailable/);
+    assert.match(e["www.fpf.pt|direto"].erro, /403/);
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.PONTE_GOOGLE_URL;
+  }
+});

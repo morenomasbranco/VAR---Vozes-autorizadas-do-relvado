@@ -51,4 +51,8 @@ Abre `https://o-endereço-do-servidor/api/retransmissor`:
 - em `encaminhamento.porSite` aparece, para cada site (www.fpf.pt, resultados.fpf.pt, www.instagram.com…), a ponte que funcionou;
 - em `encaminhamento.deLado` aparecem as pontes que um site recusou nos últimos 15 minutos.
 
+- em `encaminhamento.erros` aparece, para cada site e cada ponte, a última coisa que correu mal (por exemplo «o site respondeu 403» ou «sem resposta em 20 s»).
+
+Para experimentar todas as pontes num site de uma vez, abre `https://o-endereço-do-servidor/api/retransmissor/testar?u=https://www.fpf.pt/` (troca o endereço depois de `u=` pelo site que queres testar, por exemplo `https://www.instagram.com/fcporto/`): aparece, para cada ponte, o que o site respondeu e quanto demorou.
+
 Se, para um site, aparecerem todas as pontes em `deLado` durante horas, esse site está a bloquear também esses endereços. Nesse caso a única via gratuita que nunca falha é a ligação de uma casa: um telemóvel Android antigo, ligado ao carregador e ao Wi-Fi, com o retransmissor (`deploy/GUIA-RETRANSMISSOR.md`). Não é preciso computador.
