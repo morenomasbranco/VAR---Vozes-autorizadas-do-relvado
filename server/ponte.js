@@ -178,6 +178,26 @@ function fazer(c, url, opcoes) {
   return c.tipo === "google" ? peloGoogle(c, url, opcoes) : c.tipo === "jina" ? peloJina(c, url, opcoes) : pelaPonte(c, url, opcoes);
 }
 
+// um pedido por uma via escolhida (por exemplo, o Jina, que abre a página num browser), sem passar pelas outras;
+// null se essa via não existir ou já tiver gasto o limite (do dia ou do minuto)
+export function viaDisponivel(id, url) {
+  return pontes().find((p) => p.id === id && usadosHoje(p.id) < p.limite && (p.tipo !== "jina" || (p.hosts.some((h) => hostBate(hostDe(url), h)) && jinaLivre(p)))) || null;
+}
+export async function buscarPor(id, url, opcoes = {}) {
+  const c = viaDisponivel(id, url);
+  if (!c) throw Object.assign(new Error(`a via ${id} não está disponível agora`), { semVia: true });
+  rota(c.id).pedidos++;
+  try {
+    const res = await fazer(c, url, opcoes);
+    if (!RECUSA.has(res.status)) porSite[hostDe(url)] = { caminho: c.nome || c.id, ts: Date.now() };
+    return res;
+  } catch (e) {
+    rota(c.id).falhas++;
+    anotar(hostDe(url), c.id, e.message);
+    throw e;
+  }
+}
+
 export async function buscar(url, opcoes = {}) {
   const host = hostDe(url);
   const lista = caminhos(url, Date.now(), opcoes);
