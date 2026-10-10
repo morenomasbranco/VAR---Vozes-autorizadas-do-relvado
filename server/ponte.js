@@ -38,8 +38,8 @@ function pontes() {
   if (process.env.PONTE_JINA !== "0") {
     out.push({
       id: "jina", tipo: "jina", url: (process.env.JINA_BASE || "https://r.jina.ai/").replace(/\/?$/, "/"), nome: "Jina Reader",
-      limite: Number(process.env.PONTE_JINA_DIA) || 8000, porMinuto: Number(process.env.PONTE_JINA_MINUTO) || (process.env.JINA_API_KEY ? 150 : 18),
-      hosts: (process.env.JINA_HOSTS || "*.fpf.pt,www.facebook.com,m.facebook.com,imginn.com,www.picnob.com,www.pixwox.com,www.ligaportugal.pt,www.zerozero.pt").split(/[\s,]+/).filter(Boolean),
+      limite: Number(process.env.PONTE_JINA_DIA) || 20000, porMinuto: Number(process.env.PONTE_JINA_MINUTO) || (process.env.JINA_API_KEY ? 150 : 18),
+      hosts: (process.env.JINA_HOSTS || "*.fpf.pt,www.facebook.com,m.facebook.com,imginn.com,www.picnob.com,www.pixwox.com,www.ligaportugal.pt,www.zerozero.pt,www.youtube.com").split(/[\s,]+/).filter(Boolean),
     });
   }
   return out;
