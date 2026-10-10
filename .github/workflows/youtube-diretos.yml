@@ -1,0 +1,32 @@
+# Os diretos e os agendados do YouTube das associações, do Canal 11 e da FPF, lidos aqui (as GitHub Actions chegam ao
+# YouTube; o servidor do site, no Northflank, não chega) e enviados ao site a cada 2 minutos, com um token OIDC do
+# GitHub que o servidor confirma (não há chaves a configurar). Cada execução dura quase 6 horas e a seguinte fica
+# à espera na fila (concurrency), por isso há sempre uma a correr. O repositório é público: os minutos são grátis.
+name: youtube-diretos
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/youtube-diretos.yml", "scripts/youtube-relay.js", "server/pt/youtube.js"]
+concurrency:
+  group: youtube-diretos
+  cancel-in-progress: false
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  ler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: ler os canais e enviar ao site
+        env:
+          SITE: https://p01--var--tdhb8zl9kmy6.code.run
+          DURACAO_MIN: "345"
+        run: node scripts/youtube-relay.js

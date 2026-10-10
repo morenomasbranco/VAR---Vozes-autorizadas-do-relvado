@@ -195,6 +195,7 @@ export function createYoutube({ log = () => {} } = {}) {
   // o ritmo pelas pontes: o Cloudflare aguenta o mesmo do direto; o Google e o Jina têm limites mais curtos
   const GAP_PONTE = { ponte: GAP, ponte2: GAP, ponte3: GAP, google: Math.max(GAP, 15000), jina: Math.max(GAP, (Number(process.env.YOUTUBE_JINA_SEGUNDOS) || 8) * 1000) };
   const deLado = new Map(); // ponte → até quando fica de lado
+  const RELAY_FRESCO = 8 * 60e3;
   const comPrazo = (promessa, limite, msg) => {
     let t;
     return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), limite); })]).finally(() => clearTimeout(t));
@@ -289,6 +290,8 @@ export function createYoutube({ log = () => {} } = {}) {
     log(`[YouTube] diretos de ${canais.length} canais (associações, Canal 11 e FPF), um a cada ${GAP / 1000} s`);
     for (let i = 0; ; i = (i + 1) % canais.length) {
       if (Date.now() < geral.pausaAte) { await sleep(Math.min(60e3, geral.pausaAte - Date.now())); continue; }
+      // o GitHub está a enviar os diretos (o workflow youtube-diretos): o servidor não precisa de pedir nada
+      if (geral.relay && Date.now() - geral.relay.ts < RELAY_FRESCO) { geral.batida = Date.now(); await sleep(30e3); continue; }
       const c = canais[i];
       const e = estado[c.id];
       try {
@@ -347,6 +350,29 @@ export function createYoutube({ log = () => {} } = {}) {
         if (geral.batida && Date.now() - geral.batida > 5 * 60e3 && Date.now() > geral.pausaAte) log(`[YouTube] o ciclo está parado há ${Math.round((Date.now() - geral.batida) / 60e3)} min${geral.emCurso ? ` (à espera de ${geral.emCurso.url})` : ""}`);
       }, 60e3).unref?.();
     },
+    // os diretos lidos por outro sítio (o workflow do GitHub, que chega ao YouTube): { canalId: [transmissões] }
+    receber(porCanal = {}, origem = "relay") {
+      let n = 0;
+      const txt = (v, max) => String(v ?? "").slice(0, max);
+      for (const c of canais) {
+        const lista = porCanal[c.id];
+        if (!Array.isArray(lista)) continue;
+        const e = estado[c.id];
+        e.diretos = lista.filter((d) => /^[\w-]{11}$/.test(d?.videoId || "") && (d.aoVivo || d.marcada)).slice(0, 30).map((d) => ({
+          videoId: d.videoId, titulo: txt(d.titulo, 200), canal: txt(d.canal || c.nome, 100), aoVivo: !!d.aoVivo, marcada: !d.aoVivo && !!d.marcada,
+          inicio: Number.isFinite(+d.inicio) && +d.inicio > 0 ? +d.inicio : null, espetadores: Number.isFinite(+d.espetadores) && +d.espetadores > 0 ? +d.espetadores : null,
+          url: `https://www.youtube.com/watch?v=${d.videoId}`, imagem: `https://i.ytimg.com/vi/${d.videoId}/${d.aoVivo ? "hqdefault_live" : "hqdefault"}.jpg`,
+          org: c.assoc || c.id, nomeOrg: c.nome,
+        }));
+        e.ultimo = Date.now();
+        e.erro = null;
+        e.via = origem;
+        if (porCanal[`${c.id}#nome`] && !guardado[c.id]?.titulo) guardado[c.id] = { ...guardado[c.id], titulo: txt(porCanal[`${c.id}#nome`], 100) };
+        n++;
+      }
+      geral.relay = { ts: Date.now(), origem, canais: n };
+      return n;
+    },
     diretos() {
       const lista = [...new Map(Object.values(estado).flatMap((e) => e.diretos || []).map((d) => [d.videoId, d])).values()];
       // uma transmissão marcada há mais de 3 horas já não é «a seguir»
@@ -358,6 +384,7 @@ export function createYoutube({ log = () => {} } = {}) {
     },
     estado: () => ({
       ativo, ...geral, batida: geral.batida ? new Date(geral.batida).toISOString() : null,
+      relay: geral.relay ? { ...geral.relay, quando: new Date(geral.relay.ts).toISOString(), ativo: Date.now() - geral.relay.ts < RELAY_FRESCO } : null,
       canais: canais.map((c) => ({ id: c.id, nome: c.nome, canal: c.canal || guardado[c.id]?.canalId || null, nomeDoCanal: guardado[c.id]?.titulo || null, url: estado[c.id]?.canalUrl || null, ultimaLeitura: estado[c.id]?.ultimo ? new Date(estado[c.id].ultimo).toISOString() : null, erro: estado[c.id]?.erro || null, via: estado[c.id]?.via || null, emDireto: (estado[c.id]?.diretos || []).filter((d) => d.aoVivo).length, agendados: (estado[c.id]?.diretos || []).filter((d) => d.marcada).length })),
     }),
   };

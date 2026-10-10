@@ -33,6 +33,7 @@ import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./faceb
 import { buscar, buscarPor, motivo } from "../ponte.js";
 import { grafoAtivo, descobrir, postsDoGrafo, estadoGrafo } from "./instagram-grafo.js";
 import { createYoutube } from "./youtube.js";
+import { verificarOidc } from "../oidc-github.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
@@ -1128,6 +1129,18 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     // «Distritais»: transmissões em direto no YouTube (e as marcadas) e os canais de cada organizador
     app.get("/api/distritais/diretos", (req, res) => res.json(youtube.diretos()));
     app.get("/api/distritais/youtube", (req, res) => res.json(youtube.estado()));
+    // os diretos lidos pelo workflow do GitHub (.github/workflows/youtube-diretos.yml), que chega ao YouTube quando
+    // este servidor não chega; o pedido traz um token OIDC do GitHub, verificado aqui (sem chaves combinadas)
+    app.post("/api/distritais/diretos/relay", express.json({ limit: "1mb" }), async (req, res) => {
+      try {
+        await verificarOidc(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""), {
+          audiencia: "var-youtube",
+          repositorio: process.env.YOUTUBE_RELAY_REPO || "morenomasbranco/VAR---Vozes-autorizadas-do-relvado",
+          workflow: ".github/workflows/youtube-diretos.yml",
+        });
+      } catch (e) { return res.status(401).json({ erro: e.message }); }
+      res.json({ ok: true, canais: youtube.receber(req.body?.canais || {}, "GitHub Actions") });
+    });
     app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
     app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {
       if (!autorizado(req)) return res.status(401).json({ erro: "chave PT_TOKEN em falta ou errada" });

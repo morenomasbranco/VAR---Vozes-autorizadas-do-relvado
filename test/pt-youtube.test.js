@@ -88,3 +88,33 @@ test("YouTube: a hora de um agendado lê-se na página do vídeo", async () => {
   assert.equal(horaMarcada('..."upcomingEventData":{"scheduledStartTime":"1791640800"}...'), 1791640800000);
   assert.equal(horaMarcada("nada"), null);
 });
+
+test("Relay do YouTube: o servidor só aceita tokens OIDC do GitHub deste repositório, deste workflow e do main", async () => {
+  const crypto = await import("node:crypto");
+  const { verificarOidc } = await import("../server/oidc-github.js");
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: "jwk" }), kid: "k1", alg: "RS256" };
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const agora = Math.floor(Date.now() / 1000);
+  const base = { iss: "https://token.actions.githubusercontent.com", aud: "var-youtube", repository: "morenomasbranco/VAR---Vozes-autorizadas-do-relvado", ref: "refs/heads/main", workflow_ref: "morenomasbranco/VAR---Vozes-autorizadas-do-relvado/.github/workflows/youtube-diretos.yml@refs/heads/main", exp: agora + 300, nbf: agora - 10 };
+  const assinar = (dec, chave = privateKey) => { const h = b64({ alg: "RS256", kid: "k1" }), p = b64(dec); return `${h}.${p}.${crypto.sign("RSA-SHA256", Buffer.from(`${h}.${p}`), chave).toString("base64url")}`; };
+  const opc = { audiencia: "var-youtube", repositorio: "morenomasbranco/VAR---Vozes-autorizadas-do-relvado", workflow: ".github/workflows/youtube-diretos.yml", obterChaves: async () => [jwk] };
+  assert.equal((await verificarOidc(assinar(base), opc)).repository, base.repository);
+  await assert.rejects(verificarOidc(assinar({ ...base, repository: "outro/repo" }), opc), /outro repositório/);
+  await assert.rejects(verificarOidc(assinar({ ...base, ref: "refs/heads/x" }), opc), /outro ramo/);
+  await assert.rejects(verificarOidc(assinar({ ...base, workflow_ref: "x/.github/workflows/outro.yml@refs/heads/main" }), opc), /outro workflow/);
+  await assert.rejects(verificarOidc(assinar({ ...base, exp: agora - 3600 }), opc), /prazo/);
+  await assert.rejects(verificarOidc(assinar(base, crypto.generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey), opc), /assinatura/);
+  await assert.rejects(verificarOidc("", opc), /em falta/);
+
+  // e os dados recebidos são limpos (só transmissões de vídeos do YouTube, com os endereços feitos no servidor)
+  const { createYoutube } = await import("../server/pt/youtube.js");
+  process.env.YOUTUBE_DIRETOS = "0";
+  const yt = createYoutube();
+  yt.receber({ "af-viseu": [{ videoId: "DSUP2qpjacE", titulo: "UD Vilamaiorense x CD Santacruzense", marcada: true, inicio: 1791727200000, url: "https://mau.exemplo" }, { videoId: "<script>", aoVivo: true }, { videoId: "Antigo00001" }] });
+  const d = yt.diretos();
+  assert.deepEqual(d.aSeguir.map((x) => x.videoId), ["DSUP2qpjacE"]);
+  assert.equal(d.aSeguir[0].url, "https://www.youtube.com/watch?v=DSUP2qpjacE");
+  assert.equal(d.aSeguir[0].nomeOrg, "AF Viseu");
+  assert.equal(yt.estado().relay.ativo, true);
+});
