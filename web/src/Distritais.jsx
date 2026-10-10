@@ -11,6 +11,7 @@ const NACIONAIS_BAIXO = /liga 3|campeonato de portugal|campeonato (de futebol )?
 export const daBase = (j) => (j.mod || "futebol") === "futebol" && (String(j.org || "").startsWith("af-") || (j.org === "fpf" && NACIONAIS_BAIXO.test(j.compNome || "")));
 const AO_VIVO = (j) => ["direto", "intervalo"].includes(j.estado) || j.semInfo;
 const hhmm = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
+const diaDe = (t) => new Date(t).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
 
 // faixa 1: jogos a decorrer (primeiro), depois os que ainda vão começar e os que já acabaram hoje
 function JogosDaBase({ API, agora }) {
@@ -66,22 +67,25 @@ function DiretosYoutube({ API, agora }) {
   useEffect(() => {
     const ler = () => fetch(`${API}/api/distritais/diretos`).then((r) => r.json()).then(setD).catch(() => {});
     ler();
-    const t = setInterval(ler, 60e3);
+    const t = setInterval(ler, 30e3);
     return () => clearInterval(t);
   }, [API]);
-  const lista = d ? [...(d.aoVivo || []), ...(d.aSeguir || [])] : [];
-  if (!lista.length) return null;
+  if (!d) return null;
+  const lista = [...(d.aoVivo || []), ...(d.aSeguir || [])];
+  // agendado: a hora, e o dia quando não é hoje
+  const quandoComeca = (t) => (diaDe(t) === diaDe(agora) ? `Hoje, ${hhmm(t)}` : new Date(t).toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" }));
   const rola = (dir) => ref.current?.scrollBy({ left: dir * Math.max(240, ref.current.clientWidth * 0.8), behavior: "smooth" });
   return (
     <section className="vbar vdest dyt" aria-label="Jogos em direto no YouTube">
       <div className="livehead">
         <h2 className="vdesth">Em direto no YouTube</h2>
-        <span className="muted small">Canais das associações, do Canal 11 e da FPF</span>
+        <span className="muted small">{d.aoVivo?.length ? `${d.aoVivo.length} em direto · ` : ""}{d.aSeguir?.length ? `${d.aSeguir.length} agendados · ` : ""}Canais das associações, do Canal 11 e da FPF</span>
         <div className="varrows">
           <button className="icon-btn" onClick={() => rola(-1)} aria-label="←">‹</button>
           <button className="icon-btn" onClick={() => rola(1)} aria-label="→">›</button>
         </div>
       </div>
+      {lista.length === 0 && <p className="cempty jvhint">Neste momento não há jogos em direto nem agendados nos canais de YouTube das associações, do Canal 11 e da FPF.</p>}
       <ul className="vlist vrow" ref={ref}>
         {lista.map((v) => (
           <li key={v.videoId} className={`vcard mini ${v.aoVivo ? "cat-red" : ""}`}>
@@ -92,7 +96,7 @@ function DiretosYoutube({ API, agora }) {
                 <button className="vplay" onClick={() => setATocar(v.videoId)} aria-label="Ver">
                   <img src={v.imagem} alt="" loading="lazy" />
                   <span className="vbtn">▶</span>
-                  <span className={`vcat ${v.aoVivo ? "dao" : ""}`}>{v.aoVivo ? "AO VIVO" : v.inicio ? `Às ${hhmm(v.inicio)}` : "A seguir"}</span>
+                  <span className={`vcat ${v.aoVivo ? "dao" : ""}`}>{v.aoVivo ? "AO VIVO" : v.inicio ? quandoComeca(v.inicio) : "Agendado"}</span>
                 </button>
               )}
             </div>
@@ -100,7 +104,6 @@ function DiretosYoutube({ API, agora }) {
             <div className="vmeta">
               <span className="muted">{v.nomeOrg}{v.canal && v.canal !== v.nomeOrg ? ` · ${v.canal}` : ""}</span>
               {v.aoVivo && v.espetadores ? <span className="muted"> · {v.espetadores} a ver</span> : null}
-              {!v.aoVivo && v.inicio && v.inicio - agora > 86400e3 ? <span className="muted"> · {new Date(v.inicio).toLocaleDateString("pt-PT", { day: "numeric", month: "short", timeZone: "Europe/Lisbon" })}</span> : null}
             </div>
             <div className="vacts">
               {aTocar === v.videoId ? <button className="textbtn" onClick={() => setATocar(null)}>Fechar</button> : <button className="textbtn vwatch" onClick={() => setATocar(v.videoId)}>Ver</button>}
