@@ -31,6 +31,7 @@ import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./facebook.js";
 import { buscar, buscarPor, motivo } from "../ponte.js";
+import { grafoAtivo, descobrir, postsDoGrafo, estadoGrafo } from "./instagram-grafo.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
@@ -1094,6 +1095,31 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
           estadoSite,
         });
       } catch (e) { res.status(502).json({ conta, sessao, erro: motivo(e), estadoSite }); }
+    });
+    // Instagram pela API oficial da Meta: uma consulta à Business Discovery (sem mostrar a chave)
+    let testeApi = 0;
+    app.get("/api/distritais/teste-instagram-api", async (req, res) => {
+      if (!grafoAtivo()) {
+        return res.json({
+          configurado: false,
+          falta: [!process.env.IG_GRAPH_TOKEN && "IG_GRAPH_TOKEN (a chave)", !process.env.IG_GRAPH_USER_ID && "IG_GRAPH_USER_ID (o número da conta de Instagram)"].filter(Boolean),
+          ajuda: "Põe as duas variáveis no Northflank (passo a passo em deploy/GUIA-INSTAGRAM-API.md) e volta a abrir este endereço.",
+        });
+      }
+      if (Date.now() - testeApi < 5e3) return res.status(429).json({ erro: "espera 5 segundos entre testes" });
+      testeApi = Date.now();
+      const conta = String(req.query.conta || "fcporto").replace(/[^a-z0-9._]/gi, "").slice(0, 40) || "fcporto";
+      try {
+        const bd = await descobrir(conta, { n: 3 });
+        const posts = postsDoGrafo(bd, { instagram: conta, nome: bd.name || conta, org: "teste" });
+        res.json({
+          configurado: true, funciona: true, conta: bd.username, nome: bd.name, seguidores: bd.followers_count, numeroDePosts: bd.media_count,
+          ultimosPosts: posts.map((p) => ({ quando: new Date(p.ts).toISOString(), texto: p.legenda.slice(0, 140), url: p.url, temImagem: !!p.img })),
+          renovacaoAutomatica: !!(process.env.FB_APP_ID && process.env.FB_APP_SECRET), chaveExpira: estadoGrafo.expira ? new Date(estadoGrafo.expira).toISOString() : null, usoMeta: estadoGrafo.usoMeta,
+        });
+      } catch (e) {
+        res.json({ configurado: true, funciona: false, conta, erro: e.message, tipo: e.tipo || null, respostaDaMeta: e.meta ? { codigo: e.meta.code, subcodigo: e.meta.error_subcode, mensagem: e.meta.message } : null });
+      }
     });
     app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
     app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {

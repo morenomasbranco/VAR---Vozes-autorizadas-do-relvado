@@ -131,7 +131,9 @@ export default function Distritais({ API = "", now, query = "" }) {
   const fbPausa = fb && agora < (fb.pausaAte || 0);
   const fbFalha = fb && fb.erros > 0 && !fb.ok;
   // nada está a chegar: o Instagram recusa, os visualizadores falham, o Facebook também (ou não há) e não há retransmissor
-  const bloqueado = igPausa && anonFalha && !relayVivo && !e.casa && (!fb || fbPausa || fbFalha);
+  const api = e.instagramApi || null; // Instagram pela API oficial da Meta
+  const apiPausa = api && agora < (api.pausaAte || 0);
+  const bloqueado = !api && igPausa && anonFalha && !relayVivo && !e.casa && (!fb || fbPausa || fbFalha);
   const total = Object.values(d.posts || {}).reduce((t, l) => t + l.length, 0);
   const totalNoticias = Object.values(d.noticias || {}).reduce((t, l) => t + l.length, 0);
   const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
@@ -147,10 +149,18 @@ export default function Distritais({ API = "", now, query = "" }) {
         {porLer ? `A ler as páginas dos clubes: ${e.lidosTotal || 0} de ${e.perfis || e.clubes} já lidas, ${total} posts.` : `${e.perfis || e.clubes} páginas de clubes, relidas ao longo do dia.`}
       </p>
       <ul className="muted dvias">
-        <li>
-          Instagram{ig.comSessao ? " (com sessão)" : " (sem sessão)"}: {e.lidosInstagram ?? 0} de {e.paginasInstagram ?? "?"} lidos
-          {igPausa ? ` · o Instagram está a limitar os pedidos deste servidor (${ig.ultimoErro || "recusa"}); volta a tentar às ${hora(ig.pausaAte)}, mais devagar` : ig.ultimoOk ? " · a ler" : ""}
-        </li>
+        {api ? (
+          <li>
+            Instagram (API oficial da Meta): {e.lidosInstagram ?? 0} de {e.paginasInstagram ?? "?"} clubes lidos
+            {api.naoProfissionais ? ` · ${api.naoProfissionais} contas pessoais (a API só lê contas profissionais)` : ""}
+            {apiPausa ? ` · em pausa até às ${hora(api.pausaAte)} (${api.ultimoErro?.erro || api.ultimoErro || "limite"})` : api.ok ? " · a ler" : ""}
+          </li>
+        ) : (
+          <li>
+            Instagram{ig.comSessao ? " (com sessão)" : " (sem sessão)"}: {e.lidosInstagram ?? 0} de {e.paginasInstagram ?? "?"} lidos
+            {igPausa ? ` · o Instagram está a limitar os pedidos deste servidor (${ig.ultimoErro || "recusa"}); volta a tentar às ${hora(ig.pausaAte)}, mais devagar` : ig.ultimoOk ? " · a ler" : ""}
+          </li>
+        )}
         {fb && <li>Facebook: {e.lidosFacebook ?? 0} de {e.paginasFacebook ?? fb.paginas} páginas lidas{fbPausa ? ` · o Facebook está a recusar os pedidos (${fb.ultimoErro || "recusa"}); volta a tentar às ${hora(fb.pausaAte)}` : fbFalha ? ` · ainda sem leituras certas (${fb.ultimoErro || "erro"})` : fb.ok ? " · a ler" : ""}</li>}
         {e.casa && <li>Retransmissor de casa ligado: o Instagram e o Facebook dos clubes são lidos pela ligação de casa, em tempo real</li>}
         {relayVivo && <li>Retransmissor dos stories: {vias.retransmissor.ok} perfis recebidos</li>}
