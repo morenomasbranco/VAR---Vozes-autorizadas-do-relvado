@@ -121,15 +121,26 @@ function JogosDaBase({ itens, total, vivos, titulo, nomeDe }) {
   );
 }
 
-// faixa 2: transmissões no YouTube (em direto primeiro, depois as agendadas); toca no próprio cartão
+// ecrã inteiro do leitor (com o prefixo antigo do Safari)
+function ecraInteiro(el) {
+  if (!el) return;
+  const pedir = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (pedir) { try { const r = pedir.call(el); if (r?.catch) r.catch(() => {}); } catch { /* o browser recusou */ } }
+}
+
+// faixa 2: transmissões no YouTube (em direto primeiro, depois as agendadas). O vídeo escolhido toca num leitor fixo
+// por cima da faixa: a faixa reordena-se de 30 em 30 s, e um vídeo dentro de um cartão que muda de lugar seria
+// recarregado (e sairia do ecrã inteiro).
 function DiretosYoutube({ itens, d, agora, titulo, nomeDe }) {
-  const [aTocar, setATocar] = useState(null);
+  const [aTocar, setATocar] = useState(null); // a transmissão que está a tocar (o objeto, para continuar mesmo que saia da lista)
   const ref = useRef(null);
+  const palco = useRef(null);
   // agendado: a hora, e o dia quando não é hoje
   const quandoComeca = (t) => (diaDe(t) === diaDe(agora) ? `Hoje, ${hhmm(t)}` : new Date(t).toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" }));
   const rola = (dir) => ref.current?.scrollBy({ left: dir * Math.max(240, ref.current.clientWidth * 0.8), behavior: "smooth" });
   const vids = itens.filter((y) => y.x);
   const nVivo = vids.filter((y) => y.x.aoVivo).length, nAgendado = vids.length - nVivo;
+  const tocar = (v) => { setATocar(v); setTimeout(() => palco.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }), 50); };
   return (
     <section className="vbar vdest dyt" aria-label="Jogos em direto no YouTube">
       <div className="livehead">
@@ -140,20 +151,30 @@ function DiretosYoutube({ itens, d, agora, titulo, nomeDe }) {
           <button className="icon-btn" onClick={() => rola(1)} aria-label="→">›</button>
         </div>
       </div>
+      {aTocar && (
+        <div className="dpalco" ref={palco}>
+          <div className="dpalco-video">
+            <iframe key={aTocar.videoId} src={`https://www.youtube-nocookie.com/embed/${aTocar.videoId}?autoplay=1&playsinline=1&fs=1`} title={aTocar.titulo}
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen; web-share" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
+          </div>
+          <div className="dpalco-barra">
+            <span className="dpalco-titulo">{aTocar.aoVivo ? <b className="dao-txt">AO VIVO</b> : null} {aTocar.titulo} <span className="muted">· {aTocar.nomeOrg}</span></span>
+            <button className="textbtn" onClick={() => ecraInteiro(palco.current?.querySelector(".dpalco-video"))}>⛶ Ecrã inteiro</button>
+            <a className="textbtn" href={aTocar.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>YouTube ↗</a>
+            <button className="textbtn" onClick={() => setATocar(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
       {vids.length === 0 && <p className="cempty jvhint">{(d.aoVivo?.length || d.aSeguir?.length) ? "Neste momento não há jogos em direto nem agendados no YouTube desta associação ou deste campeonato." : "Neste momento não há jogos em direto nem agendados nos canais de YouTube das associações, do Canal 11 e da FPF."}</p>}
       <ul className="vlist vrow" ref={ref}>
         {itens.map(({ sep, x: v }) => (sep ? <Separador key={`s:${sep}`} nome={nomeDe(sep)} video /> : (
-          <li key={v.videoId} className={`vcard mini ${v.aoVivo ? "cat-red" : ""}`}>
+          <li key={v.videoId} className={`vcard mini ${v.aoVivo ? "cat-red" : ""} ${aTocar?.videoId === v.videoId ? "dtoca" : ""}`}>
             <div className="vthumb">
-              {aTocar === v.videoId ? (
-                <iframe src={`https://www.youtube-nocookie.com/embed/${v.videoId}?autoplay=1`} title={v.titulo} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
-              ) : (
-                <button className="vplay" onClick={() => setATocar(v.videoId)} aria-label="Ver">
-                  <img src={v.imagem} alt="" loading="lazy" />
-                  <span className="vbtn">▶</span>
-                  <span className={`vcat ${v.aoVivo ? "dao" : ""}`}>{v.aoVivo ? "AO VIVO" : v.inicio ? quandoComeca(v.inicio) : "Agendado"}</span>
-                </button>
-              )}
+              <button className="vplay" onClick={() => tocar(v)} aria-label="Ver">
+                <img src={v.imagem} alt="" loading="lazy" />
+                <span className="vbtn">{aTocar?.videoId === v.videoId ? "♪" : "▶"}</span>
+                <span className={`vcat ${v.aoVivo ? "dao" : ""}`}>{v.aoVivo ? "AO VIVO" : v.inicio ? quandoComeca(v.inicio) : "Agendado"}</span>
+              </button>
             </div>
             <h3 className="vtitle">{v.titulo}</h3>
             <div className="vmeta">
@@ -161,7 +182,7 @@ function DiretosYoutube({ itens, d, agora, titulo, nomeDe }) {
               {v.aoVivo && v.espetadores ? <span className="muted"> · {v.espetadores} a ver</span> : null}
             </div>
             <div className="vacts">
-              {aTocar === v.videoId ? <button className="textbtn" onClick={() => setATocar(null)}>Fechar</button> : <button className="textbtn vwatch" onClick={() => setATocar(v.videoId)}>Ver</button>}
+              {aTocar?.videoId === v.videoId ? <button className="textbtn" onClick={() => setATocar(null)}>Fechar</button> : <button className="textbtn vwatch" onClick={() => tocar(v)}>Ver</button>}
               <a className="textbtn" href={v.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>YouTube ↗</a>
             </div>
           </li>
@@ -370,6 +391,14 @@ export const DIST_CSS = `
 .apito .dsep span{font-family:var(--display);font-weight:600;font-size:13px;line-height:1.15;max-width:96px;white-space:normal}
 .apito .dsep.v{align-self:stretch}
 .apito .dyt .vcat.dao{background:#D7263D}
+.apito .dpalco{margin:0 0 12px;max-width:960px}
+.apito .dpalco-video{position:relative;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+.apito .dpalco-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.apito .dpalco-video:fullscreen{border-radius:0} .apito .dpalco-video:-webkit-full-screen{border-radius:0}
+.apito .dpalco-barra{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:6px;font-size:13px}
+.apito .dpalco-titulo{flex:1 1 240px;min-width:0}
+.apito .dao-txt{color:#D7263D;font-size:11px;letter-spacing:.04em}
+.apito .dyt .vcard.dtoca{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
 .apito .dyt .vtitle{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
 .apito .dnot .ctitle a{color:inherit;text-decoration:none} .apito .dnot .ctitle a:hover{text-decoration:underline}

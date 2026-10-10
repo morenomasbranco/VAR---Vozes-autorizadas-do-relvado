@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { norm } from "./util.js";
 import { simil } from "./sources/zapping.js";
 import { aceita as aceitaStreamain } from "./sources/streamain.js";
+import { tituloSujo } from "./sources/sporttv.js";
 
 const FILE = new URL("../data/videos.json", import.meta.url);
 const MAX = Number(process.env.VIDEOS_MAX) || 800;
@@ -68,7 +69,9 @@ const limpa = (s) => String(s || "")
 
 // «Benfica [1] - 0 Porto - Vangelis Pavlidis 67'», «GOAL Benfica 1-0 Porto - Pavlidis 67'», «Benfica 1 x [1] Porto | Samu 90+2'»
 export function extrair(titulo) {
-  const t = limpa(titulo);
+  // «FC Vizela 0 [2] Sporting CP B» (a Sport TV às vezes não põe o traço entre os resultados): com os parênteses
+  // retos a marcar um dos lados, o traço que falta é evidente
+  const t = limpa(titulo).replace(/(\s\d{1,2})\s+(\[\d{1,2}\])(?=\s)/, "$1 - $2").replace(/(\s\[\d{1,2}\])\s+(\d{1,2})(?=\s)/, "$1 - $2");
   const out = { home_team: null, away_team: null, score: null, scorer_side: null, player: null, minute: null, opponent: null };
   const m = t.match(/^(.+?)\s+(\[?)(\d{1,2})(\]?)\s*[-–x:]\s*(\[?)(\d{1,2})(\]?)\s+(.+)$/i);
   if (m) {
@@ -167,6 +170,9 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   try { videos = JSON.parse(fs.readFileSync(FILE, "utf8")).filter((v) => idade(v) < IDADE_MAX); } catch { videos = []; }
   // os do Streamain guardados antes do filtro só de futebol: o que não passa no filtro sai
   videos = videos.filter((v) => !(v.sources?.length && v.sources.every((x) => x.fonte === "streamain" && !aceitaStreamain(x))));
+  // os da Sport TV guardados com a etiqueta e a duração no título («Novo 1:25 Golo! …»): saem, e voltam limpos na
+  // próxima leitura da Sport TV (as equipas e o resultado tinham sido lidos do título errado)
+  videos = videos.filter((v) => !(v.sources?.length && v.sources.every((x) => x.fonte === "sporttv" && tituloSujo(x.title))));
   // as regras da classificação mudam com o tempo: os vídeos guardados são revistos à entrada
   // (os da VSPORTS trazem a categoria do próprio site e ficam como estão)
   for (const v of videos) {

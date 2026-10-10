@@ -26,6 +26,20 @@ export function relativo(s, agora = Date.now()) {
   return agora - n * un;
 }
 
+// O cartão de cada vídeo traz, antes do título, a etiqueta «Novo» e a duração («1:25»), e depois a hora
+// («há 5 minutos»): sem isto, «Novo 1:25 Golo! FC Vizela 0 [2] Sporting CP B 45+1'» era lido como o jogo
+// «Novo 1–25 Golo! FC Vizela».
+const ETIQUETA = /^(?:novo|nova|novidade|new|exclusivo|exclusive|v[ií]deo|em direto|live|destaque|\d{1,2}:\d{2}(?::\d{2})?)\s*[|·•-]?\s+/i;
+export function limparTitulo(t) {
+  let s = String(t || "").replace(/\s+/g, " ").trim();
+  for (let i = 0; i < 5 && ETIQUETA.test(s); i++) s = s.replace(ETIQUETA, "");
+  return s
+    .replace(/\s+h[aá]\s+(?:\d+|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(?:minuto|hora|dia|semana|m[eê]s)e?s?\s*$/i, "")
+    .replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/, "")
+    .trim();
+}
+export const tituloSujo = (t) => limparTitulo(t) !== String(t || "").replace(/\s+/g, " ").trim();
+
 // ligações …/videos/{cat}/{slug}/video/{entryId}/{slug}: título, miniatura e hora de cada vídeo
 export function lerPagina(html, base = "https://www.sporttv.pt/") {
   const src = String(html || "");
@@ -35,7 +49,10 @@ export function lerPagina(html, base = "https://www.sporttv.pt/") {
   while ((m = re.exec(src))) {
     const [, href, entry, dentro] = m;
     const perto = src.slice(m.index, m.index + m[0].length + 1200);
-    const titulo = texto(dentro) || decode(m[0].match(/\btitle="([^"]+)"/)?.[1] || "") || decode(dentro.match(/\balt="([^"]+)"/)?.[1] || "");
+    // o título: o atributo title da ligação, o texto do elemento do título, ou todo o texto do cartão (limpo)
+    const doAtributo = decode(m[0].match(/^<a\b[^>]*\btitle="([^"]+)"/i)?.[1] || "");
+    const doElemento = texto(dentro.match(/<(h[1-6]|p|span|div)\b[^>]*class="[^"]*(?:title|titulo)[^"]*"[^>]*>([\s\S]*?)<\/\1>/i)?.[2] || "");
+    const titulo = limparTitulo(doAtributo.length >= 6 ? doAtributo : doElemento.length >= 6 ? doElemento : texto(dentro) || decode(dentro.match(/\balt="([^"]+)"/)?.[1] || ""));
     const prev = out.get(entry);
     if (prev && (prev.title.length >= titulo.length || !titulo)) continue;
     if (!titulo || titulo.length < 4) { if (!prev) out.set(entry, null); continue; }

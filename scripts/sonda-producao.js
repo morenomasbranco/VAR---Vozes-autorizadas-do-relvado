@@ -64,3 +64,12 @@ for (const [nome, fazer] of [
     linha(`== ${nome} ==`, html.length, "bytes em", Date.now() - t0, "ms ·", st ? `${st.vistos} vídeos lidos, ${st.lista.length} diretos/agendados ${JSON.stringify(st.lista.map((d) => d.titulo))}` : "sem ytInitialData", "· ytInitialData:", /ytInitialData/.test(html));
   } catch (e) { linha(nome, "erro", e.message); }
 }
+
+// os títulos da Sport TV, tal como o servidor os lê (sem a etiqueta «Novo» nem a duração)
+try {
+  const { lerPagina } = await import("../server/sources/sporttv.js");
+  const r = await fetch("https://www.sporttv.pt/videos/1/mais-recentes", { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" } });
+  const lista = lerPagina(await r.text());
+  linha("== Sport TV ==", r.status, lista.length, "vídeos");
+  for (const v of lista.slice(0, 10)) linha("   ", v.title);
+} catch (e) { linha("Sport TV: erro", e.message); }
