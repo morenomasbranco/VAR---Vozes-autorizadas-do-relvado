@@ -43,6 +43,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: sonda (canais que estão sempre em direto ou com transmissões agendadas)
+        run: node scripts/sonda-youtube.js @SkyNews @aljazeeraenglish @NASA @afleiriaoficial @AFViseuTV @associacaodefuteboldoporto
       - name: canais de YouTube
         env:
           DISTRITAIS: "0"
