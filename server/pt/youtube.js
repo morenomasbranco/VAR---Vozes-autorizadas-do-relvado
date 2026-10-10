@@ -134,7 +134,7 @@ export function lerStreams(html) {
       const tudo = JSON.stringify(l);
       const aoVivo = /BADGE_STYLE_LIVE|"text":"(LIVE|AO VIVO|EM DIRETO|DIRETO)"/i.test(tudo);
       const inicio = +(tudo.match(/"startTime":"(\d{9,11})"/)?.[1] || 0) * 1000 || null;
-      const marcada = !aoVivo && (!!inicio || /UPCOMING|SCHEDULED|"text":"(Upcoming|Scheduled|Agendad[oa]|Em breve|Estreia|Premieres?)|Notify me|Notificar-me|Receber notifica/i.test(tudo));
+      const marcada = !aoVivo && (!!inicio || /UPCOMING|SCHEDULED|"text":"(Brevemente|Em breve|Coming soon|Upcoming|Scheduled|Agendad[oa]|Estreia|Premieres?|Pr[oó]ximamente)|Notify me|Notificar-me|Receber notifica/i.test(tudo));
       if (aoVivo || marcada) {
         juntar({ videoId: l.contentId, titulo: textoDe(l.metadata?.lockupMetadataViewModel?.title), aoVivo, marcada, inicio, espetadores: aoVivo ? +(tudo.match(/"text":"([\d.,\s]+) (?:watching|a ver|espetadores)/i)?.[1] || "").replace(/\D/g, "") || null : null });
       }
