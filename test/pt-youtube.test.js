@@ -34,7 +34,13 @@ test("YouTube: a pesquisa de canais e o reconhecimento do canal de cada associa�
   assert.equal(urlCanal(canaisBase().find((c) => c.id === "af-lisboa").canal), "https://www.youtube.com/channel/UCXSPgjw-KXn86J_upO98LWg");
   assert.equal(urlCanal("@FPF.Oficial"), "https://www.youtube.com/@FPF.Oficial");
   assert.equal(urlCanal("https://www.youtube.com/@x/"), "https://www.youtube.com/@x");
-  assert.equal(canaisBase().length, 24); // 22 associações, Canal 11 e FPF
+  // 22 associações (a AF Viana com dois canais), Canal 11 e FPF
+  assert.equal(canaisBase().length, 25);
+  assert.deepEqual(canaisBase().filter((c) => c.assoc === "af-viana").map((c) => c.id), ["af-viana", "af-viana:2"]);
+  assert.equal(canaisBase().find((c) => c.id === "af-ponta-delgada").canal, "@afpd_tv");
+  assert.equal(canaisBase().find((c) => c.id === "canal11").canal, "@Canal11Oficial");
+  // as que ainda não têm canal conhecido são procuradas pelo nome
+  assert.deepEqual(canaisBase().filter((c) => !c.canal).map((c) => c.id).sort(), ["af-castelo-branco", "af-coimbra", "af-madeira"]);
 });
 
 test("YouTube: o separador «Diretos» (/streams) dá as transmissões a decorrer e as agendadas, e deixa de fora as que já acabaram", async () => {

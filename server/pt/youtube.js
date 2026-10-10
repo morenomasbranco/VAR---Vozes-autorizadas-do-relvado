@@ -6,6 +6,7 @@
 //   2. de poucos em poucos minutos, abre o separador «Diretos» (/streams) de cada canal, onde o YouTube põe as
 //      transmissões a decorrer e todas as que estão agendadas (com a hora). Só essas contam: as que já acabaram ficam
 //      de fora. Se o separador não se deixar ler, usa a página «/live» (que só mostra uma transmissão).
+// Os canais das associações estão em CANAIS_CONHECIDOS; as que lá não estão são procuradas pelo nome.
 // Não precisa de chave. Os pedidos ao YouTube são espaçados (um a cada YOUTUBE_SEGUNDOS, 5 s por omissão), por isso
 // cada canal é revisto a cada 2 minutos.
 import fs from "node:fs";
@@ -20,21 +21,38 @@ const CABECALHOS = { "User-Agent": UA, "Accept-Language": "pt-PT,pt;q=0.9", Acce
 
 // o nome da terra de cada associação, para reconhecer o canal («AF Viseu», «Associação de Futebol de Viseu», «AFV TV»)
 const terra = (a) => a.nome.replace(/^AF /, "");
-// canais já confirmados (os outros são procurados no YouTube pelo nome)
-const CANAIS_CONHECIDOS = {
-  "af-lisboa": "UCXSPgjw-KXn86J_upO98LWg", // «AFL TV»
-  "af-viseu": "@AFViseuTV",
-  "af-porto": "@associacaodefuteboldoporto",
+// os canais de cada associação (os que não estão aqui são procurados no YouTube pelo nome). Uma associação pode ter
+// mais do que um; as transmissões repetidas aparecem uma vez só.
+export const CANAIS_CONHECIDOS = {
+  "af-algarve": ["@afalgarve1922"],
+  "af-angra": ["UC1YJ_VcfRrzS4hfIBpDP-9A"],
+  "af-aveiro": ["@afaveiro_oficial"],
+  "af-beja": ["@associacaofutebolbeja"],
+  "af-braga": ["@afbragaTV"],
+  "af-braganca": ["@af_braganca"],
+  "af-evora": ["@AFevoraTV"],
+  "af-guarda": ["@AFGuarda1940"],
+  "af-horta": ["https://www.youtube.com/c/Associa%C3%A7%C3%A3odeFuteboldaHorta"],
+  "af-leiria": ["@afleiriaoficial"],
+  "af-lisboa": ["UCXSPgjw-KXn86J_upO98LWg"], // «AFL TV»
+  "af-ponta-delgada": ["@afpd_tv"],
+  "af-portalegre": ["@apftv85"], // «APF TV»
+  "af-porto": ["@associacaodefuteboldoporto"],
+  "af-santarem": ["@AFSantarem"],
+  "af-setubal": ["@afsetubal2570"],
+  "af-viana": ["@AFVC1923", "UCItukc3FMSu7zL-8V2_11Kw"], // «AFVC TV»
+  "af-vila-real": ["UC733i_NcTy8c9mZJIUN2ewA"],
+  "af-viseu": ["@AFViseuTV"],
 };
 export function canaisBase() {
   return [
     { id: "fpf", nome: "FPF", canal: "@FPF.Oficial", procurar: "FPF Federação Portuguesa de Futebol", reconhece: "federacao portuguesa de futebol|\\bfpf\\b" },
-    { id: "canal11", nome: "Canal 11", procurar: "Canal 11", reconhece: "^canal ?11" },
-    ...ASSOCIACOES.map((a) => ({
-      id: a.key, assoc: a.key, nome: a.nome, procurar: a.longo,
-      canal: CANAIS_CONHECIDOS[a.key] || null,
+    { id: "canal11", nome: "Canal 11", canal: "@Canal11Oficial", procurar: "Canal 11", reconhece: "^canal ?11" },
+    // um registo por canal: o primeiro tem o id da associação, os outros «af-…:2», «af-…:3»
+    ...ASSOCIACOES.flatMap((a) => (CANAIS_CONHECIDOS[a.key] || [null]).map((canal, i) => ({
+      id: i ? `${a.key}:${i + 1}` : a.key, assoc: a.key, nome: a.nome, procurar: a.longo, canal,
       reconhece: `(associacao de futebol|\\baf\\b|futebol).*${norm(terra(a))}|${norm(terra(a))}.*(futebol|\\baf\\b)`,
-    })),
+    }))),
   ];
 }
 
@@ -205,6 +223,7 @@ export function createYoutube({ log = () => {} } = {}) {
             if (d.aoVivo && !e.diretos.some((x) => x.videoId === d.videoId && x.aoVivo)) log(`[YouTube] em direto em ${c.nome}: ${d.titulo}`);
           }
           e.diretos = lista.map((d) => ({ ...d, org: c.assoc || c.id, nomeOrg: c.nome }));
+          if (st?.canal && !guardado[c.id]?.titulo) { guardado[c.id] = { ...guardado[c.id], titulo: st.canal }; gravar(); }
           e.canalUrl = base;
         }
         e.ultimo = Date.now();
@@ -221,7 +240,7 @@ export function createYoutube({ log = () => {} } = {}) {
   return {
     start() { if (ativo) correr().catch((e) => log(`[YouTube] ${e.message}`)); },
     diretos() {
-      const lista = Object.values(estado).flatMap((e) => e.diretos || []);
+      const lista = [...new Map(Object.values(estado).flatMap((e) => e.diretos || []).map((d) => [d.videoId, d])).values()];
       // uma transmissão marcada há mais de 3 horas já não é «a seguir»
       const agora = Date.now();
       return {
