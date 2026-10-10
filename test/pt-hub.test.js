@@ -96,3 +96,17 @@ test("Streamain: só entram vídeos de futebol (o Minecraft e os outros desporto
   assert.equal(eFutebol("Mario Götze goal vs Argentina"), true);
   assert.equal(aceita({ post_id: "streamain:luSIbqVpKPbmv8J", title: "Benfica 2-1 Porto" }), false); // tirado à mão
 });
+
+test("Sport TV: a etiqueta «Novo» e a duração do cartão não entram no título, e o resultado sem traço lê-se", async () => {
+  const { limparTitulo, lerPagina, tituloSujo } = await import("../server/sources/sporttv.js");
+  const { extrair } = await import("../server/videos.js");
+  assert.equal(limparTitulo("Novo 1:25 Golo! FC Vizela 0 [2] Sporting CP B 45+1' há 5 minutos"), "Golo! FC Vizela 0 [2] Sporting CP B 45+1'");
+  assert.equal(tituloSujo("Novo 1:25 Golo! FC Vizela 0 [2] Sporting CP B 45+1'"), true);
+  assert.equal(tituloSujo("Golo! Croácia 1 - [2] Espanha 89'"), false);
+  const html = `<a href="/videos/1/futebol/video/1_abcdefgh/golo"><span>Novo</span> <span>1:25</span> Golo! FC Vizela 0 [2] Sporting CP B 45+1'</a>`;
+  assert.deepEqual(lerPagina(html).map((v) => v.title), ["Golo! FC Vizela 0 [2] Sporting CP B 45+1'"]);
+  const e = extrair("Golo! FC Vizela 0 [2] Sporting CP B 45+1'");
+  assert.equal(e.home_team, "FC Vizela"); assert.equal(e.away_team, "Sporting CP B"); assert.equal(e.score, "0-2"); assert.equal(e.scorer_side, "away"); assert.equal(e.minute, "45+1");
+  assert.equal(extrair("Golo! Croácia 1 - [2] Espanha 89'").score, "1-2");
+  assert.equal(extrair("Benfica [1] - 0 Porto - Pavlidis 67'").scorer_side, "home");
+});
