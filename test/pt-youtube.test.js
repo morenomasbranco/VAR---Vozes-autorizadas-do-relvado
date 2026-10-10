@@ -78,3 +78,10 @@ test("YouTube: o separador «Diretos» (/streams) dá as transmissões a decorre
   assert.equal(canaisBase().find((c) => c.id === "af-viseu").canal, "@AFViseuTV");
   assert.equal(canaisBase().find((c) => c.id === "af-porto").canal, "@associacaodefuteboldoporto");
 });
+
+test("YouTube: a hora de um agendado lê-se na página do vídeo", async () => {
+  const { horaMarcada } = await import("../server/pt/youtube.js");
+  assert.equal(horaMarcada('..."liveBroadcastDetails":{"isLiveNow":false,"startTimestamp":"2026-10-11T14:00:00+00:00"}...'), Date.parse("2026-10-11T14:00:00Z"));
+  assert.equal(horaMarcada('..."upcomingEventData":{"scheduledStartTime":"1791640800"}...'), 1791640800000);
+  assert.equal(horaMarcada("nada"), null);
+});
