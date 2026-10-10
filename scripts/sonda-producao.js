@@ -26,6 +26,7 @@ try {
   linha("== associações ==", af.length, "itens");
 } catch (e) { linha("oficiais: erro", e.message); }
 
+try { const r = await j("/api/retransmissor"); linha("== pontes ==", JSON.stringify(r.encaminhamento?.pontes), "porSite", JSON.stringify(r.encaminhamento?.porSite).slice(0, 600)); } catch (e) { linha("pontes: erro", e.message); }
 try { const d = await j("/api/diagnostico"); linha("== diagnóstico ==", JSON.stringify(d).slice(0, 800)); } catch (e) { linha("diagnóstico: erro", e.message); }
 try {
   const y = await j("/api/distritais/youtube");
