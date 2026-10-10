@@ -50,3 +50,17 @@ for (const q of ["site:www.fpf.pt", "site:fpf.pt", "fpf.pt", "\"Federação Port
 for (const u of ["https://www.fpf.pt/noticias", "https://www.fpf.pt/pt/News/Todas-as-notícias", "https://www.ligaportugal.pt/noticias"]) {
   try { const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" } }); const t = await r.text(); linha(u, r.status, t.length, /news\/\d+/.test(t) ? "tem notícias" : "sem notícias"); } catch (e) { linha(u, "erro", e.message); }
 }
+
+// o YouTube visto por pontes que não precisam de nada configurado (para quando o servidor não chega ao YouTube)
+const { lerStreams } = await import("../server/pt/youtube.js").catch(() => ({}));
+for (const [nome, fazer] of [
+  ["Jina (POST, html)", (u) => fetch("https://r.jina.ai/", { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", "X-Return-Format": "html", "X-No-Cache": "true" }, body: JSON.stringify({ url: u }) }).then(async (r) => { const t = await r.text(); try { const j = JSON.parse(t); return j.data?.html || j.data?.content || ""; } catch { return t; } })],
+  ["YouTube RSS direto", (u) => fetch("https://www.youtube.com/feeds/videos.xml?channel_id=UCXSPgjw-KXn86J_upO98LWg").then((r) => r.text())],
+]) {
+  try {
+    const t0 = Date.now();
+    const html = await fazer("https://www.youtube.com/@AFViseuTV/streams");
+    const st = lerStreams ? lerStreams(html) : null;
+    linha(`== ${nome} ==`, html.length, "bytes em", Date.now() - t0, "ms ·", st ? `${st.vistos} vídeos lidos, ${st.lista.length} diretos/agendados ${JSON.stringify(st.lista.map((d) => d.titulo))}` : "sem ytInitialData", "· ytInitialData:", /ytInitialData/.test(html));
+  } catch (e) { linha(nome, "erro", e.message); }
+}
