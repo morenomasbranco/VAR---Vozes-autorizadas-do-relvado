@@ -86,7 +86,9 @@ const CASTIGO_MS = 15 * 60e3;
 const PRAZO_CAMINHO_MS = Math.max(3, Number(process.env.PONTE_PRAZO_SEGUNDOS) || 8) * 1000;
 // o Google Apps Script é mais lento a arrancar (o pedido passa por dois servidores da Google antes de sair)
 const PRAZO_GOOGLE_MS = Math.max(5, Number(process.env.PONTE_GOOGLE_PRAZO_SEGUNDOS) || 20) * 1000;
-const prazoDe = (c) => (c.tipo === "google" || c.tipo === "jina" ? PRAZO_GOOGLE_MS : PRAZO_CAMINHO_MS);
+// o retransmissor de casa abre as páginas num browser verdadeiro: a primeira vez num site (o anti-robôs) demora mais
+const PRAZO_CASA_MS = Math.max(5, Number(process.env.PONTE_CASA_PRAZO_SEGUNDOS) || 20) * 1000;
+const prazoDe = (c) => (c.id === "casa" ? PRAZO_CASA_MS : c.tipo === "google" || c.tipo === "jina" ? PRAZO_GOOGLE_MS : PRAZO_CAMINHO_MS);
 const erroPonte = (msg, extra = {}) => Object.assign(new Error(msg), { daPonte: true, ...extra });
 const cabecalhos = (h) => (!h ? {} : typeof h.entries === "function" && !Array.isArray(h) ? Object.fromEntries(h.entries()) : Array.isArray(h) ? Object.fromEntries(h) : { ...h });
 

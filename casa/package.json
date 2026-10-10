@@ -1,0 +1,14 @@
+{
+  "name": "var-retransmissor",
+  "private": true,
+  "type": "module",
+  "description": "Retransmissor de casa do VAR, com um browser verdadeiro",
+  "scripts": {
+    "start": "node retransmissor.js",
+    "configurar": "node retransmissor.js --configurar"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}

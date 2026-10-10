@@ -31,7 +31,7 @@ export function resumoRetransmissor() {
   return {
     ligado: retransmissorLigado(),
     chave: !!chave(),
-    ligacoes: [...ligacoes].map((l) => ({ nome: l.nome, desde: l.desde, pedidos: l.pedidos, erros: l.erros, aCorrer: l.aCorrer, hosts: l.hosts || null })),
+    ligacoes: [...ligacoes].map((l) => ({ nome: l.nome, desde: l.desde, browser: !!l.browser, sessoes: l.sessoes || null, pedidos: l.pedidos, erros: l.erros, aCorrer: l.aCorrer, hosts: l.hosts || null })),
     ...estadoRetransmissor,
   };
 }
@@ -123,7 +123,13 @@ export function registar(ws, nome = "casa", { log = () => {} } = {}) {
     let m;
     try { m = typeof dados === "object" && !Buffer.isBuffer(dados) ? dados : JSON.parse(String(dados)); } catch { return; }
     if (!m || typeof m !== "object") return;
-    if (m.t === "ola") { if (Array.isArray(m.hosts) && m.hosts.length) lig.hosts = m.hosts.map(String).slice(0, 200); return; }
+    if (m.t === "ola") {
+      if (Array.isArray(m.hosts) && m.hosts.length) lig.hosts = m.hosts.map(String).slice(0, 200);
+      // o retransmissor com browser diz se tem as contas de Instagram e de Facebook com sessão iniciada
+      lig.browser = !!m.browser;
+      lig.sessoes = m.sessoes && typeof m.sessoes === "object" ? { instagram: !!m.sessoes.instagram, facebook: !!m.sessoes.facebook } : null;
+      return;
+    }
     const p = pendentes.get(m.id);
     if (!p || p.lig !== lig) return;
     if (m.t === "resposta") p.fim(null, respostaDe(m));

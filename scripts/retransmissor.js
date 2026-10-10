@@ -102,15 +102,21 @@ function ligar() {
     if (m.t === "pedido") { fila.push(m); andar(); }
     else if (m.t === "cancelar") { emCurso.get(m.id)?.abort(); const i = fila.findIndex((x) => x.id === m.id); if (i >= 0) fila.splice(i, 1); }
   };
-  ws.onclose = (ev) => {
-    const motivo = ev?.code === 1006 && espera === 2000 ? "" : ev?.reason ? ` (${ev.reason})` : "";
-    console.log(`[retransmissor] ligação fechada${motivo}; volto a ligar daqui a ${Math.round(espera / 1000)} s`);
+  // no Node, uma ligação que falha logo de início só dá «error» (nunca «close»): os dois levam a nova tentativa, uma vez só
+  const este = ws;
+  let tratado = false;
+  const caiu = (porque) => {
+    if (tratado) return;
+    tratado = true;
+    console.log(`[retransmissor] ligação ${porque}${espera >= 8000 ? " (há internet? a chave e o endereço VAR_URL estão certos?)" : ""}; volto a ligar daqui a ${Math.round(espera / 1000)} s`);
     fila.length = 0;
     for (const c of emCurso.values()) c.abort();
+    try { este.close(); } catch { /* */ }
     setTimeout(ligar, espera);
     espera = Math.min(60e3, espera * 2);
   };
-  ws.onerror = (e) => { if (espera >= 16e3) console.log(`[retransmissor] erro na ligação: ${e?.message || e?.error?.message || "sem resposta (a chave está certa? o endereço VAR_URL está certo?)"}`); };
+  ws.onclose = () => caiu("fechada");
+  ws.onerror = () => caiu("falhou");
 }
 
 setInterval(() => {
