@@ -2,7 +2,116 @@
 // os comunicados da própria associação, a imprensa que fala dela e os posts mais recentes dos clubes (Instagram e
 // Facebook). Os dados vêm de /api/distritais; o que é novo chega pelos eventos «distrital» (posts) e «oficial»
 // (notícias, que o App passa como evento da janela «distrital-noticia»). As imagens passam pelo servidor.
-import { useEffect, useMemo, useState } from "react";
+// Por cima das colunas, duas faixas à maneira do Feed: os jogos de hoje, das distritais à Liga 3 (/api/pt/aovivo), e
+// as transmissões em direto nos canais de YouTube das associações, do Canal 11 e da FPF (/api/distritais/diretos).
+import { useEffect, useMemo, useRef, useState } from "react";
+
+// das distritais à Liga 3: as provas das associações e, da FPF, a Liga 3, o Campeonato de Portugal e o dos Açores
+const NACIONAIS_BAIXO = /liga 3|campeonato de portugal|campeonato (de futebol )?dos a[cç]ores/i;
+export const daBase = (j) => (j.mod || "futebol") === "futebol" && (String(j.org || "").startsWith("af-") || (j.org === "fpf" && NACIONAIS_BAIXO.test(j.compNome || "")));
+const AO_VIVO = (j) => ["direto", "intervalo"].includes(j.estado) || j.semInfo;
+const hhmm = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
+
+// faixa 1: jogos a decorrer (primeiro), depois os que ainda vão começar e os que já acabaram hoje
+function JogosDaBase({ API, agora }) {
+  const [jogos, setJogos] = useState(null);
+  useEffect(() => {
+    const ler = () => fetch(`${API}/api/pt/aovivo`).then((r) => r.json()).then((l) => setJogos(Array.isArray(l) ? l.filter(daBase) : [])).catch(() => {});
+    ler();
+    const t = setInterval(ler, 30e3);
+    return () => clearInterval(t);
+  }, [API]);
+  if (!jogos) return null;
+  const vivos = jogos.filter(AO_VIVO);
+  const fase = (j) => (AO_VIVO(j) ? 0 : j.estado === "agendado" && !j.porConfirmar ? 1 : 2);
+  const lista = [...jogos].sort((a, b) => fase(a) - fase(b) || (fase(a) === 2 ? (b.inicio || 0) - (a.inicio || 0) : (a.inicio || 0) - (b.inicio || 0))).slice(0, 60);
+  return (
+    <section className="livebar jv dbase" aria-label="Jogos de hoje, das distritais à Liga 3">
+      <div className="livehead">
+        <span className={`pulse ${vivos.length ? "" : "off"}`}><i />{vivos.length ? `Em direto · ${vivos.length}` : "Jogos de hoje"}</span>
+        <span className="muted small">Das distritais à Liga 3</span>
+      </div>
+      {lista.length === 0 ? <p className="cempty jvhint">Hoje não há jogos das distritais nem da Liga 3 e do Campeonato de Portugal.</p> : (
+        <ul className="livelist jvstrip">
+          {lista.map((j) => {
+            const f = fase(j);
+            const placar = j.hs != null && j.as != null && f !== 1;
+            return (
+              <li key={j.id}>
+                <div className={`lcard ${f === 0 ? "" : f === 1 ? "next" : "done"}`}>
+                  <span className="lcomp" title={[j.compNome, j.serieNome].filter(Boolean).join(" · ")}>{j.compNome}{j.serieNome ? ` · ${j.serieNome}` : ""}</span>
+                  <span className="lrow"><span className="lteam">{j.logoCasa && <img className="dlogo" src={j.logoCasa} alt="" loading="lazy" />}{j.casa}</span>{placar && <b translate="no">{j.hs}</b>}</span>
+                  <span className="lrow"><span className="lteam">{j.logoFora && <img className="dlogo" src={j.logoFora} alt="" loading="lazy" />}{j.fora}</span>{placar && <b translate="no">{j.as}</b>}</span>
+                  <span className="lfoot">
+                    {f === 0 ? <span className={`lmin ${j.estado === "intervalo" ? "pausa" : ""}`} translate="no">{j.estado === "intervalo" ? "Intervalo" : j.min?.texto || (j.semInfo ? "A decorrer (sem info)" : "Em direto")}</span>
+                      : f === 1 ? <span className="muted small" translate="no">{j.inicio && !j.semHora ? hhmm(j.inicio) : "Hoje"}</span>
+                        : <span className="muted small">{j.porConfirmar ? "Resultado por confirmar" : j.oficial ? "Final (oficial)" : "Final"}</span>}
+                    {f === 0 && j.golos?.length > 0 && <span className="lult" title={j.golos.at(-1).marcador || ""}>{j.golos.at(-1).marcador ? `⚽ ${j.golos.at(-1).marcador}` : ""}</span>}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// faixa 2: transmissões no YouTube (em direto primeiro, depois as marcadas); toca no próprio cartão
+function DiretosYoutube({ API, agora }) {
+  const [d, setD] = useState(null);
+  const [aTocar, setATocar] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    const ler = () => fetch(`${API}/api/distritais/diretos`).then((r) => r.json()).then(setD).catch(() => {});
+    ler();
+    const t = setInterval(ler, 60e3);
+    return () => clearInterval(t);
+  }, [API]);
+  const lista = d ? [...(d.aoVivo || []), ...(d.aSeguir || [])] : [];
+  if (!lista.length) return null;
+  const rola = (dir) => ref.current?.scrollBy({ left: dir * Math.max(240, ref.current.clientWidth * 0.8), behavior: "smooth" });
+  return (
+    <section className="vbar vdest dyt" aria-label="Jogos em direto no YouTube">
+      <div className="livehead">
+        <h2 className="vdesth">Em direto no YouTube</h2>
+        <span className="muted small">Canais das associações, do Canal 11 e da FPF</span>
+        <div className="varrows">
+          <button className="icon-btn" onClick={() => rola(-1)} aria-label="←">‹</button>
+          <button className="icon-btn" onClick={() => rola(1)} aria-label="→">›</button>
+        </div>
+      </div>
+      <ul className="vlist vrow" ref={ref}>
+        {lista.map((v) => (
+          <li key={v.videoId} className={`vcard mini ${v.aoVivo ? "cat-red" : ""}`}>
+            <div className="vthumb">
+              {aTocar === v.videoId ? (
+                <iframe src={`https://www.youtube-nocookie.com/embed/${v.videoId}?autoplay=1`} title={v.titulo} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+              ) : (
+                <button className="vplay" onClick={() => setATocar(v.videoId)} aria-label="Ver">
+                  <img src={v.imagem} alt="" loading="lazy" />
+                  <span className="vbtn">▶</span>
+                  <span className={`vcat ${v.aoVivo ? "dao" : ""}`}>{v.aoVivo ? "AO VIVO" : v.inicio ? `Às ${hhmm(v.inicio)}` : "A seguir"}</span>
+                </button>
+              )}
+            </div>
+            <h3 className="vtitle">{v.titulo}</h3>
+            <div className="vmeta">
+              <span className="muted">{v.nomeOrg}{v.canal && v.canal !== v.nomeOrg ? ` · ${v.canal}` : ""}</span>
+              {v.aoVivo && v.espetadores ? <span className="muted"> · {v.espetadores} a ver</span> : null}
+              {!v.aoVivo && v.inicio && v.inicio - agora > 86400e3 ? <span className="muted"> · {new Date(v.inicio).toLocaleDateString("pt-PT", { day: "numeric", month: "short", timeZone: "Europe/Lisbon" })}</span> : null}
+            </div>
+            <div className="vacts">
+              {aTocar === v.videoId ? <button className="textbtn" onClick={() => setATocar(null)}>Fechar</button> : <button className="textbtn vwatch" onClick={() => setATocar(v.videoId)}>Ver</button>}
+              <a className="textbtn" href={v.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>YouTube ↗</a>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 // o mesmo post no Instagram e no Facebook do clube (a mesma regra do servidor, em server/pt/distritais.js)
 const palavrasDe = (t) => new Set(String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/https?:\/\/\S+|#\S+|@\S+/g, " ").match(/[a-z0-9]{2,}/g) || []);
@@ -139,6 +248,8 @@ export default function Distritais({ API = "", now, query = "" }) {
   const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
   return (
     <div className="dist">
+      <JogosDaBase API={API} agora={agora} />
+      <DiretosYoutube API={API} agora={agora} />
       <div className="livehead dhead">
         <div className="seg lvls" role="group" aria-label="O que mostrar">
           {VER.map(([k, t]) => <button key={k} aria-pressed={ver === k} onClick={() => setVer(k)}>{t}</button>)}
@@ -194,6 +305,10 @@ export default function Distritais({ API = "", now, query = "" }) {
 
 export const DIST_CSS = `
 .apito .dist .dnota{font-size:12.5px;margin:0 0 12px}
+.apito .dbase .dlogo{width:18px;height:18px;object-fit:contain;flex:none}
+.apito .dbase .lcard{cursor:default}
+.apito .dyt .vcat.dao{background:#D7263D}
+.apito .dyt .vtitle{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
 .apito .dnot .ctitle a{color:inherit;text-decoration:none} .apito .dnot .ctitle a:hover{text-decoration:underline}
 .apito .otipo.imprensa{background:var(--raise)}

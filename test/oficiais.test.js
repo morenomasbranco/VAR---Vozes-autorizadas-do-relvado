@@ -46,6 +46,16 @@ test("oficiais: as notícias das associações vão para as Distritais, com a as
   assert.deepEqual([fpf.grupo, fpf.assoc], ["af", "af-viseu"]);
   const nacional = arrumar({ grupo: "pt", org: "FPF", titulo: "Seleção Nacional convocada para a Liga das Nações" });
   assert.equal(nacional.grupo, "pt");
+  // pelo Google News («site:fpf.pt»), uma notícia do site de uma associação não é da FPF: vai para a associação
+  const viseu = arrumar({ grupo: "pt", org: "FPF", via: "Google News", titulo: "UD Vilamaiorense e CD Santacruzense com transmissão em direto", meio: "Associação de Futebol de Viseu", site: "https://afviseu.fpf.pt" });
+  assert.deepEqual([viseu.grupo, viseu.assoc, viseu.fora], ["af", "af-viseu", undefined]);
+  const soPeloSite = arrumar({ grupo: "pt", org: "FPF", via: "Google News", titulo: "Jornada 5 com transmissão em direto", site: "https://afvr.fpf.pt" });
+  assert.deepEqual([soPeloSite.grupo, soPeloSite.assoc], ["af", "af-vila-real"]);
+  // o que é mesmo da FPF ou da Liga fica; a imprensa pelo Google News fica de fora da coluna «Portugal»
+  assert.equal(arrumar({ grupo: "pt", org: "FPF", via: "Google News", titulo: "Seleção Nacional convocada", meio: "FPF", site: "https://www.fpf.pt" }).fora, undefined);
+  assert.equal(arrumar({ grupo: "pt", org: "Liga Portugal", via: "Google News", titulo: "Comunicado oficial n.º 12", meio: "Liga Portugal", site: "https://www.ligaportugal.pt" }).fora, undefined);
+  assert.equal(arrumar({ grupo: "pt", org: "FPF", via: "Google News", titulo: "FPF anuncia novo selecionador", meio: "Record", site: "https://www.record.pt" }).fora, true);
+  assert.equal(arrumar({ grupo: "pt", org: "FPF", via: "Google News", titulo: "Liga das Nações: a convocatória", meio: "Federação Portuguesa de Futebol" }).fora, undefined);
   // as das fontes das associações ficam com a associação da fonte
   assert.equal(arrumar({ grupo: "af", org: "AF Viana do Castelo", titulo: "Calendários" }, { grupo: "af", org: "AF Viana do Castelo" }).assoc, "af-viana");
   const imp = fontesImprensa();

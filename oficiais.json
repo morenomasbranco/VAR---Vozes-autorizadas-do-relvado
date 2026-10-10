@@ -58,7 +58,7 @@
    "url": "https://www.fpf.pt/noticias",
    "artigo": "https://www.fpf.pt/pt/News/Todas-as-notícias/Notícia/news/{id}",
    "link": "/news/(\\d+)",
-   "google": "site:fpf.pt"
+   "google": "site:www.fpf.pt"
   },
   {
    "id": "fpf-cd-profissional",
@@ -69,7 +69,7 @@
    "leitor": "html",
    "url": "https://www.fpf.pt/Institucional/Disciplina/Secção-Profissional/Comunicados",
    "link": "(?:DownloadDocument\\.ashx|LinkClick\\.aspx|\\.pdf)[^\\\"]*",
-   "google": "site:fpf.pt comunicado conselho de disciplina"
+   "google": "site:www.fpf.pt comunicado conselho de disciplina"
   },
   {
    "id": "fpf-cd-nao-profissional",

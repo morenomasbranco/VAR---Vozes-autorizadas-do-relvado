@@ -83,3 +83,15 @@ test("tabela: uma oficial lida antes dos jogos de domingo não anula os resultad
   assert.equal(B.j, 2); assert.equal(B.pts, 3);
   assert.equal(A.j, 2); assert.equal(A.pts, 0, "o castigo mantém-se");
 });
+
+test("Vídeos: o que não é futebol (Minecraft, Fortnite…) não entra; nas fontes que aceitam qualquer ligação, só com sinais de futebol", async () => {
+  const { naoEFutebol, categoria } = await import("../server/videos.js");
+  const fora = (title, aceitaLinks = false) => naoEFutebol({ title, aceitaLinks }, categoria(title), {});
+  assert.equal(fora("Minecraft, mas cada bloco é um golo"), true);
+  assert.equal(fora("EA FC 26 Ultimate Team pack opening"), true);
+  assert.equal(fora("Benfica 2-1 Porto - Pavlidis 67'"), false);
+  assert.equal(fora("Mbappé reaction after the game"), false); // r/soccer: confia-se na fonte
+  assert.equal(fora("O meu gato a dormir", true), true);
+  assert.equal(fora("Grande golo do Gyökeres frente ao Arouca", true), false);
+  assert.equal(fora("Mundial FIFA 2026: sorteio", true), false);
+});
