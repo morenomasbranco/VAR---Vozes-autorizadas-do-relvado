@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import { sleep, norm } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
-import { buscarPor, viaDisponivel } from "../ponte.js";
+import { buscarPor, viaDisponivel, estadoEncaminhamento } from "../ponte.js";
 
 const FICHEIRO = new URL("../../data/youtube-canais.json", import.meta.url);
 const CONFIG = new URL("../../youtube.json", import.meta.url);
@@ -216,8 +216,10 @@ export function createYoutube({ log = () => {} } = {}) {
   // pelas pontes, pela ordem; a primeira que trouxer a página fica a ser a via
   async function pedirPontes(url) {
     const erros = [];
+    const configuradas = new Set(estadoEncaminhamento().pontes.map((p) => p.id));
     for (const id of PONTES) {
-      if ((deLado.get(id) || 0) > Date.now() || !viaDisponivel(id, url)) continue;
+      // (o Jina no limite do minuto não fica de fora: espera-se pela vez, mais abaixo)
+      if ((deLado.get(id) || 0) > Date.now() || !configuradas.has(id) || (id !== "jina" && !viaDisponivel(id, url))) continue;
       const prazo = id === "google" || id === "jina" ? 45000 : 25000;
       try {
         let r;
