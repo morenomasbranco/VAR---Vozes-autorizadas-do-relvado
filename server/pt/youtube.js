@@ -1,0 +1,157 @@
+// Transmissões em direto no YouTube das associações de futebol, do Canal 11 e da FPF (secção Distritais).
+//
+// Cada associação tem um canal de YouTube onde transmite jogos. O servidor:
+//   1. sabe o canal de cada uma (o youtube.json, se lá estiver; senão procura no YouTube o nome da associação e fica
+//      com o primeiro canal cujo nome bate certo; o que encontrou fica guardado em data/youtube-canais.json);
+//   2. de poucos em poucos minutos, abre a página «/live» de cada canal: quando o canal está a transmitir, o YouTube
+//      mostra lá a transmissão (com «isLiveNow»), e quando há uma marcada, mostra-a como «a seguir».
+// Não precisa de chave. Os pedidos ao YouTube são espaçados (um a cada YOUTUBE_SEGUNDOS, 8 s por omissão).
+import fs from "node:fs";
+import { sleep, norm } from "../util.js";
+import { ASSOCIACOES } from "./catalogo.js";
+
+const FICHEIRO = new URL("../../data/youtube-canais.json", import.meta.url);
+const CONFIG = new URL("../../youtube.json", import.meta.url);
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+// sem isto, os pedidos vindos da Europa vão parar à página de consentimento de cookies do YouTube
+const CABECALHOS = { "User-Agent": UA, "Accept-Language": "pt-PT,pt;q=0.9", Accept: "text/html,*/*;q=0.8", Cookie: "CONSENT=YES+cb; SOCS=CAI" };
+
+// o nome da terra de cada associação, para reconhecer o canal («AF Viseu», «Associação de Futebol de Viseu», «AFV TV»)
+const terra = (a) => a.nome.replace(/^AF /, "");
+export function canaisBase() {
+  return [
+    { id: "fpf", nome: "FPF", canal: "@FPF.Oficial", procurar: "FPF Federação Portuguesa de Futebol", reconhece: "federacao portuguesa de futebol|\\bfpf\\b" },
+    { id: "canal11", nome: "Canal 11", procurar: "Canal 11", reconhece: "^canal ?11" },
+    ...ASSOCIACOES.map((a) => ({
+      id: a.key, assoc: a.key, nome: a.nome, procurar: a.longo,
+      canal: a.key === "af-lisboa" ? "UCXSPgjw-KXn86J_upO98LWg" : null, // «AFL TV», o canal da AF Lisboa
+      reconhece: `(associacao de futebol|\\baf\\b|futebol).*${norm(terra(a))}|${norm(terra(a))}.*(futebol|\\baf\\b)`,
+    })),
+  ];
+}
+
+// endereço da página de um canal a partir do id (UC…), do @nome ou de um endereço completo
+export function urlCanal(c) {
+  const s = String(c || "").trim();
+  if (/^https?:\/\//.test(s)) return s.replace(/\/+$/, "");
+  if (/^UC[\w-]{22}$/.test(s)) return `https://www.youtube.com/channel/${s}`;
+  if (/^@/.test(s)) return `https://www.youtube.com/${s}`;
+  return null;
+}
+
+// a página «/live» de um canal: em direto, a transmissão marcada, ou nada
+export function lerLive(html) {
+  const t = String(html || "");
+  const id = t.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/)?.[1]
+    || t.match(/"videoDetails":\{"videoId":"([\w-]{11})"/)?.[1] || null;
+  if (!id) return null;
+  const aoVivo = /"isLiveNow":true/.test(t) || /"videoDetails":\{[^}]*"isLive":true/.test(t);
+  const marcada = !aoVivo && /"isUpcoming":true/.test(t);
+  if (!aoVivo && !marcada) return null; // a página mostra um vídeo antigo, não uma transmissão
+  const dec = (s) => { try { return JSON.parse(`"${s}"`); } catch { return s; } };
+  const titulo = t.match(/<meta name="title" content="([^"]*)"/)?.[1] || dec(t.match(/"videoDetails":\{[^}]*?"title":"((?:[^"\\]|\\.)*)"/)?.[1] || "");
+  const canal = dec(t.match(/"ownerChannelName":"((?:[^"\\]|\\.)*)"/)?.[1] || t.match(/"author":"((?:[^"\\]|\\.)*)"/)?.[1] || "");
+  const inicio = +(t.match(/"scheduledStartTime":"(\d{9,11})"/)?.[1] || 0) * 1000 || Date.parse(t.match(/"startTimestamp":"([^"]+)"/)?.[1] || "") || null;
+  const espetadores = +(t.match(/"concurrentViewers":"(\d+)"/)?.[1] || 0) || null;
+  return {
+    videoId: id, titulo: entidades(titulo), canal, aoVivo, marcada, inicio, espetadores,
+    url: `https://www.youtube.com/watch?v=${id}`, imagem: `https://i.ytimg.com/vi/${id}/${aoVivo ? "hqdefault_live" : "hqdefault"}.jpg`,
+  };
+}
+const entidades = (s) => String(s || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+
+// pesquisa de canais no YouTube: [{ id, titulo }] pela ordem dos resultados
+export function lerPesquisaCanais(html) {
+  const out = [];
+  for (const m of String(html || "").matchAll(/"channelRenderer":\{"channelId":"(UC[\w-]{22})","title":\{"simpleText":"((?:[^"\\]|\\.)*)"/g)) {
+    let titulo = m[2];
+    try { titulo = JSON.parse(`"${m[2]}"`); } catch { /* fica */ }
+    if (!out.some((x) => x.id === m[1])) out.push({ id: m[1], titulo });
+  }
+  return out;
+}
+
+export function createYoutube({ log = () => {} } = {}) {
+  const ativo = process.env.YOUTUBE_DIRETOS !== "0";
+  const GAP = Math.max(3, Number(process.env.YOUTUBE_SEGUNDOS) || 8) * 1000;
+  // canais: os de base, com o que estiver no youtube.json por cima ({ "canais": [{ "id": "af-viseu", "canal": "@…" }] })
+  let extra = [];
+  try { extra = JSON.parse(fs.readFileSync(CONFIG, "utf8")).canais || []; } catch { /* sem youtube.json */ }
+  const canais = canaisBase().map((c) => ({ ...c, ...(extra.find((e) => e.id === c.id) || {}) }));
+  for (const e of extra) if (!canais.some((c) => c.id === e.id) && e.canal) canais.push({ nome: e.id, ...e });
+  let guardado = {};
+  try { guardado = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { /* primeira vez */ }
+  const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(guardado)); } catch { /* */ } };
+  const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, direto: null }]));
+  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null };
+
+  async function pedir(url) {
+    geral.pedidos++;
+    const r = await fetch(url, { headers: CABECALHOS, redirect: "follow", signal: AbortSignal.timeout(20000) });
+    if (r.status === 429) { geral.pausaAte = Date.now() + 30 * 60e3; throw Object.assign(new Error("o YouTube pediu uma pausa (429)"), { status: 429 }); }
+    if (!r.ok) throw Object.assign(new Error(`o YouTube respondeu ${r.status}`), { status: r.status });
+    const html = await r.text();
+    if (/consent\.youtube\.com|before you continue to youtube|antes de continuar para o youtube/i.test(r.url + html.slice(0, 3000))) throw new Error("o YouTube mostrou a página de consentimento de cookies");
+    return html;
+  }
+
+  // o canal de um organizador: o do youtube.json, o já encontrado, ou procura-se no YouTube pelo nome
+  async function canalDe(c) {
+    if (c.canal) return urlCanal(c.canal);
+    const g = guardado[c.id];
+    if (g?.canalId) return urlCanal(g.canalId);
+    if (g?.procuradoEm && Date.now() - g.procuradoEm < 7 * 86400e3) return null; // não encontrado: volta a procurar daqui a uma semana
+    const html = await pedir(`https://www.youtube.com/results?search_query=${encodeURIComponent(c.procurar)}&sp=EgIQAg%253D%253D`);
+    const re = new RegExp(c.reconhece, "i");
+    const achado = lerPesquisaCanais(html).find((x) => re.test(norm(x.titulo)));
+    guardado[c.id] = { canalId: achado?.id || null, titulo: achado?.titulo || null, procuradoEm: Date.now() };
+    gravar();
+    if (achado) log(`[YouTube] ${c.nome}: canal «${achado.titulo}» (${achado.id})`);
+    else log(`[YouTube] ${c.nome}: não encontrei o canal (põe-no no youtube.json)`);
+    return achado ? urlCanal(achado.id) : null;
+  }
+
+  async function correr() {
+    log(`[YouTube] diretos de ${canais.length} canais (associações, Canal 11 e FPF), um a cada ${GAP / 1000} s`);
+    for (let i = 0; ; i = (i + 1) % canais.length) {
+      if (Date.now() < geral.pausaAte) { await sleep(Math.min(60e3, geral.pausaAte - Date.now())); continue; }
+      const c = canais[i];
+      const e = estado[c.id];
+      try {
+        const base = await canalDe(c);
+        if (base) {
+          const html = await pedir(`${base}/live`);
+          const d = lerLive(html);
+          if (d && !d.canal) d.canal = guardado[c.id]?.titulo || c.nome;
+          if (d?.aoVivo && !e.direto?.aoVivo) log(`[YouTube] em direto em ${c.nome}: ${d.titulo}`);
+          e.direto = d ? { ...d, org: c.assoc || c.id, nomeOrg: c.nome } : null;
+          e.canalUrl = base;
+        }
+        e.ultimo = Date.now();
+        e.erro = base ? null : "canal por encontrar";
+      } catch (err) {
+        geral.erros++;
+        e.erro = err.message;
+        geral.ultimoErro = { canal: c.id, erro: err.message, ts: Date.now() };
+      }
+      await sleep(GAP);
+    }
+  }
+
+  return {
+    start() { if (ativo) correr().catch((e) => log(`[YouTube] ${e.message}`)); },
+    diretos() {
+      const lista = Object.values(estado).map((e) => e.direto).filter(Boolean);
+      // uma transmissão marcada há mais de 3 horas já não é «a seguir»
+      const agora = Date.now();
+      return {
+        aoVivo: lista.filter((d) => d.aoVivo).sort((a, b) => (b.espetadores || 0) - (a.espetadores || 0)),
+        aSeguir: lista.filter((d) => d.marcada && (!d.inicio || d.inicio > agora - 3 * 3600e3)).sort((a, b) => (a.inicio || 9e15) - (b.inicio || 9e15)),
+      };
+    },
+    estado: () => ({
+      ativo, ...geral,
+      canais: canais.map((c) => ({ id: c.id, nome: c.nome, canal: c.canal || guardado[c.id]?.canalId || null, nomeDoCanal: guardado[c.id]?.titulo || null, url: estado[c.id]?.canalUrl || null, ultimaLeitura: estado[c.id]?.ultimo ? new Date(estado[c.id].ultimo).toISOString() : null, erro: estado[c.id]?.erro || null, emDireto: !!estado[c.id]?.direto?.aoVivo })),
+    }),
+  };
+}

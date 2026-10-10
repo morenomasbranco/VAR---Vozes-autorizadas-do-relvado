@@ -32,6 +32,7 @@ import { createDistritais } from "./distritais.js";
 import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./facebook.js";
 import { buscar, buscarPor, motivo } from "../ponte.js";
 import { grafoAtivo, descobrir, postsDoGrafo, estadoGrafo } from "./instagram-grafo.js";
+import { createYoutube } from "./youtube.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
 import { retransmissorLigado, aoLigarRetransmissor, resumoRetransmissor } from "../retransmissor.js";
 import crypto from "node:crypto";
@@ -69,6 +70,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
   const clubes = createClubes({ log });
   // «Distritais»: os posts mais recentes dos clubes de cada associação (secção própria do site)
   const distritais = createDistritais({ clubes, broadcast: (ev, d) => broadcast(ev, d), cookie: cookieDoEnv(), log });
+  // transmissões em direto no YouTube das associações, do Canal 11 e da FPF (secção Distritais)
+  const youtube = createYoutube({ log });
   const estado = { arranque: Date.now(), descoberta: null, filas: { alta: 0, normal: 0, baixa: 0 }, ultimoCiclo: null, evidencias: { recebidas: 0, novo: 0, confirmacao: 0, historico: 0, conflito: 0, ignorado: 0, relogio: 0, semJogo: 0, repetido: 0 } };
   let sujo = false, sujoEv = false;
   const marca = () => { sujo = true; };
@@ -844,6 +847,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       }
     })();
     distritais.start(); // DISTRITAIS=0 desliga
+    youtube.start(); // YOUTUBE_DIRETOS=0 desliga
     vigiarFacebook(); // PT_FACEBOOK=0 desliga
     ocr.verificar().then((o) => log(`[PT] OCR dos stories: ${o.tesseract ? `tesseract (${o.tesseract.linguas.join(", ") || "?"})` : "sem tesseract"}${o.ffmpeg ? " + ffmpeg" : ""}${process.env.GEMINI_API_KEY ? " + Gemini como reserva" : ""}`));
     // com sessão de uma conta qualquer (não precisa de seguir os clubes): leitura direta pelo Instagram;
@@ -1121,6 +1125,9 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
         res.json({ configurado: true, funciona: false, conta, erro: e.message, tipo: e.tipo || null, respostaDaMeta: e.meta ? { codigo: e.meta.code, subcodigo: e.meta.error_subcode, mensagem: e.meta.message } : null });
       }
     });
+    // «Distritais»: transmissões em direto no YouTube (e as marcadas) e os canais de cada organizador
+    app.get("/api/distritais/diretos", (req, res) => res.json(youtube.diretos()));
+    app.get("/api/distritais/youtube", (req, res) => res.json(youtube.estado()));
     app.get("/api/distritais/alvos", (req, res) => (autorizado(req) ? res.json(distritais.paraRetransmissor(Math.min(Number(req.query.n) || 5, 20))) : res.status(401).json({ erro: "chave em falta" })));
     app.post("/api/distritais/posts", express.json({ limit: "2mb" }), (req, res) => {
       if (!autorizado(req)) return res.status(401).json({ erro: "chave PT_TOKEN em falta ou errada" });

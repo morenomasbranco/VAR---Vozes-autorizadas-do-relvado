@@ -414,8 +414,10 @@ const LEITORES = {
         const feed = await readFeed(`${GOOGLE_BASE}?q=${encodeURIComponent(q)}&${loc}`, {});
         const lista = (feed?.items || []).slice(0, 30).map((it) => {
           const t = limpa(it.title);
-          const meio = t.match(/\s+-\s+([^-]+)$/)?.[1]?.trim() || undefined;
-          return { titulo: t.replace(/\s+-\s+[^-]+$/, ""), url: it.link, ts: Date.parse(it.isoDate || it.pubDate || "") || null, dia: false, meio };
+          // o jornal e o site que publicaram (o elemento <source url="…">) — o endereço do item é o do Google News
+          const fonte = it.source && typeof it.source === "object" ? it.source : { _: typeof it.source === "string" ? it.source : "" };
+          const meio = String(fonte._ || "").trim() || t.match(/\s+-\s+([^-]+)$/)?.[1]?.trim() || undefined;
+          return { titulo: t.replace(/\s+-\s+[^-]+$/, ""), url: it.link, ts: Date.parse(it.isoDate || it.pubDate || "") || null, dia: false, meio, site: fonte.$?.url || undefined };
         });
         if (lista.length) return lista;
       } catch (e) { erro = e; }
@@ -446,14 +448,36 @@ export function fontesImprensa() {
     };
   });
 }
-// o grupo e a associação de uma entrada: uma notícia da FPF ou da Liga que fala de uma associação vai para a
-// coluna dessa associação, nas Distritais, e deixa a coluna «Portugal» só com o futebol nacional
+// sites das associações (afviseu.fpf.pt…) → associação; preenchido com as fontes do grupo «af» do oficiais.json
+const ASSOC_POR_HOST = new Map();
+const hostDe = (u) => { try { return new URL(/^https?:/.test(u) ? u : `https://${u}`).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; } };
+// (os sites com abreviatura no nome; os outros percebem-se pelo nome: afviseu → AF Viseu)
+const ABREVIATURAS = { afah: "af-angra", afpd: "af-ponta-delgada", afvr: "af-vila-real", afvianacastelo: "af-viana", afcastelobranco: "af-castelo-branco" };
+const assocDoHost = (h) => {
+  if (ASSOC_POR_HOST.has(h)) return ASSOC_POR_HOST.get(h);
+  const sub = h.match(/^(af[a-z]+)\.fpf\.pt$/)?.[1];
+  return sub ? ABREVIATURAS[sub] || associacaoDoTexto(`AF ${sub.slice(2)}`) : null;
+};
+const SITES_OFICIAIS = /^(fpf\.pt|ligaportugal\.pt|resultados\.fpf\.pt)$/;
+const NOME_OFICIAL = /\b(fpf|federa[cç][aã]o portuguesa de futebol|liga ?portugal|ligaportugal(\.pt)?|fpf\.pt)\b/i;
+// O grupo e a associação de uma entrada. Na coluna «Portugal» (secção Ligas e Federações) só fica o que a FPF e a
+// Liga Portugal publicaram sobre o futebol nacional:
+//  - uma notícia de um site de associação (afviseu.fpf.pt…) ou publicada por uma associação vai para essa
+//    associação, nas Distritais (antes, a pesquisa «site:fpf.pt» do Google News trazia-as como se fossem da FPF);
+//  - uma notícia da FPF ou da Liga que fala de uma associação também vai para a coluna dela;
+//  - o que chega pelo Google News de outro site (imprensa, clubes) fica de fora (x.fora).
 export function arrumar(x, s = null) {
   const daFonte = s ? assocDe(s) : null;
   if (x.grupo === "af") { x.assoc ||= daFonte || associacaoDoTexto(`${x.org} ${x.titulo}`) || undefined; return x; }
   if (x.grupo === "pt") {
-    const a = associacaoDoTexto(x.titulo);
-    if (a) { x.grupo = "af"; x.assoc = a; }
+    const host = hostDe(x.site || (x.via ? (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(x.meio || "") ? x.meio : "") : x.url));
+    const deAssoc = (host && assocDoHost(host)) || (x.meio && !NOME_OFICIAL.test(x.meio) ? associacaoDoTexto(x.meio) : null);
+    const a = deAssoc || associacaoDoTexto(x.titulo);
+    if (a) { x.grupo = "af"; x.assoc = a; delete x.fora; return x; }
+    if (x.via) {
+      const oficial = host ? SITES_OFICIAIS.test(host) : NOME_OFICIAL.test(x.meio || "");
+      if (!oficial) x.fora = true; else delete x.fora;
+    }
   }
   return x;
 }
@@ -467,6 +491,11 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       try { return { ...s, google: `site:${new URL(s.url).hostname.replace(/^www\./, "")}` }; } catch { return s; }
     });
   const GRUPOS = config.grupos || [];
+  for (const s of config.fontes || []) {
+    if (s.grupo !== "af") continue;
+    const h = hostDe(s.url), a = assocDe(s);
+    if (h && a && !/news\.google/.test(h)) ASSOC_POR_HOST.set(h, a);
+  }
   let itens = [];
   let vistos = {}; // fonte → endereços já vistos (também os que ficaram de fora, para não voltarem como novos)
   try {
@@ -476,6 +505,7 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
     // as entradas gravadas antes de as associações irem para as Distritais: grupo e associação revistos
     const porId = new Map((config.fontes || []).map((s) => [s.id, s]));
     for (const x of itens) arrumar(x, porId.get(x.fonte));
+    itens = itens.filter((x) => !x.fora); // gravadas antes: a imprensa e outros sites na coluna «Portugal» saem
   } catch { /* primeira vez */ }
   const estado = Object.fromEntries(FONTES.map((s) => [s.id, { modo: "site", ok: null, erro: null, ultimo: null, lidos: null, novos: 0 }]));
   let sujo = false;
@@ -561,8 +591,9 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
       if (porUrl.has(k) || mesmoTitulo(s.org, x.titulo, ts)) continue;
       const item = arrumar({
         id: `${s.id}:${hash(k)}`, fonte: s.id, org: s.org, grupo: s.grupo, tipo: s.tipo, lang: s.lang,
-        titulo: x.titulo, url: x.url, ts, soDia: dia || undefined, pdf: ePdf(x.url) || undefined, via: via === "google" ? "Google News" : undefined, meio: x.meio, v: 2,
+        titulo: x.titulo, url: x.url, ts, soDia: dia || undefined, pdf: ePdf(x.url) || undefined, via: via === "google" ? "Google News" : undefined, meio: x.meio, site: x.site, v: 2,
       }, s);
+      if (item.fora) continue; // pelo Google News, de um site que não é o da FPF nem o da Liga
       porUrl.add(k);
       itens.push(item);
       novos.push(item);

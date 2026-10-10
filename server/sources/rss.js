@@ -6,7 +6,7 @@ import { sleep, hash, BACKFILL_MS, lerTexto, entidades, conserta } from "../util
 
 const parser = new Parser({
   timeout: 10000,
-  customFields: { item: [["dc:date", "dcDate"], ["dcterms:created", "dctCreated"], ["published", "published"], ["updated", "updated"], ["a10:updated", "a10Updated"]] },
+  customFields: { item: [["dc:date", "dcDate"], ["dcterms:created", "dctCreated"], ["published", "published"], ["updated", "updated"], ["a10:updated", "a10Updated"], ["source", "source"]] },
 });
 // alguns feeds (Sky Sports em vídeos, por exemplo) não datam os itens
 const dataDe = (it) => Date.parse(it.isoDate || it.pubDate || it.dcDate || it.dctCreated || it.published || it.updated || it.a10Updated || "") || null;
