@@ -22,3 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t var .
+      # o servidor tem de arrancar e responder (o site e a API), como no Northflank
+      - name: arranque
+        run: |
+          docker run -d --name var -p 3001:3001 var
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3001/ && break; sleep 2; done
+          docker logs var 2>&1 | tail -40
+          curl -sf http://localhost:3001/ | grep -qi "<div id=\"root\"" || (echo "o site não respondeu"; exit 1)
+          curl -sf http://localhost:3001/api/distritais/youtube | head -c 400; echo
+          curl -sf http://localhost:3001/api/pt/aovivo | head -c 200; echo
+          docker inspect -f '{{.State.Running}}' var | grep -q true || (echo "o servidor parou"; exit 1)
