@@ -39,8 +39,9 @@ test("YouTube: a pesquisa de canais e o reconhecimento do canal de cada associa�
   assert.deepEqual(canaisBase().filter((c) => c.assoc === "af-viana").map((c) => c.id), ["af-viana", "af-viana:2"]);
   assert.equal(canaisBase().find((c) => c.id === "af-ponta-delgada").canal, "@afpd_tv");
   assert.equal(canaisBase().find((c) => c.id === "canal11").canal, "@Canal11Oficial");
-  // as que ainda não têm canal conhecido são procuradas pelo nome
-  assert.deepEqual(canaisBase().filter((c) => !c.canal).map((c) => c.id).sort(), ["af-castelo-branco", "af-coimbra", "af-madeira"]);
+  // todas as associações têm canal conhecido (as que não tivessem seriam procuradas pelo nome)
+  assert.deepEqual(canaisBase().filter((c) => !c.canal).map((c) => c.id), []);
+  assert.equal(canaisBase().find((c) => c.id === "af-coimbra").canal, "@af.coimbra");
 });
 
 test("YouTube: o separador «Diretos» (/streams) dá as transmissões a decorrer e as agendadas, e deixa de fora as que já acabaram", async () => {

@@ -30,11 +30,14 @@ export const CANAIS_CONHECIDOS = {
   "af-beja": ["@associacaofutebolbeja"],
   "af-braga": ["@afbragaTV"],
   "af-braganca": ["@af_braganca"],
+  "af-castelo-branco": ["@associacaofutebolcastelobr4578"],
+  "af-coimbra": ["@af.coimbra"],
   "af-evora": ["@AFevoraTV"],
   "af-guarda": ["@AFGuarda1940"],
   "af-horta": ["https://www.youtube.com/c/Associa%C3%A7%C3%A3odeFuteboldaHorta"],
   "af-leiria": ["@afleiriaoficial"],
   "af-lisboa": ["UCXSPgjw-KXn86J_upO98LWg"], // «AFL TV»
+  "af-madeira": ["@AFMadeiraTV"],
   "af-ponta-delgada": ["@afpd_tv"],
   "af-portalegre": ["@apftv85"], // «APF TV»
   "af-porto": ["@associacaodefuteboldoporto"],
