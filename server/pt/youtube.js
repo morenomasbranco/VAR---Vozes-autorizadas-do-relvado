@@ -3,9 +3,11 @@
 // Cada associação tem um canal de YouTube onde transmite jogos. O servidor:
 //   1. sabe o canal de cada uma (o youtube.json, se lá estiver; senão procura no YouTube o nome da associação e fica
 //      com o primeiro canal cujo nome bate certo; o que encontrou fica guardado em data/youtube-canais.json);
-//   2. de poucos em poucos minutos, abre a página «/live» de cada canal: quando o canal está a transmitir, o YouTube
-//      mostra lá a transmissão (com «isLiveNow»), e quando há uma marcada, mostra-a como «a seguir».
-// Não precisa de chave. Os pedidos ao YouTube são espaçados (um a cada YOUTUBE_SEGUNDOS, 8 s por omissão).
+//   2. de poucos em poucos minutos, abre o separador «Diretos» (/streams) de cada canal, onde o YouTube põe as
+//      transmissões a decorrer e todas as que estão agendadas (com a hora). Só essas contam: as que já acabaram ficam
+//      de fora. Se o separador não se deixar ler, usa a página «/live» (que só mostra uma transmissão).
+// Não precisa de chave. Os pedidos ao YouTube são espaçados (um a cada YOUTUBE_SEGUNDOS, 5 s por omissão), por isso
+// cada canal é revisto a cada 2 minutos.
 import fs from "node:fs";
 import { sleep, norm } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
@@ -18,13 +20,19 @@ const CABECALHOS = { "User-Agent": UA, "Accept-Language": "pt-PT,pt;q=0.9", Acce
 
 // o nome da terra de cada associação, para reconhecer o canal («AF Viseu», «Associação de Futebol de Viseu», «AFV TV»)
 const terra = (a) => a.nome.replace(/^AF /, "");
+// canais já confirmados (os outros são procurados no YouTube pelo nome)
+const CANAIS_CONHECIDOS = {
+  "af-lisboa": "UCXSPgjw-KXn86J_upO98LWg", // «AFL TV»
+  "af-viseu": "@AFViseuTV",
+  "af-porto": "@associacaodefuteboldoporto",
+};
 export function canaisBase() {
   return [
     { id: "fpf", nome: "FPF", canal: "@FPF.Oficial", procurar: "FPF Federação Portuguesa de Futebol", reconhece: "federacao portuguesa de futebol|\\bfpf\\b" },
     { id: "canal11", nome: "Canal 11", procurar: "Canal 11", reconhece: "^canal ?11" },
     ...ASSOCIACOES.map((a) => ({
       id: a.key, assoc: a.key, nome: a.nome, procurar: a.longo,
-      canal: a.key === "af-lisboa" ? "UCXSPgjw-KXn86J_upO98LWg" : null, // «AFL TV», o canal da AF Lisboa
+      canal: CANAIS_CONHECIDOS[a.key] || null,
       reconhece: `(associacao de futebol|\\baf\\b|futebol).*${norm(terra(a))}|${norm(terra(a))}.*(futebol|\\baf\\b)`,
     })),
   ];
@@ -60,6 +68,67 @@ export function lerLive(html) {
 }
 const entidades = (s) => String(s || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 
+// o JSON que o YouTube põe na página (ytInitialData)
+function dadosIniciais(html) {
+  const t = String(html || "");
+  const i = t.search(/(?:var ytInitialData|window\["ytInitialData"\])\s*=\s*\{/);
+  if (i < 0) return null;
+  const ini = t.indexOf("{", i);
+  const fim = t.indexOf(";</script>", ini);
+  if (fim < 0) return null;
+  try { return JSON.parse(t.slice(ini, fim)); } catch { return null; }
+}
+const textoDe = (x) => (x == null ? "" : typeof x === "string" ? x : x.simpleText || x.content || (x.runs || []).map((r) => r.text).join(""));
+
+// o separador «Diretos» (/streams) de um canal: as transmissões a decorrer e as agendadas (as que já acabaram, não).
+// Devolve null se a página não trouxer a lista (para se usar a «/live»).
+export function lerStreams(html) {
+  const dados = dadosIniciais(html);
+  if (!dados) return null;
+  const canal = textoDe(dados.metadata?.channelMetadataRenderer?.title) || textoDe(dados.header?.pageHeaderRenderer?.pageTitle) || "";
+  const out = new Map();
+  let vistos = 0;
+  const juntar = (d) => { if (d.videoId && !out.has(d.videoId)) out.set(d.videoId, d); };
+  const ver = (o) => {
+    if (!o || typeof o !== "object") return;
+    if (Array.isArray(o)) { for (const x of o) ver(x); return; }
+    // formato clássico
+    const r = o.videoRenderer || o.gridVideoRenderer;
+    if (r?.videoId) {
+      vistos++;
+      const estilos = JSON.stringify([r.thumbnailOverlays || [], r.badges || []]);
+      const aoVivo = /"style":"LIVE"|BADGE_STYLE_TYPE_LIVE_NOW/.test(estilos);
+      const inicio = +(r.upcomingEventData?.startTime || 0) * 1000 || null;
+      const marcada = !aoVivo && (!!r.upcomingEventData || /"style":"UPCOMING"/.test(estilos));
+      if (aoVivo || marcada) {
+        const vistas = textoDe(r.viewCountText);
+        juntar({ videoId: r.videoId, titulo: textoDe(r.title), aoVivo, marcada, inicio, espetadores: aoVivo ? +(vistas.replace(/\D/g, "")) || null : null });
+      }
+      return;
+    }
+    // formato novo («lockup»)
+    const l = o.lockupViewModel;
+    if (l?.contentId && /VIDEO/i.test(l.contentType || "VIDEO")) {
+      vistos++;
+      const tudo = JSON.stringify(l);
+      const aoVivo = /BADGE_STYLE_LIVE|"text":"(LIVE|AO VIVO|EM DIRETO|DIRETO)"/i.test(tudo);
+      const inicio = +(tudo.match(/"startTime":"(\d{9,11})"/)?.[1] || 0) * 1000 || null;
+      const marcada = !aoVivo && (!!inicio || /UPCOMING|"text":"(Upcoming|Agendad[oa]|Em breve|Estreia)/i.test(tudo));
+      if (aoVivo || marcada) {
+        juntar({ videoId: l.contentId, titulo: textoDe(l.metadata?.lockupMetadataViewModel?.title), aoVivo, marcada, inicio, espetadores: aoVivo ? +(tudo.match(/"text":"([\d.,\s]+) (?:watching|a ver|espetadores)/i)?.[1] || "").replace(/\D/g, "") || null : null });
+      }
+      return;
+    }
+    for (const k in o) ver(o[k]);
+  };
+  ver(dados.contents || dados);
+  const lista = [...out.values()].map((d) => ({
+    ...d, titulo: entidades(d.titulo), canal, url: `https://www.youtube.com/watch?v=${d.videoId}`,
+    imagem: `https://i.ytimg.com/vi/${d.videoId}/${d.aoVivo ? "hqdefault_live" : "hqdefault"}.jpg`,
+  }));
+  return { canal, lista, vistos };
+}
+
 // pesquisa de canais no YouTube: [{ id, titulo }] pela ordem dos resultados
 export function lerPesquisaCanais(html) {
   const out = [];
@@ -73,7 +142,7 @@ export function lerPesquisaCanais(html) {
 
 export function createYoutube({ log = () => {} } = {}) {
   const ativo = process.env.YOUTUBE_DIRETOS !== "0";
-  const GAP = Math.max(3, Number(process.env.YOUTUBE_SEGUNDOS) || 8) * 1000;
+  const GAP = Math.max(3, Number(process.env.YOUTUBE_SEGUNDOS) || 5) * 1000;
   // canais: os de base, com o que estiver no youtube.json por cima ({ "canais": [{ "id": "af-viseu", "canal": "@…" }] })
   let extra = [];
   try { extra = JSON.parse(fs.readFileSync(CONFIG, "utf8")).canais || []; } catch { /* sem youtube.json */ }
@@ -82,7 +151,7 @@ export function createYoutube({ log = () => {} } = {}) {
   let guardado = {};
   try { guardado = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { /* primeira vez */ }
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(guardado)); } catch { /* */ } };
-  const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, direto: null }]));
+  const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, diretos: [], via: null }]));
   const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null };
 
   async function pedir(url) {
@@ -120,11 +189,22 @@ export function createYoutube({ log = () => {} } = {}) {
       try {
         const base = await canalDe(c);
         if (base) {
-          const html = await pedir(`${base}/live`);
-          const d = lerLive(html);
-          if (d && !d.canal) d.canal = guardado[c.id]?.titulo || c.nome;
-          if (d?.aoVivo && !e.direto?.aoVivo) log(`[YouTube] em direto em ${c.nome}: ${d.titulo}`);
-          e.direto = d ? { ...d, org: c.assoc || c.id, nomeOrg: c.nome } : null;
+          // o separador «Diretos»: todas as transmissões agendadas e as que estão a decorrer
+          let lista = null;
+          const st = lerStreams(await pedir(`${base}/streams`));
+          if (st && st.vistos > 0) { lista = st.lista; e.via = "streams"; } else if (st && !st.vistos) { lista = []; e.via = "streams (vazio)"; }
+          // o separador não se deixou ler (o YouTube mudou o formato?): a página «/live», que só mostra uma
+          if (!st) {
+            const d = lerLive(await pedir(`${base}/live`));
+            lista = d ? [d] : [];
+            e.via = "live";
+          }
+          const nomeCanal = st?.canal || guardado[c.id]?.titulo || c.nome;
+          for (const d of lista) {
+            if (!d.canal) d.canal = nomeCanal;
+            if (d.aoVivo && !e.diretos.some((x) => x.videoId === d.videoId && x.aoVivo)) log(`[YouTube] em direto em ${c.nome}: ${d.titulo}`);
+          }
+          e.diretos = lista.map((d) => ({ ...d, org: c.assoc || c.id, nomeOrg: c.nome }));
           e.canalUrl = base;
         }
         e.ultimo = Date.now();
@@ -141,7 +221,7 @@ export function createYoutube({ log = () => {} } = {}) {
   return {
     start() { if (ativo) correr().catch((e) => log(`[YouTube] ${e.message}`)); },
     diretos() {
-      const lista = Object.values(estado).map((e) => e.direto).filter(Boolean);
+      const lista = Object.values(estado).flatMap((e) => e.diretos || []);
       // uma transmissão marcada há mais de 3 horas já não é «a seguir»
       const agora = Date.now();
       return {
@@ -151,7 +231,7 @@ export function createYoutube({ log = () => {} } = {}) {
     },
     estado: () => ({
       ativo, ...geral,
-      canais: canais.map((c) => ({ id: c.id, nome: c.nome, canal: c.canal || guardado[c.id]?.canalId || null, nomeDoCanal: guardado[c.id]?.titulo || null, url: estado[c.id]?.canalUrl || null, ultimaLeitura: estado[c.id]?.ultimo ? new Date(estado[c.id].ultimo).toISOString() : null, erro: estado[c.id]?.erro || null, emDireto: !!estado[c.id]?.direto?.aoVivo })),
+      canais: canais.map((c) => ({ id: c.id, nome: c.nome, canal: c.canal || guardado[c.id]?.canalId || null, nomeDoCanal: guardado[c.id]?.titulo || null, url: estado[c.id]?.canalUrl || null, ultimaLeitura: estado[c.id]?.ultimo ? new Date(estado[c.id].ultimo).toISOString() : null, erro: estado[c.id]?.erro || null, via: estado[c.id]?.via || null, emDireto: (estado[c.id]?.diretos || []).filter((d) => d.aoVivo).length, agendados: (estado[c.id]?.diretos || []).filter((d) => d.marcada).length })),
     }),
   };
 }

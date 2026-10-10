@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { norm } from "./util.js";
 import { simil } from "./sources/zapping.js";
+import { aceita as aceitaStreamain } from "./sources/streamain.js";
 
 const FILE = new URL("../data/videos.json", import.meta.url);
 const MAX = Number(process.env.VIDEOS_MAX) || 800;
@@ -29,16 +30,6 @@ const RE = {
   skill: /\bskill|nutmeg|\bdribbl|\bfinta|\bdrible|\bcueca\b|t[uú]nel\b|rabona|el[aá]stico|\bruleta|roulette|\bflick\b|\bbicycle kick|\bbicicleta\b|\bpisadinha|\bhabilidade|\bcaneta\b|\btrivela\b|\bchap[eé]u\b|\bsombrero\b|\bossinho/i,
   lance: /\bchance\b|\bmiss(ed)?\b|\bsitter\b|\bfalhan[cç]o|\bfalha(do)?\b|\boportunidade|\bocasi[oó]n|\bclearance|\bgoal[- ]line|\btackle|\bassist\b|\bassist[eê]ncia|\bwoodwork|\bhits? the (post|bar|crossbar)|\bposte\b|\bbarra\b|\btrave\b|\bcorte\b/i,
 };
-// O que nunca é futebol (jogos de computador e outros temas), mesmo vindo de uma fonte de futebol: não entra
-// (foi assim que um vídeo de Minecraft apareceu nos Destaques do Feed)
-export const NAO_FUTEBOL = /\b(minecraft|fortnite|roblox|gta ?(v|vi|5|6|online)?|grand theft auto|call of duty|warzone|valorant|league of legends|counter[- ]?strike|cs ?go|cs2|among us|pok[eé]mon|clash royale|clash of clans|brawl stars|free ?fire|apex legends|overwatch|genshin|rocket league|mario kart|zelda|elden ring|gameplay|let'?s play|speedrun|e-?football|ea ?(sports )?fc ?\d{2}|fifa ?\d{2}\b|ultimate team|pes ?20\d\d|twitch ?stream|unboxing|asmr)\b/i;
-// sinais de que um título é de futebol (para as fontes que aceitam qualquer ligação como vídeo)
-const FUTEBOL = /futebol|futsal|football|soccer|\bgol[oa]?s?\b|\bgoal|\bjogo\b|\bliga\b|ta[cç]a|treinador|jogador|equipa|[aá]rbitro|sele[cç][aã]o|campeonato|clube|est[aá]dio|pen[aá]lti|\bvar\b|resumo|highlights|benfica|sporting|\bporto\b|braga|guimar[aã]es|vit[oó]ria|\b(fc|sc|cd|ud|ad|gd|sl|ac)\b|mundial|\bfifa\b|\buefa\b|champions|liga dos campe|europeu|\beuro\b|sorteio|convoca|selecionador|plantel|contrata|transfer|mercado|avan[cç]ado|guarda-redes|m[eé]dio|defesa|adeptos|claque|bola\b|remate|livre direto|canto\b|marcador|hat-?trick/i;
-export function naoEFutebol(raw, cat, info) {
-  const t = `${raw.title || ""} ${raw.flair || ""}`;
-  if (NAO_FUTEBOL.test(t)) return true;
-  return !!raw.aceitaLinks && cat === "other" && !info?.home_team && !FUTEBOL.test(t);
-}
 export const CATEGORIA_IDS = ["goal", "highlight", "save", "red", "var", "skill", "other"];
 
 // flair do Reddit que diz diretamente o que é o vídeo (os subreddits portugueses usam «Golo», «Resumo»…)
@@ -174,8 +165,8 @@ const idade = (v) => Date.now() - v.created_time;
 export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () => [], emblemas = null } = {}) {
   let videos = [];
   try { videos = JSON.parse(fs.readFileSync(FILE, "utf8")).filter((v) => idade(v) < IDADE_MAX); } catch { videos = []; }
-  // os guardados antes do filtro: o que não é futebol sai
-  videos = videos.filter((v) => !v.sources?.some((x) => NAO_FUTEBOL.test(`${x.title || ""} ${x.flair || ""}`)));
+  // os do Streamain guardados antes do filtro só de futebol: o que não passa no filtro sai
+  videos = videos.filter((v) => !(v.sources?.length && v.sources.every((x) => x.fonte === "streamain" && !aceitaStreamain(x))));
   // as regras da classificação mudam com o tempo: os vídeos guardados são revistos à entrada
   // (os da VSPORTS trazem a categoria do próprio site e ficam como estão)
   for (const v of videos) {
@@ -462,7 +453,6 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     // fontes com formato fixo (ex.: VSPORTS) já trazem os dados lidos; as outras são lidas aqui pelo título
     const info = raw.info ? { ...extrair(""), ...raw.info } : extrair(raw.title);
     const cat = raw.categoria || categoria(raw.title, raw.flair);
-    if (naoEFutebol(raw, cat, info)) { estado.ignorados++; return null; }
     const fonte = { ...raw, video_key: chaveVideo(raw.video_url) };
     for (const k of ["flair", "info", "categoria", "competicao"]) delete fonte[k];
 

@@ -84,14 +84,15 @@ test("tabela: uma oficial lida antes dos jogos de domingo não anula os resultad
   assert.equal(A.j, 2); assert.equal(A.pts, 0, "o castigo mantém-se");
 });
 
-test("Vídeos: o que não é futebol (Minecraft, Fortnite…) não entra; nas fontes que aceitam qualquer ligação, só com sinais de futebol", async () => {
-  const { naoEFutebol, categoria } = await import("../server/videos.js");
-  const fora = (title, aceitaLinks = false) => naoEFutebol({ title, aceitaLinks }, categoria(title), {});
-  assert.equal(fora("Minecraft, mas cada bloco é um golo"), true);
-  assert.equal(fora("EA FC 26 Ultimate Team pack opening"), true);
-  assert.equal(fora("Benfica 2-1 Porto - Pavlidis 67'"), false);
-  assert.equal(fora("Mbappé reaction after the game"), false); // r/soccer: confia-se na fonte
-  assert.equal(fora("O meu gato a dormir", true), true);
-  assert.equal(fora("Grande golo do Gyökeres frente ao Arouca", true), false);
-  assert.equal(fora("Mundial FIFA 2026: sorteio", true), false);
+test("Streamain: só entram vídeos de futebol (o Minecraft e os outros desportos ficam de fora)", async () => {
+  const { eFutebol, aceita } = await import("../server/sources/streamain.js");
+  assert.equal(eFutebol("Minecraft but every block is a goal"), false);
+  assert.equal(eFutebol("Minecraft Hardcore 1-100 days"), false);
+  assert.equal(eFutebol("EA FC 26 Ultimate Team pack opening"), false);
+  assert.equal(eFutebol("NBA highlights Lakers vs Celtics"), false);
+  assert.equal(eFutebol("Day 1 vs Day 100"), false); // «vs» e números sozinhos não chegam
+  assert.equal(eFutebol("Benfica 2-1 Porto - Pavlidis 67'"), true);
+  assert.equal(eFutebol("Arouca [1] - 2 Estoril - Yaw Moses 45+2'"), true);
+  assert.equal(eFutebol("Mario Götze goal vs Argentina"), true);
+  assert.equal(aceita({ post_id: "streamain:luSIbqVpKPbmv8J", title: "Benfica 2-1 Porto" }), false); // tirado à mão
 });

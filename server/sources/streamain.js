@@ -1,6 +1,6 @@
 // Vídeos do Streamain (streamain.com): alojamento de vídeos enviados por utilizadores, onde aparecem golos e
 // resumos partilhados pouco depois dos jogos. Como o site mistura tudo (não tem categoria de desporto),
-// só entram os vídeos cujo título é de desporto. A lista vem já na página; cada vídeo toca no site pelo
+// só entram os vídeos cujo título é de futebol. A lista vem já na página; cada vídeo toca no site pelo
 // leitor do próprio Streamain (streamain.com/embed/<id>).
 import { sleep, lerTexto } from "../util.js";
 
@@ -11,17 +11,30 @@ const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39"
 const decode = (s) => String(s || "").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&([a-z#0-9]+);/gi, (m, n) => ENT[n] ?? m);
 const texto = (h) => decode(String(h || "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 
-// vocabulário de desporto: golos, resumos, competições, clubes e modalidades, em várias línguas
-const DESPORTO = new RegExp([
-  "\\bgoal", "\\bgolo", "\\bgol\\b", "golazo", "gola[cç]o", "highlights?", "resumo", "resumen", "sintesi", "melhores momentos",
-  "\\bvs\\.?\\s", "\\b\\d{1,2}\\s?[-–]\\s?\\d{1,2}\\b", "\\[\\d+\\]", "\\b\\d{1,3}(\\+\\d{1,2})?['’](?!s)",
-  "football", "soccer", "futebol", "f[uú]tbol", "calcio", "fu(ss|ß)ball", "futsal", "basket", "\\bnba\\b", "\\bufc\\b", "\\bmma\\b", "boxing", "boxe",
-  "tennis", "t[eé]nis", "\\bf1\\b", "formula ?1", "motogp", "rugby", "hockey", "h[oó]quei", "andebol", "handball", "volei", "volley", "cycling", "ciclismo", "\\bnfl\\b", "\\bmlb\\b",
-  "premier league", "champions", "europa league", "conference league", "la ?liga", "serie a", "bundesliga", "ligue 1", "liga portugal", "eredivisie", "libertadores", "brasileir[aã]o", "\\bmls\\b", "\\bcopa\\b", "\\bcup\\b", "ta[cç]a", "coppa", "pokal", "mundial", "world cup", "\\beuro\\b", "nations league",
-  "\\bfc\\b", "\\bsc\\b", "\\bcf\\b", "benfica", "sporting", "porto", "real madrid", "barcelona", "bar[cç]a", "atl[eé]tico", "arsenal", "chelsea", "liverpool", "manchester", "man (city|utd|united)", "tottenham", "newcastle", "juventus", "\\binter\\b", "milan", "napoli", "\\broma\\b", "bayern", "dortmund", "psg", "paris saint", "marseille", "flamengo", "palmeiras", "boca", "river plate",
-  "\\bpenalt", "pen[aá]lti", "\\bsave\\b", "red card", "\\bvar\\b", "free[- ]kick", "hat[- ]trick", "\\bassist",
+// Só futebol. O Streamain mistura tudo (jogos de computador, outros desportos, vídeos pessoais), por isso:
+//   1. o que é claramente outra coisa fica sempre de fora (foi assim que um vídeo de Minecraft entrou no Feed);
+//   2. o título tem de ter uma palavra de futebol (golo, resumo, competição, clube…). Um resultado («2-1»), um
+//      «vs» ou um minuto sozinhos não chegam: só contam o resultado com minuto («2-1 67'») ou entre parênteses
+//      retos, à maneira do r/soccer («Benfica [2] - 1 Porto»).
+const NAO_FUTEBOL = new RegExp([
+  "minecraft", "fortnite", "roblox", "\\bgta\\b", "grand theft auto", "call of duty", "warzone", "valorant", "league of legends", "counter[- ]?strike", "\\bcs ?go\\b", "\\bcs2\\b",
+  "among us", "pok[eé]mon", "clash (royale|of clans)", "brawl stars", "free ?fire", "apex legends", "overwatch", "genshin", "rocket league", "super mario", "mario kart", "zelda", "elden ring",
+  "gameplay", "let'?s play", "speedrun", "walkthrough", "playthrough", "\\bgaming\\b", "\\bgamer\\b", "e-?football", "\\bea ?(sports )?fc ?\\d{2}", "\\bfifa ?\\d{2}\\b", "ultimate team", "\\bpes ?20\\d\\d",
+  "\\bnba\\b", "\\bufc\\b", "\\bmma\\b", "boxing", "\\bboxe\\b", "tennis", "t[eé]nis", "\\bf1\\b", "formula ?1", "motogp", "rugby", "\\bnfl\\b", "\\bmlb\\b", "\\bnhl\\b", "hockey", "basketball", "baseball", "cricket", "wrestling", "\\bwwe\\b",
+  "unboxing", "asmr", "tiktok compilation", "prank", "reaction to", "music video", "trailer",
 ].join("|"), "i");
-export const eDesporto = (t) => DESPORTO.test(String(t || ""));
+const FUTEBOL = new RegExp([
+  "\\bgoal", "\\bgolo", "\\bgol\\b", "golazo", "gola[cç]o", "highlights?", "resumo", "resumen", "sintesi", "melhores momentos",
+  "\\[\\d+\\]", "\\b\\d{1,2}\\s?[-–]\\s?\\d{1,2}\\b.*\\b\\d{1,3}(\\+\\d{1,2})?['’](?!s)",
+  "football", "soccer", "futebol", "f[uú]tbol", "calcio", "fu(ss|ß)ball", "futsal",
+  "premier league", "champions", "europa league", "conference league", "la ?liga", "serie a", "bundesliga", "ligue 1", "liga portugal", "eredivisie", "libertadores", "brasileir[aã]o", "\\bmls\\b", "\\bcopa\\b", "ta[cç]a", "coppa", "pokal", "mundial", "world cup", "\\beuro\\b", "nations league", "\\buefa\\b", "\\bfifa\\b",
+  "\\bfc\\b", "\\bsc\\b", "\\bcf\\b", "benfica", "sporting", "\\bporto\\b", "real madrid", "barcelona", "bar[cç]a", "atl[eé]tico", "arsenal", "chelsea", "liverpool", "manchester", "man (city|utd|united)", "tottenham", "newcastle", "juventus", "\\binter\\b", "milan", "napoli", "\\broma\\b", "bayern", "dortmund", "psg", "paris saint", "marseille", "flamengo", "palmeiras", "boca juniors", "river plate",
+  "\\bpenalt", "pen[aá]lti", "red card", "\\bvar\\b", "free[- ]kick", "hat[- ]trick", "\\bassist", "goalkeeper", "guarda-redes",
+].join("|"), "i");
+export const eFutebol = (t) => { const s = String(t || ""); return !NAO_FUTEBOL.test(s) && FUTEBOL.test(s); };
+// vídeos do Streamain tirados à mão (o id de 15 caracteres do endereço streamain.com/en/<id>/watch)
+export const RECUSADOS = new Set(["luSIbqVpKPbmv8J", ...String(process.env.STREAMAIN_FORA || "").split(",").map((x) => x.trim()).filter(Boolean)]);
+export const aceita = (v) => eFutebol(v.title) && !RECUSADOS.has(String(v.post_id || "").replace(/^streamain:/, ""));
 
 // …/en/<id de 15 caracteres>/watch, com o título e a miniatura (…/thumbnails/<id>_<epoch>_thumb.jpg) por perto
 export function lerPagina(html, base = "https://streamain.com/en") {
@@ -73,7 +86,7 @@ export function startStreamain(add, log, estado = {}) {
   const vistos = new Set();
   let primeira = true;
   (async () => {
-    log(`[Streamain] vídeos de desporto do Streamain, a cada ${ritmo / 1000} s`);
+    log(`[Streamain] vídeos de futebol do Streamain, a cada ${ritmo / 1000} s`);
     let espera = ritmo;
     for (;;) {
       let lidos = 0, aceites = 0;
@@ -87,7 +100,7 @@ export function startStreamain(add, log, estado = {}) {
           for (const v of lista.reverse()) {
             if (vistos.has(v.post_id)) continue;
             vistos.add(v.post_id);
-            if (!eDesporto(v.title)) continue; // só desporto
+            if (!aceita(v)) continue; // só futebol
             if (!v.created_time) { if (primeira) continue; v.created_time = Date.now(); }
             aceites++;
             add(v);

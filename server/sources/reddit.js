@@ -54,7 +54,6 @@ export function deJson(d, subs, diag = null) {
     crosspost_of: d.crosspost_parent ? `reddit:${String(d.crosspost_parent).replace(/^t3_/, "")}` : null,
     subreddit: d.subreddit,
     regiao: sub.regiao || "mundo",
-    aceitaLinks: !!sub.aceitaLinks || undefined, // (qualquer ligação conta como vídeo: o filtro de futebol é mais apertado)
     title: decode(d.title),
     reddit_url: `https://www.reddit.com${d.permalink}`,
     video_url: videoUrl,
@@ -94,7 +93,6 @@ export function deRss(it, subs, diag = null) {
     crosspost_of: null,
     subreddit: subNome,
     regiao: sub.regiao || "mundo",
-    aceitaLinks: !!sub.aceitaLinks || undefined, // (qualquer ligação conta como vídeo: o filtro de futebol é mais apertado)
     title: decode(it.title),
     reddit_url: it.link,
     video_url: link,

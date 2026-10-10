@@ -36,3 +36,38 @@ test("YouTube: a pesquisa de canais e o reconhecimento do canal de cada associa�
   assert.equal(urlCanal("https://www.youtube.com/@x/"), "https://www.youtube.com/@x");
   assert.equal(canaisBase().length, 24); // 22 associações, Canal 11 e FPF
 });
+
+test("YouTube: o separador «Diretos» (/streams) dá as transmissões a decorrer e as agendadas, e deixa de fora as que já acabaram", async () => {
+  const { lerStreams } = await import("../server/pt/youtube.js");
+  const item = (r) => ({ richItemRenderer: { content: { videoRenderer: r } } });
+  const badge = { thumbnailBadgeViewModel: { text: "AO VIVO", badgeStyle: "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE" } };
+  const lockup = {
+    contentId: "Lockup00001", contentType: "LOCKUP_CONTENT_TYPE_VIDEO",
+    metadata: { lockupMetadataViewModel: { title: { content: "Tondela B x Mangualde" } } },
+    contentImage: { thumbnailViewModel: { overlays: [{ thumbnailOverlayBadgeViewModel: { thumbnailBadges: [badge] } }] } },
+  };
+  const dados = {
+    metadata: { channelMetadataRenderer: { title: "AF Viseu TV" } },
+    contents: { twoColumnBrowseResultsRenderer: { tabs: [{ tabRenderer: { content: { richGridRenderer: { contents: [
+      item({ videoId: "LiveLiveLiv", title: { runs: [{ text: "Vilamaiorense x Santacruzense" }] }, viewCountText: { runs: [{ text: "143" }, { text: " a ver" }] }, badges: [{ metadataBadgeRenderer: { style: "BADGE_STYLE_TYPE_LIVE_NOW", label: "EM DIRETO" } }], thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "LIVE" } }] }),
+      item({ videoId: "Agendado001", title: { runs: [{ text: "Lusitano FCV x Penalva" }] }, upcomingEventData: { startTime: "1791640800" }, thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "UPCOMING" } }] }),
+      item({ videoId: "Antigo00001", title: { runs: [{ text: "Jogo da semana passada" }] }, thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "DEFAULT" } }] }),
+      { richItemRenderer: { content: { lockupViewModel: lockup } } },
+    ] } } } }] } },
+  };
+  const html = `<html><script>var ytInitialData = ${JSON.stringify(dados)};</script></html>`;
+  const st = lerStreams(html);
+  assert.equal(st.canal, "AF Viseu TV");
+  assert.equal(st.vistos, 4);
+  assert.deepEqual(st.lista.map((d) => d.videoId), ["LiveLiveLiv", "Agendado001", "Lockup00001"]);
+  const [vivo, agendado, novo] = st.lista;
+  assert.equal(vivo.aoVivo, true); assert.equal(vivo.espetadores, 143); assert.equal(vivo.titulo, "Vilamaiorense x Santacruzense");
+  assert.equal(agendado.aoVivo, false); assert.equal(agendado.marcada, true); assert.equal(agendado.inicio, 1791640800000);
+  assert.equal(novo.aoVivo, true); assert.equal(novo.titulo, "Tondela B x Mangualde");
+  // um canal sem nada agendado nem em direto: lista vazia; uma página sem os dados: null (usa-se a «/live»)
+  assert.deepEqual(lerStreams(html.replace(/BADGE_STYLE_TYPE_LIVE_NOW|THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE|AO VIVO|UPCOMING|upcomingEventData/g, "nada").replace(/"style":"LIVE"/g, '"style":"DEFAULT"')).lista, []);
+  assert.equal(lerStreams("<html>nada</html>"), null);
+  // os canais da AF Viseu e da AF Porto já vêm certos
+  assert.equal(canaisBase().find((c) => c.id === "af-viseu").canal, "@AFViseuTV");
+  assert.equal(canaisBase().find((c) => c.id === "af-porto").canal, "@associacaodefuteboldoporto");
+});
