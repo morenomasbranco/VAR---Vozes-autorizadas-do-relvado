@@ -13,29 +13,91 @@ const AO_VIVO = (j) => ["direto", "intervalo"].includes(j.estado) || j.semInfo;
 const hhmm = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
 const diaDe = (t) => new Date(t).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
 
-// faixa 1: jogos a decorrer (primeiro), depois os que ainda vão começar e os que já acabaram hoje
-function JogosDaBase({ API, agora }) {
+// a divisão das faixas: uma por associação e, nos nacionais, uma por campeonato
+const NOMES_GRUPO = { liga3: "Liga 3", cp: "Campeonato de Portugal", acores: "Campeonato dos Açores", fpf: "FPF", canal11: "Canal 11" };
+const grupoDoTexto = (t) => (/liga 3/i.test(t) ? "liga3" : /campeonato de portugal/i.test(t) ? "cp" : /campeonato (de futebol )?dos a[cç]ores/i.test(t) ? "acores" : null);
+const grupoJogo = (j) => (String(j.org || "").startsWith("af-") ? j.org : grupoDoTexto(j.compNome || "") || j.org);
+// as transmissões dos canais das associações ficam na associação; as da FPF e do Canal 11 vão para o campeonato do título
+const grupoVideo = (v) => (String(v.org || "").startsWith("af-") ? v.org : grupoDoTexto(v.titulo || "") || v.org);
+const faseJogo = (j) => (AO_VIVO(j) ? 0 : j.estado === "agendado" && !j.porConfirmar ? 1 : 2);
+const porFase = (a, b) => faseJogo(a) - faseJogo(b) || (faseJogo(a) === 2 ? (b.inicio || 0) - (a.inicio || 0) : (a.inicio || 0) - (b.inicio || 0));
+
+// as duas faixas (jogos e YouTube), com uma linha de botões para escolher a associação ou o campeonato
+function FaixasDaBase({ API, agora, orgs = [] }) {
   const [jogos, setJogos] = useState(null);
+  const [yt, setYt] = useState(null);
+  const [grupo, setGrupo] = useState(() => { try { return localStorage.getItem("dist-grupo") || "todos"; } catch { return "todos"; } });
   useEffect(() => {
-    const ler = () => fetch(`${API}/api/pt/aovivo`).then((r) => r.json()).then((l) => setJogos(Array.isArray(l) ? l.filter(daBase) : [])).catch(() => {});
+    const ler = () => {
+      fetch(`${API}/api/pt/aovivo`).then((r) => r.json()).then((l) => setJogos(Array.isArray(l) ? l.filter(daBase) : [])).catch(() => {});
+      fetch(`${API}/api/distritais/diretos`).then((r) => r.json()).then(setYt).catch(() => {});
+    };
     ler();
     const t = setInterval(ler, 30e3);
     return () => clearInterval(t);
   }, [API]);
-  if (!jogos) return null;
-  const vivos = jogos.filter(AO_VIVO);
-  const fase = (j) => (AO_VIVO(j) ? 0 : j.estado === "agendado" && !j.porConfirmar ? 1 : 2);
-  const lista = [...jogos].sort((a, b) => fase(a) - fase(b) || (fase(a) === 2 ? (b.inicio || 0) - (a.inicio || 0) : (a.inicio || 0) - (b.inicio || 0))).slice(0, 60);
+  const escolher = (g) => { setGrupo(g); try { localStorage.setItem("dist-grupo", g); } catch { /* */ } };
+  const videos = yt ? [...(yt.aoVivo || []), ...(yt.aSeguir || [])] : [];
+  // a ordem: os campeonatos nacionais, as associações (pela ordem das colunas), a FPF e o Canal 11
+  const ordem = ["liga3", "cp", "acores", ...orgs.map((o) => o.key), "fpf", "canal11"];
+  const nomeDe = (g) => NOMES_GRUPO[g] || orgs.find((o) => o.key === g)?.nome || g;
+  const pos = (g) => { const i = ordem.indexOf(g); return i < 0 ? 999 : i; };
+  const contagem = new Map();
+  for (const j of jogos || []) { const g = grupoJogo(j); const c = contagem.get(g) || { n: 0, vivo: 0 }; c.n++; if (AO_VIVO(j)) c.vivo++; contagem.set(g, c); }
+  for (const v of videos) { const g = grupoVideo(v); const c = contagem.get(g) || { n: 0, vivo: 0 }; c.n++; if (v.aoVivo) c.vivo++; contagem.set(g, c); }
+  const grupos = [...contagem.keys()].sort((x, y) => pos(x) - pos(y));
+  // nas faixas, os grupos com jogos em direto vêm primeiro
+  const posFaixa = (k) => (contagem.get(k)?.vivo ? 0 : 1000) + pos(k);
+  const g = grupo !== "todos" && !contagem.has(grupo) && jogos && yt ? "todos" : grupo;
+  const doGrupo = (lista, gr) => (g === "todos" ? lista : lista.filter((x) => gr(x) === g));
+  // jogos e vídeos arrumados por grupo (com o nome do grupo antes de cada um, quando se veem todos)
+  const arrumar = (lista, gr, ord) => {
+    const l = [...lista].sort((x, y) => posFaixa(gr(x)) - posFaixa(gr(y)) || ord(x, y));
+    const out = [];
+    let ant = null;
+    for (const x of l) {
+      if (g === "todos" && gr(x) !== ant) { ant = gr(x); out.push({ sep: ant }); }
+      out.push({ x });
+    }
+    return out;
+  };
+  const jogosVer = arrumar(doGrupo(jogos || [], grupoJogo), grupoJogo, porFase).slice(0, 90);
+  const videosVer = arrumar(doGrupo(videos, grupoVideo), grupoVideo, (x, y) => (y.aoVivo ? 1 : 0) - (x.aoVivo ? 1 : 0) || (x.inicio || 9e15) - (y.inicio || 9e15));
+  if (!jogos && !yt) return null;
+  return (
+    <>
+      {grupos.length > 0 && (
+        <div className="seg lvls dgrupos" role="group" aria-label="Associação ou campeonato">
+          <button aria-pressed={g === "todos"} onClick={() => escolher("todos")}>Todos</button>
+          {grupos.map((k) => (
+            <button key={k} aria-pressed={g === k} onClick={() => escolher(k)}>
+              {contagem.get(k).vivo > 0 && <i className="dvivo" aria-label="em direto" />}{nomeDe(k)}<span className="ct">{contagem.get(k).n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {jogos && <JogosDaBase itens={jogosVer} total={(jogos || []).length} vivos={doGrupo(jogos, grupoJogo).filter(AO_VIVO).length} titulo={g === "todos" ? "Das distritais à Liga 3" : nomeDe(g)} nomeDe={nomeDe} />}
+      {yt && <DiretosYoutube itens={videosVer} d={yt} agora={agora} nomeDe={nomeDe} titulo={g === "todos" ? "Canais das associações, do Canal 11 e da FPF" : nomeDe(g)} />}
+    </>
+  );
+}
+
+// separador com o nome da associação ou do campeonato, no meio da faixa
+const Separador = ({ nome, video }) => <li className={`dsep ${video ? "v" : ""}`}><span>{nome}</span></li>;
+
+// faixa 1: jogos a decorrer (primeiro), depois os que ainda vão começar e os que já acabaram hoje
+function JogosDaBase({ itens, total, vivos, titulo, nomeDe }) {
   return (
     <section className="livebar jv dbase" aria-label="Jogos de hoje, das distritais à Liga 3">
       <div className="livehead">
-        <span className={`pulse ${vivos.length ? "" : "off"}`}><i />{vivos.length ? `Em direto · ${vivos.length}` : "Jogos de hoje"}</span>
-        <span className="muted small">Das distritais à Liga 3</span>
+        <span className={`pulse ${vivos ? "" : "off"}`}><i />{vivos ? `Em direto · ${vivos}` : "Jogos de hoje"}</span>
+        <span className="muted small">{titulo}</span>
       </div>
-      {lista.length === 0 ? <p className="cempty jvhint">Hoje não há jogos das distritais nem da Liga 3 e do Campeonato de Portugal.</p> : (
+      {itens.length === 0 ? <p className="cempty jvhint">{total ? "Hoje não há jogos desta associação ou deste campeonato." : "Hoje não há jogos das distritais nem da Liga 3 e do Campeonato de Portugal."}</p> : (
         <ul className="livelist jvstrip">
-          {lista.map((j) => {
-            const f = fase(j);
+          {itens.map(({ sep, x: j }) => {
+            if (sep) return <Separador key={`s:${sep}`} nome={nomeDe(sep)} />;
+            const f = faseJogo(j);
             const placar = j.hs != null && j.as != null && f !== 1;
             return (
               <li key={j.id}>
@@ -59,35 +121,28 @@ function JogosDaBase({ API, agora }) {
   );
 }
 
-// faixa 2: transmissões no YouTube (em direto primeiro, depois as marcadas); toca no próprio cartão
-function DiretosYoutube({ API, agora }) {
-  const [d, setD] = useState(null);
+// faixa 2: transmissões no YouTube (em direto primeiro, depois as agendadas); toca no próprio cartão
+function DiretosYoutube({ itens, d, agora, titulo, nomeDe }) {
   const [aTocar, setATocar] = useState(null);
   const ref = useRef(null);
-  useEffect(() => {
-    const ler = () => fetch(`${API}/api/distritais/diretos`).then((r) => r.json()).then(setD).catch(() => {});
-    ler();
-    const t = setInterval(ler, 30e3);
-    return () => clearInterval(t);
-  }, [API]);
-  if (!d) return null;
-  const lista = [...(d.aoVivo || []), ...(d.aSeguir || [])];
   // agendado: a hora, e o dia quando não é hoje
   const quandoComeca = (t) => (diaDe(t) === diaDe(agora) ? `Hoje, ${hhmm(t)}` : new Date(t).toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" }));
   const rola = (dir) => ref.current?.scrollBy({ left: dir * Math.max(240, ref.current.clientWidth * 0.8), behavior: "smooth" });
+  const vids = itens.filter((y) => y.x);
+  const nVivo = vids.filter((y) => y.x.aoVivo).length, nAgendado = vids.length - nVivo;
   return (
     <section className="vbar vdest dyt" aria-label="Jogos em direto no YouTube">
       <div className="livehead">
         <h2 className="vdesth">Em direto no YouTube</h2>
-        <span className="muted small">{d.aoVivo?.length ? `${d.aoVivo.length} em direto · ` : ""}{d.aSeguir?.length ? `${d.aSeguir.length} agendados · ` : ""}Canais das associações, do Canal 11 e da FPF</span>
+        <span className="muted small">{nVivo ? `${nVivo} em direto · ` : ""}{nAgendado ? `${nAgendado} agendados · ` : ""}{titulo}</span>
         <div className="varrows">
           <button className="icon-btn" onClick={() => rola(-1)} aria-label="←">‹</button>
           <button className="icon-btn" onClick={() => rola(1)} aria-label="→">›</button>
         </div>
       </div>
-      {lista.length === 0 && <p className="cempty jvhint">Neste momento não há jogos em direto nem agendados nos canais de YouTube das associações, do Canal 11 e da FPF.</p>}
+      {vids.length === 0 && <p className="cempty jvhint">{(d.aoVivo?.length || d.aSeguir?.length) ? "Neste momento não há jogos em direto nem agendados no YouTube desta associação ou deste campeonato." : "Neste momento não há jogos em direto nem agendados nos canais de YouTube das associações, do Canal 11 e da FPF."}</p>}
       <ul className="vlist vrow" ref={ref}>
-        {lista.map((v) => (
+        {itens.map(({ sep, x: v }) => (sep ? <Separador key={`s:${sep}`} nome={nomeDe(sep)} video /> : (
           <li key={v.videoId} className={`vcard mini ${v.aoVivo ? "cat-red" : ""}`}>
             <div className="vthumb">
               {aTocar === v.videoId ? (
@@ -110,7 +165,7 @@ function DiretosYoutube({ API, agora }) {
               <a className="textbtn" href={v.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>YouTube ↗</a>
             </div>
           </li>
-        ))}
+        )))}
       </ul>
     </section>
   );
@@ -251,8 +306,7 @@ export default function Distritais({ API = "", now, query = "" }) {
   const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
   return (
     <div className="dist">
-      <JogosDaBase API={API} agora={agora} />
-      <DiretosYoutube API={API} agora={agora} />
+      <FaixasDaBase API={API} agora={agora} orgs={d.orgs} />
       <div className="livehead dhead">
         <div className="seg lvls" role="group" aria-label="O que mostrar">
           {VER.map(([k, t]) => <button key={k} aria-pressed={ver === k} onClick={() => setVer(k)}>{t}</button>)}
@@ -310,6 +364,11 @@ export const DIST_CSS = `
 .apito .dist .dnota{font-size:12.5px;margin:0 0 12px}
 .apito .dbase .dlogo{width:18px;height:18px;object-fit:contain;flex:none}
 .apito .dbase .lcard{cursor:default}
+.apito .dist .dgrupos{margin:0 0 12px;flex-wrap:wrap}
+.apito .dgrupos .dvivo{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-right:6px;vertical-align:middle}
+.apito .dsep{flex:0 0 auto;display:flex;align-items:center;padding:0 4px 0 10px;border-left:3px solid var(--accent);list-style:none}
+.apito .dsep span{font-family:var(--display);font-weight:600;font-size:13px;line-height:1.15;max-width:96px;white-space:normal}
+.apito .dsep.v{align-self:stretch}
 .apito .dyt .vcat.dao{background:#D7263D}
 .apito .dyt .vtitle{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
