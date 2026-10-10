@@ -1,0 +1,24 @@
+# Compila o site e corre os testes a cada envio, como o Northflank faz (npm ci, vite build e a imagem Docker),
+# para um erro de compilação aparecer aqui antes de chegar ao site.
+name: build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t var .
