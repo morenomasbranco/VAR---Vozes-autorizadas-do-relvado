@@ -19,11 +19,14 @@ try {
   const porOrg = {};
   for (const x of pt) porOrg[x.org] = (porOrg[x.org] || 0) + 1;
   linha("== coluna Portugal ==", pt.length, "itens", JSON.stringify(porOrg));
-  for (const x of pt.slice(0, 15)) linha(new Date(x.ts).toISOString(), x.org, x.tipo, "|", x.titulo, "|", x.via || "", x.meio || "", x.url);
+  for (const x of pt.slice(0, 8)) linha(new Date(x.ts).toISOString(), x.org, x.tipo, x.fonte, "|", x.titulo, "|", x.via || "", x.meio || "");
+  linha("-- só FPF --");
+  for (const x of pt.filter((x) => x.org === "FPF").slice(0, 25)) linha(new Date(x.ts).toISOString(), x.tipo, x.fonte, "|", x.titulo, "|", x.via || "", x.meio || "", x.site || "");
   const af = (o.itens || []).filter((x) => x.grupo === "af");
   linha("== associações ==", af.length, "itens");
 } catch (e) { linha("oficiais: erro", e.message); }
 
+try { const d = await j("/api/diagnostico"); linha("== diagnóstico ==", JSON.stringify(d).slice(0, 800)); } catch (e) { linha("diagnóstico: erro", e.message); }
 try {
   const y = await j("/api/distritais/youtube");
   linha("== YouTube ==", "pedidos", y.pedidos, "erros", y.erros, JSON.stringify(y.ultimoErro));
