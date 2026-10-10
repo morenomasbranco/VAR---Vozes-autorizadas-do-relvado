@@ -209,7 +209,14 @@ export function createYoutube({ log = () => {} } = {}) {
   }
   async function pedirJina(url) {
     geral.peloJina++;
-    const r = await comPrazo(buscarPor("jina", url, { signal: AbortSignal.timeout(40000) }), 45000, "o Jina não respondeu em 45 s");
+    let r;
+    // o Jina tem um limite por minuto (partilhado com as outras leituras): espera-se pela vez, em vez de falhar
+    for (let i = 0; ; i++) {
+      try { r = await comPrazo(buscarPor("jina", url, { signal: AbortSignal.timeout(40000) }), 45000, "o Jina não respondeu em 45 s"); break; } catch (e) {
+        if (!e.semVia || i >= 4) throw e;
+        await sleep(15000);
+      }
+    }
     if (!r.ok) throw Object.assign(new Error(`pelo Jina, o YouTube respondeu ${r.status}`), { status: r.status });
     return r.text();
   }
@@ -274,11 +281,13 @@ export function createYoutube({ log = () => {} } = {}) {
           // a lista nova do YouTube não traz a hora dos agendados: lê-se na página do vídeo (uma vez por vídeo)
           for (const d of lista) {
             if (!d.marcada || d.inicio) continue;
-            if (!horas.has(d.videoId)) {
-              try { horas.set(d.videoId, horaMarcada(await pedir(`https://www.youtube.com/watch?v=${d.videoId}`))); } catch { horas.set(d.videoId, null); }
+            // (uma leitura que falhou volta a ser tentada na volta seguinte; uma página sem hora, só daqui a 1 h)
+            const h = horas.get(d.videoId);
+            if (!h || (!h.inicio && Date.now() - h.ts > 3600e3)) {
+              try { horas.set(d.videoId, { inicio: horaMarcada(await pedir(`https://www.youtube.com/watch?v=${d.videoId}`)), ts: Date.now() }); } catch { /* fica para a próxima volta */ }
               if (horas.size > 500) horas.delete(horas.keys().next().value);
             }
-            d.inicio = horas.get(d.videoId) || null;
+            d.inicio = horas.get(d.videoId)?.inicio || null;
           }
           const nomeCanal = st?.canal || guardado[c.id]?.titulo || c.nome;
           for (const d of lista) {
