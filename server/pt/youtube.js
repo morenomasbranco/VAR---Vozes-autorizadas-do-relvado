@@ -188,7 +188,7 @@ export function createYoutube({ log = () => {} } = {}) {
   // seguidas sem resposta, os pedidos passam a ir pelo Jina Reader (r.jina.ai, gratuito, sem chave), que abre a página
   // nos servidores deles, e de hora a hora volta-se a experimentar o caminho direto. YOUTUBE_VIA=direto ou =jina fixa um.
   const VIA = process.env.YOUTUBE_VIA || "auto";
-  const GAP_JINA = Math.max(GAP, (Number(process.env.YOUTUBE_JINA_SEGUNDOS) || 12) * 1000);
+  const GAP_JINA = Math.max(GAP, (Number(process.env.YOUTUBE_JINA_SEGUNDOS) || 8) * 1000);
   const comPrazo = (promessa, limite, msg) => {
     let t;
     return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), limite); })]).finally(() => clearTimeout(t));
