@@ -66,3 +66,20 @@ test("oficiais: as notícias das associações vão para as Distritais, com a as
   assert.deepEqual(o.grupos().map((g) => g.id), ["pt"]);
   assert.deepEqual(o.lista().filter((x) => x.grupo === "af"), []);
 });
+
+test("Portugal: pelo Google News, os lances, os resumos e as fichas de jogadores ficam de fora, e as notícias apanhadas pela pesquisa dos comunicados passam a notícia", async () => {
+  const { arrumar, naoENoticia } = await import("../server/sources/oficiais.js");
+  const g = (titulo, tipo = "noticia", org = "Liga Portugal", site = "https://www.ligaportugal.pt") => arrumar({ grupo: "pt", tipo, titulo, org, via: "Google News", meio: org, site });
+  assert.equal(g("GOLO! Sporting CP, L. Suárez aos 66', SC Braga 1-1 Sporting CP").fora, true);
+  assert.equal(g("SC Braga, Jogada, Pau Victor aos 52'").fora, true);
+  assert.equal(g("Liga Portugal Betclic (8ªJ): Resumo Moreirense FC 0-1 Gil Vicente FC").fora, true);
+  assert.equal(g("Bruno Lourenço Pereira").fora, true);
+  assert.equal(g("Cascavel decisivo").fora, undefined);
+  assert.equal(naoENoticia("COMUNICADO OFICIAL"), false);
+  const fpf = (t) => g(t, "comunicado", "FPF", "https://www.fpf.pt");
+  assert.equal(fpf("França foi mais feliz").tipo, "noticia");
+  assert.equal(fpf("Portugal vence a Chéquia").tipo, "noticia");
+  assert.equal(fpf("CONSELHO DE DISCIPLINA").tipo, "comunicado");
+  assert.equal(fpf("Nomeações profissionais").tipo, "comunicado");
+  assert.equal(fpf("França foi mais feliz").fora, undefined);
+});

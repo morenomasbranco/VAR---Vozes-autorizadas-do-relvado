@@ -179,17 +179,29 @@ export function createYoutube({ log = () => {} } = {}) {
   try { guardado = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { /* primeira vez */ }
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(guardado)); } catch { /* */ } };
   const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, diretos: [], via: null }]));
-  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null };
+  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null, emCurso: null, voltas: 0, ultimaVolta: null };
   const horas = new Map(); // videoId → hora de início de um agendado
 
-  async function pedir(url) {
+  // cada pedido tem um limite rígido (a ligação, a resposta e o corpo): um pedido pendurado não pode parar o ciclo
+  async function pedir(url, limite = 25000) {
     geral.pedidos++;
-    const r = await fetch(url, { headers: CABECALHOS, redirect: "follow", signal: AbortSignal.timeout(20000) });
-    if (r.status === 429) { geral.pausaAte = Date.now() + 30 * 60e3; throw Object.assign(new Error("o YouTube pediu uma pausa (429)"), { status: 429 }); }
-    if (!r.ok) throw Object.assign(new Error(`o YouTube respondeu ${r.status}`), { status: r.status });
-    const html = await r.text();
-    if (/consent\.youtube\.com|before you continue to youtube|antes de continuar para o youtube/i.test(r.url + html.slice(0, 3000))) throw new Error("o YouTube mostrou a página de consentimento de cookies");
-    return html;
+    const ctl = new AbortController();
+    const prazo = new Promise((_, rej) => { ctl.signal.addEventListener("abort", () => rej(new Error(`o YouTube não respondeu em ${limite / 1000} s`))); });
+    const t = setTimeout(() => ctl.abort(), limite);
+    geral.emCurso = { url, desde: new Date().toISOString() };
+    try {
+      return await Promise.race([prazo, (async () => {
+        const r = await fetch(url, { headers: CABECALHOS, redirect: "follow", signal: ctl.signal });
+        if (r.status === 429) { geral.pausaAte = Date.now() + 30 * 60e3; throw Object.assign(new Error("o YouTube pediu uma pausa (429)"), { status: 429 }); }
+        if (!r.ok) throw Object.assign(new Error(`o YouTube respondeu ${r.status}`), { status: r.status });
+        const html = await r.text();
+        if (/consent\.youtube\.com|before you continue to youtube|antes de continuar para o youtube/i.test(r.url + html.slice(0, 3000))) throw new Error("o YouTube mostrou a página de consentimento de cookies");
+        return html;
+      })()]);
+    } finally {
+      clearTimeout(t);
+      geral.emCurso = null;
+    }
   }
 
   // o canal de um organizador: o do youtube.json, o já encontrado, ou procura-se no YouTube pelo nome
@@ -252,12 +264,22 @@ export function createYoutube({ log = () => {} } = {}) {
         e.erro = err.message;
         geral.ultimoErro = { canal: c.id, erro: err.message, ts: Date.now() };
       }
+      if (i === canais.length - 1) { geral.voltas++; geral.ultimaVolta = new Date().toISOString(); }
+      geral.batida = Date.now();
       await sleep(GAP);
     }
   }
 
   return {
-    start() { if (ativo) correr().catch((e) => log(`[YouTube] ${e.message}`)); },
+    start() {
+      if (!ativo) return;
+      // se o ciclo parar (um erro inesperado), recomeça; o vigia confirma de minuto a minuto que ele anda
+      const arrancar = () => correr().catch((e) => { log(`[YouTube] o ciclo parou (${e.message}); recomeça daqui a 1 min`); setTimeout(arrancar, 60e3); });
+      arrancar();
+      setInterval(() => {
+        if (geral.batida && Date.now() - geral.batida > 5 * 60e3 && Date.now() > geral.pausaAte) log(`[YouTube] o ciclo está parado há ${Math.round((Date.now() - geral.batida) / 60e3)} min${geral.emCurso ? ` (à espera de ${geral.emCurso.url})` : ""}`);
+      }, 60e3).unref?.();
+    },
     diretos() {
       const lista = [...new Map(Object.values(estado).flatMap((e) => e.diretos || []).map((d) => [d.videoId, d])).values()];
       // uma transmissão marcada há mais de 3 horas já não é «a seguir»
@@ -268,7 +290,7 @@ export function createYoutube({ log = () => {} } = {}) {
       };
     },
     estado: () => ({
-      ativo, ...geral,
+      ativo, ...geral, batida: geral.batida ? new Date(geral.batida).toISOString() : null,
       canais: canais.map((c) => ({ id: c.id, nome: c.nome, canal: c.canal || guardado[c.id]?.canalId || null, nomeDoCanal: guardado[c.id]?.titulo || null, url: estado[c.id]?.canalUrl || null, ultimaLeitura: estado[c.id]?.ultimo ? new Date(estado[c.id].ultimo).toISOString() : null, erro: estado[c.id]?.erro || null, via: estado[c.id]?.via || null, emDireto: (estado[c.id]?.diretos || []).filter((d) => d.aoVivo).length, agendados: (estado[c.id]?.diretos || []).filter((d) => d.marcada).length })),
     }),
   };

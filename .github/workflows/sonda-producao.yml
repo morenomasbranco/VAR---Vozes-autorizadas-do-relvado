@@ -1,0 +1,19 @@
+# Sonda: o que o site em produção (Northflank) está a devolver, e as fontes da FPF vistas de fora.
+# Corre nos ramos de trabalho (não no main) e quando se pede à mão.
+name: sonda-producao
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    env:
+      SITE: https://p01--var--tdhb8zl9kmy6.code.run
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: produção
+        run: node scripts/sonda-producao.js
