@@ -466,6 +466,18 @@ const NOME_OFICIAL = /\b(fpf|federa[cç][aã]o portuguesa de futebol|liga ?portu
 //    associação, nas Distritais (antes, a pesquisa «site:fpf.pt» do Google News trazia-as como se fossem da FPF);
 //  - uma notícia da FPF ou da Liga que fala de uma associação também vai para a coluna dela;
 //  - o que chega pelo Google News de outro site (imprensa, clubes) fica de fora (x.fora).
+// o que não é notícia nem comunicado: lances («GOLO! Sporting CP, … aos 66'», «SC Braga, Jogada, … aos 52'»),
+// resumos em vídeo e fichas de jogadores (só um nome próprio: «Bruno Lourenço Pereira»)
+const LANCE = /^GOLO!|,\s*Jogada,|\baos \d{1,3}'|\(\d+ª ?J\): Resumo|^Resumo\b/i;
+const SO_NOME = /^\p{Lu}[\p{L}'’.-]+(?:\s+(?:d[aeo]s?|e|\p{Lu}[\p{L}'’.-]+)){1,6}$/u;
+export const naoENoticia = (t) => {
+  const s = String(t || "").trim();
+  if (LANCE.test(s)) return true;
+  // um título todo em maiúsculas («COMUNICADO OFICIAL») ou com cara de comunicado não é uma ficha de jogador
+  return SO_NOME.test(s) && s !== s.toUpperCase() && !COMUNICADO.test(s);
+};
+const COMUNICADO = /comunicad|conselho de disciplina|disciplin|castig|san[cç][aã]o|sancion|processo|nomea[cç]|nota oficial|nota de pesar|esclarecimento|decis[aã]o|delibera|regulament|convocat[oó]ria|concurso|candidat|despacho|ac[oó]rd[aã]o|recurso|multa|interdi|inscri[cç]|licenciamento/i;
+
 export function arrumar(x, s = null) {
   const daFonte = s ? assocDe(s) : null;
   if (x.grupo === "af") { x.assoc ||= daFonte || associacaoDoTexto(`${x.org} ${x.titulo}`) || undefined; return x; }
@@ -476,7 +488,10 @@ export function arrumar(x, s = null) {
     if (a) { x.grupo = "af"; x.assoc = a; delete x.fora; return x; }
     if (x.via) {
       const oficial = host ? SITES_OFICIAIS.test(host) : NOME_OFICIAL.test(x.meio || "");
-      if (!oficial) x.fora = true; else delete x.fora;
+      // pelo Google News também vêm páginas que não são notícias: lances e resumos dos jogos e fichas de jogadores
+      if (!oficial || naoENoticia(x.titulo)) x.fora = true; else delete x.fora;
+      // a pesquisa dos comunicados também apanha notícias: o que não tem cara de comunicado passa a notícia
+      if (x.tipo === "comunicado" && !COMUNICADO.test(x.titulo || "")) x.tipo = "noticia";
     }
   }
   return x;

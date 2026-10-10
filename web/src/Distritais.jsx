@@ -133,7 +133,7 @@ function DiretosYoutube({ itens, d, agora, titulo, nomeDe }) {
   return (
     <section className="vbar vdest dyt" aria-label="Jogos em direto no YouTube">
       <div className="livehead">
-        <h2 className="vdesth">Em direto no YouTube</h2>
+        <h2 className="vdesth">Em direto e agendados no YouTube</h2>
         <span className="muted small">{nVivo ? `${nVivo} em direto · ` : ""}{nAgendado ? `${nAgendado} agendados · ` : ""}{titulo}</span>
         <div className="varrows">
           <button className="icon-btn" onClick={() => rola(-1)} aria-label="←">‹</button>
