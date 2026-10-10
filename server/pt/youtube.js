@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import { sleep, norm } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
-import { buscarPor } from "../ponte.js";
+import { buscarPor, viaDisponivel, estadoEncaminhamento } from "../ponte.js";
 
 const FICHEIRO = new URL("../../data/youtube-canais.json", import.meta.url);
 const CONFIG = new URL("../../youtube.json", import.meta.url);
@@ -180,15 +180,21 @@ export function createYoutube({ log = () => {} } = {}) {
   try { guardado = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { /* primeira vez */ }
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(guardado)); } catch { /* */ } };
   const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, diretos: [], via: null }]));
-  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null, emCurso: null, voltas: 0, ultimaVolta: null, via: "direto", falhasDiretas: 0, diretoDeNovo: 0, peloJina: 0 };
+  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null, emCurso: null, voltas: 0, ultimaVolta: null, via: "direto", falhasDiretas: 0, diretoDeNovo: 0, pelasPontes: 0, errosPontes: null };
+  const NOMES_VIA = { ponte: "Cloudflare/Netlify", ponte2: "2.ª ponte", ponte3: "3.ª ponte", google: "Google Apps Script", jina: "Jina Reader" };
   const horas = new Map(); // videoId → hora de início de um agendado
 
   // Cada pedido tem um limite rígido (a ligação, a resposta e o corpo): um pedido pendurado não pode parar o ciclo.
-  // O YouTube às vezes não responde aos servidores de alojamento (os pedidos ficam pendurados): ao fim de duas falhas
-  // seguidas sem resposta, os pedidos passam a ir pelo Jina Reader (r.jina.ai, gratuito, sem chave), que abre a página
-  // nos servidores deles, e de hora a hora volta-se a experimentar o caminho direto. YOUTUBE_VIA=direto ou =jina fixa um.
-  const VIA = process.env.YOUTUBE_VIA || "auto";
-  const GAP_JINA = Math.max(GAP, (Number(process.env.YOUTUBE_JINA_SEGUNDOS) || 8) * 1000);
+  // O YouTube não responde a alguns servidores de alojamento (no Northflank, os pedidos ficam pendurados): ao fim de
+  // duas falhas seguidas sem resposta, os pedidos passam pelas pontes gratuitas, por esta ordem: o Cloudflare Worker
+  // (PONTE_URL), o Google Apps Script (PONTE_GOOGLE_URL) e o Jina Reader (r.jina.ai, sem chave). Uma ponte que ainda
+  // não tenha o YouTube na lista fica de lado 6 horas. De hora a hora volta-se a experimentar o caminho direto.
+  // YOUTUBE_VIA=direto ou =pontes fixa um dos caminhos.
+  const VIA = process.env.YOUTUBE_VIA === "jina" ? "pontes" : process.env.YOUTUBE_VIA || "auto";
+  const PONTES = ["ponte", "ponte2", "ponte3", "google", "jina"];
+  // o ritmo pelas pontes: o Cloudflare aguenta o mesmo do direto; o Google e o Jina têm limites mais curtos
+  const GAP_PONTE = { ponte: GAP, ponte2: GAP, ponte3: GAP, google: Math.max(GAP, 15000), jina: Math.max(GAP, (Number(process.env.YOUTUBE_JINA_SEGUNDOS) || 8) * 1000) };
+  const deLado = new Map(); // ponte → até quando fica de lado
   const comPrazo = (promessa, limite, msg) => {
     let t;
     return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), limite); })]).finally(() => clearTimeout(t));
@@ -207,24 +213,44 @@ export function createYoutube({ log = () => {} } = {}) {
       })(), limite, `o YouTube não respondeu em ${limite / 1000} s`);
     } finally { clearTimeout(t); }
   }
-  async function pedirJina(url) {
-    geral.peloJina++;
-    let r;
-    // o Jina tem um limite por minuto (partilhado com as outras leituras): espera-se pela vez, em vez de falhar
-    for (let i = 0; ; i++) {
-      try { r = await comPrazo(buscarPor("jina", url, { signal: AbortSignal.timeout(40000) }), 45000, "o Jina não respondeu em 45 s"); break; } catch (e) {
-        if (!e.semVia || i >= 4) throw e;
-        await sleep(15000);
+  // pelas pontes, pela ordem; a primeira que trouxer a página fica a ser a via
+  async function pedirPontes(url) {
+    const erros = [];
+    const configuradas = new Set(estadoEncaminhamento().pontes.map((p) => p.id));
+    for (const id of PONTES) {
+      // (o Jina no limite do minuto não fica de fora: espera-se pela vez, mais abaixo)
+      if ((deLado.get(id) || 0) > Date.now() || !configuradas.has(id) || (id !== "jina" && !viaDisponivel(id, url))) continue;
+      const prazo = id === "google" || id === "jina" ? 45000 : 25000;
+      try {
+        let r;
+        // o Jina tem um limite por minuto (partilhado com as outras leituras): espera-se pela vez
+        for (let i = 0; ; i++) {
+          try { r = await comPrazo(buscarPor(id, url, { headers: CABECALHOS, signal: AbortSignal.timeout(prazo - 5000) }), prazo, `sem resposta em ${prazo / 1000} s`); break; } catch (e) {
+            if (!e.semVia || i >= 3) throw e;
+            await sleep(15000);
+          }
+        }
+        if (r.status === 429) throw Object.assign(new Error("o YouTube pediu uma pausa (429)"), { status: 429 });
+        if (!r.ok) throw Object.assign(new Error(`o YouTube respondeu ${r.status}`), { status: r.status });
+        const html = await comPrazo(r.text(), prazo, `a página não chegou em ${prazo / 1000} s`);
+        if (geral.via !== id) log(`[YouTube] a ler pela ponte ${NOMES_VIA[id] || id}`);
+        geral.via = id;
+        geral.pelasPontes++;
+        return html;
+      } catch (e) {
+        erros.push(`${NOMES_VIA[id] || id}: ${e.message}`);
+        // a ponte não tem o YouTube na lista (ou a chave está errada): fica de lado umas horas
+        deLado.set(id, Date.now() + (e.longo ? 6 * 3600e3 : 10 * 60e3));
       }
     }
-    if (!r.ok) throw Object.assign(new Error(`pelo Jina, o YouTube respondeu ${r.status}`), { status: r.status });
-    return r.text();
+    geral.errosPontes = erros;
+    throw new Error(erros.length ? `nenhuma ponte trouxe a página (${erros.join("; ")})` : "não há pontes disponíveis para o YouTube");
   }
   async function pedir(url, limite = 25000) {
     geral.pedidos++;
     geral.emCurso = { url, via: geral.via, desde: new Date().toISOString() };
     try {
-      if (VIA === "jina" || (VIA === "auto" && geral.via === "jina" && Date.now() < geral.diretoDeNovo)) return await pedirJina(url);
+      if (VIA === "pontes" || (VIA === "auto" && geral.via !== "direto" && Date.now() < geral.diretoDeNovo)) return await pedirPontes(url);
       try {
         const html = await pedirDireto(url, limite);
         geral.falhasDiretas = 0;
@@ -233,10 +259,10 @@ export function createYoutube({ log = () => {} } = {}) {
       } catch (e) {
         if (e.status || VIA === "direto") throw e; // o YouTube respondeu (404, 429…): não é falta de ligação
         if (++geral.falhasDiretas < 2) throw e;
-        if (geral.via !== "jina") log(`[YouTube] o YouTube não responde a este servidor (${e.message}); passo a ler pelo Jina Reader`);
-        geral.via = "jina";
+        if (geral.via === "direto") log(`[YouTube] o YouTube não responde a este servidor (${e.message}); passo a ler pelas pontes`);
+        geral.via = "pontes";
         geral.diretoDeNovo = Date.now() + 3600e3;
-        return await pedirJina(url);
+        return await pedirPontes(url);
       }
     } finally {
       geral.emCurso = null;
@@ -307,7 +333,7 @@ export function createYoutube({ log = () => {} } = {}) {
       }
       if (i === canais.length - 1) { geral.voltas++; geral.ultimaVolta = new Date().toISOString(); }
       geral.batida = Date.now();
-      await sleep(geral.via === "jina" || VIA === "jina" ? GAP_JINA : GAP);
+      await sleep(GAP_PONTE[geral.via] || GAP);
     }
   }
 
