@@ -32,3 +32,24 @@ jobs:
           curl -sf http://localhost:3001/api/distritais/youtube | head -c 400; echo
           curl -sf http://localhost:3001/api/pt/aovivo | head -c 200; echo
           docker inspect -f '{{.State.Running}}' var | grep -q true || (echo "o servidor parou"; exit 1)
+  # nos ramos de trabalho: o servidor corre 3 minutos e mostra o que leu dos canais de YouTube das associações
+  youtube:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: canais de YouTube
+        env:
+          DISTRITAIS: "0"
+          YOUTUBE_SEGUNDOS: "3"
+        run: |
+          node server/index.js > servidor.log 2>&1 &
+          sleep 150
+          grep "YouTube" servidor.log | head -60
+          curl -s http://localhost:3001/api/distritais/youtube | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log("pedidos",j.pedidos,"erros",j.erros,"ultimoErro",JSON.stringify(j.ultimoErro));for(const c of j.canais)console.log(c.id.padEnd(20),String(c.via).padEnd(16),"direto",c.emDireto,"agendados",c.agendados,"|",c.nomeDoCanal||"","|",c.erro||"")})'
+          curl -s http://localhost:3001/api/distritais/diretos | head -c 3000; echo
