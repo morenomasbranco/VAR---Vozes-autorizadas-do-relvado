@@ -60,21 +60,31 @@ test("YouTube: o separador «Diretos» (/streams) dá as transmissões a decorre
       item({ videoId: "Agendado001", title: { runs: [{ text: "Lusitano FCV x Penalva" }] }, upcomingEventData: { startTime: "1791640800" }, thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "UPCOMING" } }] }),
       item({ videoId: "Antigo00001", title: { runs: [{ text: "Jogo da semana passada" }] }, thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "DEFAULT" } }] }),
       { richItemRenderer: { content: { lockupViewModel: lockup } } },
+      { richItemRenderer: { content: { lockupViewModel: { ...lockup, contentId: "Brevemente1", metadata: { lockupMetadataViewModel: { title: { content: "Lusitano x Penalva" } } }, contentImage: { thumbnailViewModel: { overlays: [{ thumbnailOverlayBadgeViewModel: { thumbnailBadges: [{ thumbnailBadgeViewModel: { text: "Brevemente", badgeStyle: "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT" } }] } }] } } } } } },
     ] } } } }] } },
   };
   const html = `<html><script>var ytInitialData = ${JSON.stringify(dados)};</script></html>`;
   const st = lerStreams(html);
   assert.equal(st.canal, "AF Viseu TV");
-  assert.equal(st.vistos, 4);
-  assert.deepEqual(st.lista.map((d) => d.videoId), ["LiveLiveLiv", "Agendado001", "Lockup00001"]);
+  assert.equal(st.vistos, 5);
+  assert.deepEqual(st.lista.map((d) => d.videoId), ["LiveLiveLiv", "Agendado001", "Lockup00001", "Brevemente1"]);
+  // o formato novo marca os agendados com «Brevemente» (a hora vem depois da página do vídeo)
+  assert.equal(st.lista[3].marcada, true); assert.equal(st.lista[3].aoVivo, false);
   const [vivo, agendado, novo] = st.lista;
   assert.equal(vivo.aoVivo, true); assert.equal(vivo.espetadores, 143); assert.equal(vivo.titulo, "Vilamaiorense x Santacruzense");
   assert.equal(agendado.aoVivo, false); assert.equal(agendado.marcada, true); assert.equal(agendado.inicio, 1791640800000);
   assert.equal(novo.aoVivo, true); assert.equal(novo.titulo, "Tondela B x Mangualde");
   // um canal sem nada agendado nem em direto: lista vazia; uma página sem os dados: null (usa-se a «/live»)
-  assert.deepEqual(lerStreams(html.replace(/BADGE_STYLE_TYPE_LIVE_NOW|THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE|AO VIVO|UPCOMING|upcomingEventData/g, "nada").replace(/"style":"LIVE"/g, '"style":"DEFAULT"')).lista, []);
+  assert.deepEqual(lerStreams(html.replace(/BADGE_STYLE_TYPE_LIVE_NOW|THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE|AO VIVO|UPCOMING|upcomingEventData|Brevemente/g, "nada").replace(/"style":"LIVE"/g, '"style":"DEFAULT"')).lista, []);
   assert.equal(lerStreams("<html>nada</html>"), null);
   // os canais da AF Viseu e da AF Porto já vêm certos
   assert.equal(canaisBase().find((c) => c.id === "af-viseu").canal, "@AFViseuTV");
   assert.equal(canaisBase().find((c) => c.id === "af-porto").canal, "@associacaodefuteboldoporto");
+});
+
+test("YouTube: a hora de um agendado lê-se na página do vídeo", async () => {
+  const { horaMarcada } = await import("../server/pt/youtube.js");
+  assert.equal(horaMarcada('..."liveBroadcastDetails":{"isLiveNow":false,"startTimestamp":"2026-10-11T14:00:00+00:00"}...'), Date.parse("2026-10-11T14:00:00Z"));
+  assert.equal(horaMarcada('..."upcomingEventData":{"scheduledStartTime":"1791640800"}...'), 1791640800000);
+  assert.equal(horaMarcada("nada"), null);
 });

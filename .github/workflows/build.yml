@@ -1,0 +1,57 @@
+# Compila o site e corre os testes a cada envio, como o Northflank faz (npm ci, vite build e a imagem Docker),
+# para um erro de compilação aparecer aqui antes de chegar ao site.
+name: build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t var .
+      # o servidor tem de arrancar e responder (o site e a API), como no Northflank
+      - name: arranque
+        run: |
+          docker run -d --name var -p 3001:3001 var
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3001/ && break; sleep 2; done
+          docker logs var 2>&1 | tail -40
+          curl -sf http://localhost:3001/ | grep -qi "<div id=\"root\"" || (echo "o site não respondeu"; exit 1)
+          curl -sf http://localhost:3001/api/distritais/youtube | head -c 400; echo
+          curl -sf http://localhost:3001/api/pt/aovivo | head -c 200; echo
+          docker inspect -f '{{.State.Running}}' var | grep -q true || (echo "o servidor parou"; exit 1)
+  # nos ramos de trabalho: o servidor corre 3 minutos e mostra o que leu dos canais de YouTube das associações
+  youtube:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: sonda (canais que estão sempre em direto ou com transmissões agendadas)
+        run: node scripts/sonda-youtube.js @SkyNews @NASASpaceflight @SpaceflightNow @NASA @Canal11Oficial @FPF.Oficial @afleiriaoficial @AFViseuTV @associacaodefuteboldoporto
+      - name: canais de YouTube
+        env:
+          DISTRITAIS: "0"
+          YOUTUBE_SEGUNDOS: "3"
+        run: |
+          node server/index.js > servidor.log 2>&1 &
+          sleep 150
+          grep "YouTube" servidor.log | head -60
+          curl -s http://localhost:3001/api/distritais/youtube | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log("pedidos",j.pedidos,"erros",j.erros,"ultimoErro",JSON.stringify(j.ultimoErro));for(const c of j.canais)console.log(c.id.padEnd(20),String(c.via).padEnd(16),"direto",c.emDireto,"agendados",c.agendados,"|",c.nomeDoCanal||"","|",c.erro||"")})'
+          curl -s http://localhost:3001/api/distritais/diretos | head -c 3000; echo

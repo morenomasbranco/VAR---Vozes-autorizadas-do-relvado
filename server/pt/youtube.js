@@ -134,7 +134,7 @@ export function lerStreams(html) {
       const tudo = JSON.stringify(l);
       const aoVivo = /BADGE_STYLE_LIVE|"text":"(LIVE|AO VIVO|EM DIRETO|DIRETO)"/i.test(tudo);
       const inicio = +(tudo.match(/"startTime":"(\d{9,11})"/)?.[1] || 0) * 1000 || null;
-      const marcada = !aoVivo && (!!inicio || /UPCOMING|"text":"(Upcoming|Agendad[oa]|Em breve|Estreia)/i.test(tudo));
+      const marcada = !aoVivo && (!!inicio || /UPCOMING|SCHEDULED|"text":"(Brevemente|Em breve|Coming soon|Upcoming|Scheduled|Agendad[oa]|Estreia|Premieres?|Pr[oó]ximamente)|Notify me|Notificar-me|Receber notifica/i.test(tudo));
       if (aoVivo || marcada) {
         juntar({ videoId: l.contentId, titulo: textoDe(l.metadata?.lockupMetadataViewModel?.title), aoVivo, marcada, inicio, espetadores: aoVivo ? +(tudo.match(/"text":"([\d.,\s]+) (?:watching|a ver|espetadores)/i)?.[1] || "").replace(/\D/g, "") || null : null });
       }
@@ -148,6 +148,12 @@ export function lerStreams(html) {
     imagem: `https://i.ytimg.com/vi/${d.videoId}/${d.aoVivo ? "hqdefault_live" : "hqdefault"}.jpg`,
   }));
   return { canal, lista, vistos };
+}
+
+// a hora de início de uma transmissão agendada, na página do vídeo
+export function horaMarcada(html) {
+  const t = String(html || "");
+  return +(t.match(/"scheduledStartTime":"(\d{9,11})"/)?.[1] || 0) * 1000 || Date.parse(t.match(/"startTimestamp":"([^"]+)"/)?.[1] || "") || null;
 }
 
 // pesquisa de canais no YouTube: [{ id, titulo }] pela ordem dos resultados
@@ -174,6 +180,7 @@ export function createYoutube({ log = () => {} } = {}) {
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(guardado)); } catch { /* */ } };
   const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, diretos: [], via: null }]));
   const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null };
+  const horas = new Map(); // videoId → hora de início de um agendado
 
   async function pedir(url) {
     geral.pedidos++;
@@ -219,6 +226,15 @@ export function createYoutube({ log = () => {} } = {}) {
             const d = lerLive(await pedir(`${base}/live`));
             lista = d ? [d] : [];
             e.via = "live";
+          }
+          // a lista nova do YouTube não traz a hora dos agendados: lê-se na página do vídeo (uma vez por vídeo)
+          for (const d of lista) {
+            if (!d.marcada || d.inicio) continue;
+            if (!horas.has(d.videoId)) {
+              try { horas.set(d.videoId, horaMarcada(await pedir(`https://www.youtube.com/watch?v=${d.videoId}`))); } catch { horas.set(d.videoId, null); }
+              if (horas.size > 500) horas.delete(horas.keys().next().value);
+            }
+            d.inicio = horas.get(d.videoId) || null;
           }
           const nomeCanal = st?.canal || guardado[c.id]?.titulo || c.nome;
           for (const d of lista) {
