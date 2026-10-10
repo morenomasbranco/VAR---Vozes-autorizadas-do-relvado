@@ -12,6 +12,7 @@
 import fs from "node:fs";
 import { sleep, norm } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
+import { buscarPor } from "../ponte.js";
 
 const FICHEIRO = new URL("../../data/youtube-canais.json", import.meta.url);
 const CONFIG = new URL("../../youtube.json", import.meta.url);
@@ -179,27 +180,65 @@ export function createYoutube({ log = () => {} } = {}) {
   try { guardado = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { /* primeira vez */ }
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(guardado)); } catch { /* */ } };
   const estado = Object.fromEntries(canais.map((c) => [c.id, { ultimo: null, erro: null, diretos: [], via: null }]));
-  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null, emCurso: null, voltas: 0, ultimaVolta: null };
+  const geral = { pedidos: 0, erros: 0, pausaAte: 0, ultimoErro: null, emCurso: null, voltas: 0, ultimaVolta: null, via: "direto", falhasDiretas: 0, diretoDeNovo: 0, peloJina: 0 };
   const horas = new Map(); // videoId → hora de início de um agendado
 
-  // cada pedido tem um limite rígido (a ligação, a resposta e o corpo): um pedido pendurado não pode parar o ciclo
-  async function pedir(url, limite = 25000) {
-    geral.pedidos++;
+  // Cada pedido tem um limite rígido (a ligação, a resposta e o corpo): um pedido pendurado não pode parar o ciclo.
+  // O YouTube às vezes não responde aos servidores de alojamento (os pedidos ficam pendurados): ao fim de duas falhas
+  // seguidas sem resposta, os pedidos passam a ir pelo Jina Reader (r.jina.ai, gratuito, sem chave), que abre a página
+  // nos servidores deles, e de hora a hora volta-se a experimentar o caminho direto. YOUTUBE_VIA=direto ou =jina fixa um.
+  const VIA = process.env.YOUTUBE_VIA || "auto";
+  const GAP_JINA = Math.max(GAP, (Number(process.env.YOUTUBE_JINA_SEGUNDOS) || 8) * 1000);
+  const comPrazo = (promessa, limite, msg) => {
+    let t;
+    return Promise.race([promessa, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), limite); })]).finally(() => clearTimeout(t));
+  };
+  async function pedirDireto(url, limite) {
     const ctl = new AbortController();
-    const prazo = new Promise((_, rej) => { ctl.signal.addEventListener("abort", () => rej(new Error(`o YouTube não respondeu em ${limite / 1000} s`))); });
     const t = setTimeout(() => ctl.abort(), limite);
-    geral.emCurso = { url, desde: new Date().toISOString() };
     try {
-      return await Promise.race([prazo, (async () => {
+      return await comPrazo((async () => {
         const r = await fetch(url, { headers: CABECALHOS, redirect: "follow", signal: ctl.signal });
         if (r.status === 429) { geral.pausaAte = Date.now() + 30 * 60e3; throw Object.assign(new Error("o YouTube pediu uma pausa (429)"), { status: 429 }); }
         if (!r.ok) throw Object.assign(new Error(`o YouTube respondeu ${r.status}`), { status: r.status });
         const html = await r.text();
         if (/consent\.youtube\.com|before you continue to youtube|antes de continuar para o youtube/i.test(r.url + html.slice(0, 3000))) throw new Error("o YouTube mostrou a página de consentimento de cookies");
         return html;
-      })()]);
+      })(), limite, `o YouTube não respondeu em ${limite / 1000} s`);
+    } finally { clearTimeout(t); }
+  }
+  async function pedirJina(url) {
+    geral.peloJina++;
+    let r;
+    // o Jina tem um limite por minuto (partilhado com as outras leituras): espera-se pela vez, em vez de falhar
+    for (let i = 0; ; i++) {
+      try { r = await comPrazo(buscarPor("jina", url, { signal: AbortSignal.timeout(40000) }), 45000, "o Jina não respondeu em 45 s"); break; } catch (e) {
+        if (!e.semVia || i >= 4) throw e;
+        await sleep(15000);
+      }
+    }
+    if (!r.ok) throw Object.assign(new Error(`pelo Jina, o YouTube respondeu ${r.status}`), { status: r.status });
+    return r.text();
+  }
+  async function pedir(url, limite = 25000) {
+    geral.pedidos++;
+    geral.emCurso = { url, via: geral.via, desde: new Date().toISOString() };
+    try {
+      if (VIA === "jina" || (VIA === "auto" && geral.via === "jina" && Date.now() < geral.diretoDeNovo)) return await pedirJina(url);
+      try {
+        const html = await pedirDireto(url, limite);
+        geral.falhasDiretas = 0;
+        if (geral.via !== "direto") { geral.via = "direto"; log("[YouTube] o caminho direto voltou a funcionar"); }
+        return html;
+      } catch (e) {
+        if (e.status || VIA === "direto") throw e; // o YouTube respondeu (404, 429…): não é falta de ligação
+        if (++geral.falhasDiretas < 2) throw e;
+        if (geral.via !== "jina") log(`[YouTube] o YouTube não responde a este servidor (${e.message}); passo a ler pelo Jina Reader`);
+        geral.via = "jina";
+        geral.diretoDeNovo = Date.now() + 3600e3;
+        return await pedirJina(url);
+      }
     } finally {
-      clearTimeout(t);
       geral.emCurso = null;
     }
   }
@@ -242,11 +281,13 @@ export function createYoutube({ log = () => {} } = {}) {
           // a lista nova do YouTube não traz a hora dos agendados: lê-se na página do vídeo (uma vez por vídeo)
           for (const d of lista) {
             if (!d.marcada || d.inicio) continue;
-            if (!horas.has(d.videoId)) {
-              try { horas.set(d.videoId, horaMarcada(await pedir(`https://www.youtube.com/watch?v=${d.videoId}`))); } catch { horas.set(d.videoId, null); }
+            // (uma leitura que falhou volta a ser tentada na volta seguinte; uma página sem hora, só daqui a 1 h)
+            const h = horas.get(d.videoId);
+            if (!h || (!h.inicio && Date.now() - h.ts > 3600e3)) {
+              try { horas.set(d.videoId, { inicio: horaMarcada(await pedir(`https://www.youtube.com/watch?v=${d.videoId}`)), ts: Date.now() }); } catch { /* fica para a próxima volta */ }
               if (horas.size > 500) horas.delete(horas.keys().next().value);
             }
-            d.inicio = horas.get(d.videoId) || null;
+            d.inicio = horas.get(d.videoId)?.inicio || null;
           }
           const nomeCanal = st?.canal || guardado[c.id]?.titulo || c.nome;
           for (const d of lista) {
@@ -266,7 +307,7 @@ export function createYoutube({ log = () => {} } = {}) {
       }
       if (i === canais.length - 1) { geral.voltas++; geral.ultimaVolta = new Date().toISOString(); }
       geral.batida = Date.now();
-      await sleep(GAP);
+      await sleep(geral.via === "jina" || VIA === "jina" ? GAP_JINA : GAP);
     }
   }
 

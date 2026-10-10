@@ -49,6 +49,9 @@ jobs:
         env:
           DISTRITAIS: "0"
           YOUTUBE_SEGUNDOS: "3"
+          # o caminho que o servidor usa quando o YouTube não lhe responde (como no Northflank)
+          YOUTUBE_VIA: jina
+          YOUTUBE_JINA_SEGUNDOS: "6"
         run: |
           node server/index.js > servidor.log 2>&1 &
           sleep 150
