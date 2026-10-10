@@ -17,6 +17,7 @@ import { ASSOCIACOES } from "./catalogo.js";
 import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
 import { buscar } from "../ponte.js";
 import { aoLigarRetransmissor, retransmissorLigado } from "../retransmissor.js";
+import { grafoAtivo, grafoLivre, descobrir, postsDoGrafo, renovarChave, estadoGrafo, POR_HORA } from "./instagram-grafo.js";
 
 const FICHEIRO = new URL("../../data/pt-distritais.json", import.meta.url);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -209,7 +210,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
   async function via(nome, ler, gap) {
     const v = estado.vias[nome];
     while (!parar) {
-      if (nome === "instagram" && Date.now() < v.pausaAte) { await sleep(Math.min(60e3, v.pausaAte - Date.now())); continue; }
+      if (v.pausaAte && Date.now() < v.pausaAte) { await sleep(Math.min(60e3, v.pausaAte - Date.now())); continue; }
       const c = proximo();
       if (!c) { await sleep(30e3); continue; }
       ocupados.add(c.instagram);
@@ -222,7 +223,8 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
         v.ultimoOk = Date.now();
       } catch (e) {
         v.erros++;
-        if (nome === "instagram" && ([401, 403, 429].includes(e.status) || (e.status >= 300 && e.status < 400))) {
+        if (e.pausa) { v.pausaAte = Date.now() + e.pausa; v.ultimoErro = e.message; } // (API oficial: limite, chave, permissão)
+        else if (nome === "instagram" && ([401, 403, 429].includes(e.status) || (e.status >= 300 && e.status < 400))) {
           v.recusas = (v.recusas || 0) + 1;
           v.pausaAte = Date.now() + Math.min(240, 15 * 2 ** (v.recusas - 1)) * 60e3; // 15, 30, 60, 120, 240 min
           v.ultimoErro = e.message;
@@ -271,9 +273,32 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     for (const f of ANONIMOS) f.castigoAte = 0;
   });
 
+  // Instagram pela API oficial da Meta (Business Discovery): com IG_GRAPH_TOKEN e IG_GRAPH_USER_ID, é a única via do
+  // Instagram (sem bloqueios nem contas em risco). As contas que não são profissionais não se leem por aqui: ficam
+  // marcadas e voltam a ser experimentadas uma vez por semana (podem passar a profissionais).
+  estado.vias.grafo = { ok: 0, erros: 0, pausaAte: 0, naoProfissionais: 0, ativo: grafoAtivo() };
+  async function lerGrafo(clube) {
+    if (!grafoLivre()) throw Object.assign(new Error("limite de pedidos por hora da API oficial"), { pausa: 60e3 });
+    try {
+      return { posts: postsDoGrafo(await descobrir(clube.instagram), clube) };
+    } catch (e) {
+      if (e.tipo === "pessoal") { estado.vias.grafo.naoProfissionais++; return { naoExiste: true }; }
+      if (e.tipo === "limite") throw Object.assign(e, { pausa: 15 * 60e3 });
+      if (e.tipo === "chave" || e.tipo === "permissao") throw Object.assign(e, { pausa: 60 * 60e3 });
+      throw e;
+    }
+  }
+
   async function correr() {
-    log(`[Distritais] ${lista.length} clubes das associações com Instagram; pelo Instagram (um a cada ${GAP_IG / 1000} s) e pelos visualizadores anónimos (um a cada ${GAP_ANON / 1000} s)`);
-    const vias = [via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)];
+    if (grafoAtivo()) {
+      const gap = Math.ceil(3600e3 / POR_HORA());
+      log(`[Distritais] Instagram pela API oficial da Meta: ${lista.length} clubes, um a cada ${Math.round(gap / 1000)} s (só as contas profissionais)`);
+      renovarChave({ log });
+      setInterval(() => renovarChave({ log }), 24 * 3600e3).unref();
+    } else log(`[Distritais] ${lista.length} clubes das associações com Instagram; pelo Instagram (um a cada ${GAP_IG / 1000} s) e pelos visualizadores anónimos (um a cada ${GAP_ANON / 1000} s)`);
+    const vias = grafoAtivo()
+      ? [via("grafo", lerGrafo, Math.ceil(3600e3 / POR_HORA()))]
+      : [via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)];
     if (process.env.DISTRITAIS_FACEBOOK !== "0" && listaFb.length) {
       log(`[Distritais] ${listaFb.length} páginas de Facebook dos clubes, uma a cada ${GAP_FB / 1000} s`);
       vias.push(viaFacebook());
@@ -343,6 +368,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
         lidosTotal: Object.values(dados.lido).filter((l) => l.ok || l.naoExiste).length + Object.values(dados.fb.lido).filter((l) => l.ok).length,
         lidosInstagram: Object.values(dados.lido).filter((l) => l.ok).length, lidosFacebook: Object.values(dados.fb.lido).filter((l) => l.ok).length,
         paginasInstagram: lista.length, paginasFacebook: listaFb.length, casa: retransmissorLigado(),
+        instagramApi: grafoAtivo() ? { ...estado.vias.grafo, pedidos: estadoGrafo.pedidos, ultimoErro: estadoGrafo.ultimoErro, usoMeta: estadoGrafo.usoMeta, chaveExpira: estadoGrafo.expira } : null,
       },
     };
   }
