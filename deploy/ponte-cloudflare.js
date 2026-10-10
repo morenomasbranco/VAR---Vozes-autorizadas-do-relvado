@@ -12,6 +12,7 @@ const SITES = [
   "www.instagram.com", "i.instagram.com", "www.facebook.com", "m.facebook.com",
   "imginn.com", "www.picnob.com", "www.pixwox.com", "anonyig.com", "storiesig.info", "fastdl.app",
   "www.ligaportugal.pt", "www.zerozero.pt",
+  "www.youtube.com", // os diretos e os agendados dos canais das associações (secção Distritais)
 ];
 const permitido = (h) => SITES.some((s) => (s.startsWith(".") ? h === s.slice(1) || h.endsWith(s) : h === s));
 

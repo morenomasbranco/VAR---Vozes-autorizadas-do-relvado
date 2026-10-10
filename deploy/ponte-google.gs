@@ -12,7 +12,8 @@ var SITES = [
   ".fpf.pt", "api.sofascore.com", "www.sofascore.com",
   "www.instagram.com", "i.instagram.com", "www.facebook.com", "m.facebook.com",
   "imginn.com", "www.picnob.com", "www.pixwox.com", "anonyig.com", "storiesig.info", "fastdl.app",
-  "www.ligaportugal.pt", "www.zerozero.pt"
+  "www.ligaportugal.pt", "www.zerozero.pt",
+  "www.youtube.com"
 ];
 
 function hostDe(u) { var m = String(u).match(/^https?:\/\/([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ""; }
