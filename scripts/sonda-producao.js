@@ -1,5 +1,5 @@
 // Sonda do site em produção: as fontes oficiais de Portugal (FPF e Liga), as notícias que estão na coluna «Portugal»
-// e as transmissões do YouTube das Distritais. Também experimenta o Google News da FPF diretamente.
+// e as transmissões do YouTube das Distritais, o Sen7ir e os sinónimos do Glossário. Também experimenta o Google News da FPF diretamente.
 // Uso: SITE=https://o-teu-site node scripts/sonda-producao.js
 const SITE = (process.env.SITE || "http://localhost:3001").replace(/\/$/, "");
 const j = async (p) => { const r = await fetch(SITE + p, { signal: AbortSignal.timeout(30000) }); return r.json(); };
@@ -91,3 +91,15 @@ try {
     }
   }
 } catch (e) { linha("Sen7ir: erro", e.message); }
+
+// Glossário: os sites de sinónimos e antónimos lidos daqui (com o leitor do servidor) e a resposta do site em produção
+try {
+  const { createGlossario } = await import("../server/glossario.js");
+  const g = createGlossario();
+  for (const [p, tipo] of [["vitória", "sinonimos"], ["vitória", "antonimos"], ["estádio", "sinonimos"], ["traquejo", "sinonimos"]]) {
+    const r = await g.procurar(p, tipo).catch((e) => ({ erro: e.message }));
+    linha(`== Glossário (${tipo} de ${p}) ==`, r.erro || r.sentidos.map((s) => `${s.sentido || "—"}: ${s.palavras.slice(0, 8).join(", ")}`).join(" | ") || "(nada)");
+  }
+  const prod = await fetch(`${SITE}/api/glossario/palavra?p=vit%C3%B3ria&tipo=sinonimos`, { signal: AbortSignal.timeout(30000) });
+  linha("== Glossário em produção ==", prod.status, (await prod.text()).slice(0, 400));
+} catch (e) { linha("Glossário: erro", e.message); }

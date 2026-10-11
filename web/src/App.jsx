@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import Portugal, { PT_CSS } from "./Portugal.jsx";
 import Distritais, { DIST_CSS } from "./Distritais.jsx";
+// o glossário só se carrega quando se abre a secção
+const Glossario = lazy(() => import("./Glossario.jsx"));
 import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2, X as Fechar } from "lucide-react";
 
 /* ───────── Fontes (contas do X) ───────── */
@@ -25,6 +27,7 @@ const CATS = [
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
   { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
   { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
+  { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
@@ -68,7 +71,7 @@ const semAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u03
 const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
 
 const inSection = (it, s) => {
-  if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais") return false;
+  if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais" || s === "glossario") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
@@ -2595,6 +2598,8 @@ export default function App() {
               })()
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
+            ) : section === "glossario" ? (
+              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} /></Suspense>
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "resultados" && resVista === "portugal" ? (

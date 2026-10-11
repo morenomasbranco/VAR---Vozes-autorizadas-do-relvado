@@ -25,6 +25,7 @@ import { startStreamain } from "./sources/streamain.js";
 import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
+import { createGlossario } from "./glossario.js";
 import { createPortugal } from "./pt/index.js";
 import { ligarRetransmissor, resumoRetransmissor } from "./retransmissor.js";
 import { estadoEncaminhamento, testarCaminhos } from "./ponte.js";
@@ -466,6 +467,17 @@ app.get("/api/capas/img/:id", async (req, res) => {
 });
 app.get("/api/efemerides", (req, res) => res.json(efemerides.para(String(req.query.lang || "pt"))));
 app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
+// Glossário: sinónimos e antónimos de uma palavra que o glossário do site não tem (?p=palavra&tipo=sinonimos|antonimos)
+const glossario = createGlossario();
+app.get("/api/glossario/palavra", async (req, res) => {
+  try {
+    const tipo = req.query.tipo === "antonimos" ? "antonimos" : "sinonimos";
+    res.set("Cache-Control", "public, max-age=86400").json(await glossario.procurar(String(req.query.p || ""), tipo));
+  } catch (e) {
+    res.status(e.status || 502).json({ erro: e.message });
+  }
+});
+app.get("/api/glossario/estado", (req, res) => res.json(glossario.estado()));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));
