@@ -1,0 +1,17 @@
+name: sonda-sen7ir
+on: { push: { branches: [sonda-sen7ir] } }
+jobs:
+  s:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          for u in https://www.sen7ir.pt/t/desporto/ https://www.sen7ir.pt/feed/ https://www.sen7ir.pt/t/desporto/feed/ https://www.sen7ir.pt/rss https://www.sen7ir.pt/feed https://www.sen7ir.pt/rss.xml https://www.sen7ir.pt/sitemap.xml https://www.sen7ir.pt/robots.txt; do
+            echo "=== $u"; curl -sL -A "$UA" -o /tmp/p -w "%{http_code} %{content_type} %{size_download}\n" "$u"; head -c 600 /tmp/p | tr '\n' ' '; echo
+            grep -oiE '<link[^>]+(rss|atom)[^>]*>' /tmp/p | head -5
+          done
+          echo "=== links de artigos na página de desporto"
+          curl -sL -A "$UA" https://www.sen7ir.pt/t/desporto/ > /tmp/d
+          grep -oE 'href="[^"]+"' /tmp/d | sort -u | grep -v -E '\.(css|js|png|jpg|svg|ico|woff)' | head -80
+          echo "=== títulos"; grep -oE '<h[1-4][^>]*>[^<]{10,200}' /tmp/d | head -30
+          echo "=== datas"; grep -oE '(datetime|data-date|date)="[^"]+"' /tmp/d | head -10
