@@ -8,13 +8,11 @@
 //     12 s (DISTRITAIS_SEGUNDOS), e se o Instagram recusar, pela página pública do perfil num visualizador anónimo;
 //   - os perfis que a recolha dos jogos já leu (clubes a jogar) entram aqui também, sem pedido a mais.
 // As imagens do Instagram não abrem noutros sites, por isso passam pelo servidor (/api/distritais/img).
-// As páginas de Facebook dos clubes são lidas ao mesmo tempo, pelo plugin público de página do Facebook (facebook.js),
-// e os posts juntam-se na coluna da associação.
+// Só o Instagram: a leitura das páginas de Facebook dos clubes foi retirada.
 // Tudo fica em data/pt-distritais.json; cada post novo segue para o site no mesmo instante (evento «distrital»).
 import fs from "node:fs";
 import { sleep } from "../util.js";
 import { ASSOCIACOES } from "./catalogo.js";
-import { paginaFacebook, lerPaginaFacebook } from "./facebook.js";
 import { buscar } from "../ponte.js";
 import { aoLigarRetransmissor, retransmissorLigado } from "../retransmissor.js";
 import { grafoAtivo, grafoLivre, descobrir, postsDoGrafo, renovarChave, estadoGrafo, POR_HORA } from "./instagram-grafo.js";
@@ -100,10 +98,7 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); sujo = false; } catch (e) { log(`[Distritais] não consegui gravar: ${e.message}`); }
   }, 30e3).unref();
 
-  // Facebook: as páginas dos clubes (chave: o nome da página ou o id do perfil)
-  const listaFb = clubes.clubes.filter((c) => c.facebook && c.org && c.org.startsWith("af-")).map((c) => ({ ...c, fb: paginaFacebook(c.facebook)?.chave })).filter((c) => c.fb);
-  const porFb = new Map(listaFb.map((c) => [c.fb, c]));
-  dados.fb = { posts: {}, lido: {}, ...(dados.fb || {}) };
+  delete dados.fb; // os posts de Facebook guardados antes (a leitura do Facebook foi retirada)
 
   // junta os posts lidos de um clube; os novos seguem para o site
   function juntar(handle, posts, opcoes = {}) {
@@ -234,42 +229,11 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       await sleep(gap);
     }
   }
-  // Facebook: uma página a cada 8 s (DISTRITAIS_FB_SEGUNDOS); se o Facebook recusar, pausa de meia hora
-  const GAP_FB = Math.max(2, Number(process.env.DISTRITAIS_FB_SEGUNDOS) || 8) * 1000;
-  estado.vias.facebook = { ok: 0, erros: 0, pausaAte: 0, paginas: listaFb.length, aLer: null };
-  async function viaFacebook() {
-    const v = estado.vias.facebook;
-    while (!parar) {
-      if (Date.now() < v.pausaAte) { await sleep(Math.min(60e3, v.pausaAte - Date.now())); continue; }
-      const c = proximoEm(listaFb, dados.fb.lido, (x) => x.fb);
-      if (!c) { await sleep(30e3); continue; }
-      ocupados.add(c.fb);
-      estado.pedidos++;
-      v.aLer = { pagina: c.fb, desde: Date.now() };
-      try {
-        const r = await comPrazo(lerPaginaFacebook(c));
-        juntarEm(dados.fb, c.fb, r.posts.map((p) => ({ ...p, handle: `fb:${c.fb}` })));
-        v.ok++;
-        sujo = true;
-      } catch (e) {
-        v.erros++;
-        v.ultimoErro = e.message;
-        if ([401, 403, 429].includes(e.status)) v.pausaAte = Date.now() + 30 * 60e3;
-        else {
-          const l = dados.fb.lido[c.fb] || {};
-          dados.fb.lido[c.fb] = { ...l, ts: l.ok ? Date.now() : Date.now() - CALMO_MS + 10 * 60e3, falhas: (l.falhas || 0) + 1, ok: l.ok };
-        }
-      } finally { ocupados.delete(c.fb); }
-      await sleep(GAP_FB);
-    }
-  }
-
-  // o retransmissor de casa ligou-se: as pausas que o Instagram e o Facebook impuseram ao servidor deixam de contar,
+  // o retransmissor de casa ligou-se: as pausas que o Instagram impôs ao servidor deixam de contar,
   // porque os pedidos passam a sair pela ligação de casa
   aoLigarRetransmissor(() => {
-    const ig = estado.vias.instagram, fb = estado.vias.facebook;
+    const ig = estado.vias.instagram;
     if (ig) { ig.pausaAte = 0; ig.recusas = 0; }
-    if (fb) fb.pausaAte = 0;
     for (const f of ANONIMOS) f.castigoAte = 0;
   });
 
@@ -299,10 +263,6 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     const vias = grafoAtivo()
       ? [via("grafo", lerGrafo, Math.ceil(3600e3 / POR_HORA()))]
       : [via("instagram", lerInstagram, GAP_IG), via("anonimo", lerAnonimo, GAP_ANON)];
-    if (process.env.DISTRITAIS_FACEBOOK !== "0" && listaFb.length) {
-      log(`[Distritais] ${listaFb.length} páginas de Facebook dos clubes, uma a cada ${GAP_FB / 1000} s`);
-      vias.push(viaFacebook());
-    }
     await Promise.all(vias);
   }
 
@@ -350,24 +310,19 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
       if (!c || (org && c.org !== org)) continue;
       for (const p of posts) (porOrg[c.org] ||= []).push(p);
     }
-    for (const [k, posts] of Object.entries(dados.fb.posts)) {
-      const c = porFb.get(k);
-      if (!c || (org && c.org !== org)) continue;
-      for (const p of posts) (porOrg[c.org] ||= []).push(p);
-    }
     for (const k of Object.keys(porOrg)) porOrg[k] = semRepetidos(porOrg[k]).slice(0, limite);
-    // clubes de cada associação com Instagram ou Facebook
-    const nomes = (o) => new Set([...lista, ...listaFb].filter((c) => c.org === o).map((c) => c.nome)).size;
+    // clubes de cada associação com Instagram
+    const nomes = (o) => new Set(lista.filter((c) => c.org === o).map((c) => c.nome)).size;
     return {
       // todas as associações: as que não têm clubes com redes também têm as notícias e os comunicados da associação
       orgs: ASSOCIACOES.filter((a) => !org || a.key === org).map((a) => ({ key: a.key, nome: a.nome, clubes: nomes(a.key) })),
       posts: porOrg,
       // só contam as páginas lidas de facto (as tentativas que falharam não)
       estado: {
-        ...estado, perfis: lista.length + listaFb.length,
-        lidosTotal: Object.values(dados.lido).filter((l) => l.ok || l.naoExiste).length + Object.values(dados.fb.lido).filter((l) => l.ok).length,
-        lidosInstagram: Object.values(dados.lido).filter((l) => l.ok).length, lidosFacebook: Object.values(dados.fb.lido).filter((l) => l.ok).length,
-        paginasInstagram: lista.length, paginasFacebook: listaFb.length, casa: retransmissorLigado(),
+        ...estado, perfis: lista.length,
+        lidosTotal: Object.values(dados.lido).filter((l) => l.ok || l.naoExiste).length,
+        lidosInstagram: Object.values(dados.lido).filter((l) => l.ok).length,
+        paginasInstagram: lista.length, casa: retransmissorLigado(),
         instagramApi: grafoAtivo() ? { ...estado.vias.grafo, pedidos: estadoGrafo.pedidos, ultimoErro: estadoGrafo.ultimoErro, usoMeta: estadoGrafo.usoMeta, chaveExpira: estadoGrafo.expira } : null,
       },
     };
@@ -377,7 +332,5 @@ export function createDistritais({ clubes, broadcast = () => {}, cookie = null, 
     start() { if (estado.ativo) correr().catch((e) => log(`[Distritais] ${e.message}`)); },
     parar() { parar = true; },
     juntar, deEdges, feed, imagem, paraRetransmissor, doRetransmissor, estado: () => estado,
-    // posts de Facebook que a recolha dos jogos já leu
-    deFacebook: (chave, posts) => (porFb.has(chave) ? juntarEm(dados.fb, chave, posts.map((p) => ({ ...p, handle: `fb:${chave}` }))) : 0),
   };
 }

@@ -189,7 +189,7 @@ A secção **Distritais** (ao lado de «Portugueses pelo mundo») tem uma coluna
 
 - **as notícias e os comunicados da própria associação** (os sites das associações, lidos como as outras fontes do `oficiais.json`; se um site não responder, passa a ser lido pelo Google News com `site:`);
 - **a imprensa que fala da associação**: uma pesquisa do Google News por associação («AF Braga», «Associação de Futebol de Braga», «distrital de Braga»), de 20 em 20 minutos, com o nome do jornal (`OFICIAIS_IMPRENSA=0` desliga);
-- **os posts mais recentes do Instagram e do Facebook dos clubes** (os do `pt/clubes.json`).
+- **os posts mais recentes do Instagram dos clubes** (os do `pt/clubes.json`).
 
 Por cima das colunas há duas faixas, à maneira do Feed:
 
@@ -198,7 +198,7 @@ Por cima das colunas há duas faixas, à maneira do Feed:
 
 As duas faixas estão divididas por associação e, nos nacionais, por campeonato (Liga 3, Campeonato de Portugal, Campeonato dos Açores): por cima delas há um botão para cada um que tenha jogos ou transmissões (com o número, e um ponto vermelho quando há algum em direto), e em «Todos» cada grupo leva o nome antes dos seus cartões, com os que estão em direto primeiro. As transmissões dos canais das associações ficam na associação; as da FPF e do Canal 11 vão para o campeonato que o título indicar. A escolha fica guardada no browser.
 
-As notícias e a imprensa chegam sempre, porque não dependem do Instagram nem do Facebook; os posts dos clubes dependem de estas redes não bloquearem o servidor (ver abaixo).
+As notícias e a imprensa chegam sempre, porque não dependem do Instagram; os posts dos clubes dependem de o Instagram não bloquear o servidor (ver abaixo).
 
 O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o servidor percorre os perfis devagar, um de cada vez (`server/pt/distritais.js`):
 
@@ -207,11 +207,11 @@ O Instagram não dá os posts novos de centenas de contas de uma vez, por isso o
 - o **retransmissor** de casa (`npm run instagram-relay`) também lê perfis para esta secção: pede ao site que clubes ler e devolve os posts (`RELAY_DISTRITAIS=0` desliga). É a forma mais fiável quando o Instagram bloqueia o servidor;
 - os perfis que a recolha dos jogos já leu (clubes a jogar) entram também, sem pedidos a mais.
 
-**Facebook.** As páginas de Facebook dos clubes (800 no `pt/clubes.json`) são lidas ao mesmo tempo, pelo plugin público de página do Facebook (a caixa que qualquer site pode pôr para mostrar a cronologia de uma página; `server/pt/facebook.js`), uma a cada 8 s (`DISTRITAIS_FB_SEGUNDOS`), sem conta. Se o Facebook passar a pedir sessão, `FB_COOKIE` (os cookies `c_user` e `xs` de uma conta qualquer) vai com o pedido; `DISTRITAIS_FACEBOOK=0` desliga. Quando o clube publica o mesmo post no Instagram e no Facebook (o mesmo clube, poucas horas de diferença, quase o mesmo texto), a coluna mostra um só, o primeiro a sair, com a ligação para o outro («também no Facebook»).
+**Facebook.** A leitura das páginas de Facebook dos clubes foi retirada: a secção Distritais usa só o Instagram (o Facebook não deixa ler as páginas sem sessão iniciada).
 
 **Instagram pela API oficial da Meta (a forma recomendada, grátis).** Com `IG_GRAPH_TOKEN` e `IG_GRAPH_USER_ID` (uma conta profissional de Instagram ligada a uma página de Facebook e uma app da Meta, passo a passo em `deploy/GUIA-INSTAGRAM-API.md`), os posts dos clubes são lidos pela Graph API («Business Discovery», `server/pt/instagram-grafo.js`): sem bloqueios a servidores e sem contas em risco. Só lê contas profissionais (Empresa ou Criador); as pessoais ficam marcadas e voltam a ser experimentadas uma vez por semana. O ritmo fica abaixo do limite da Meta (`IG_GRAPH_POR_HORA`, 150 por hora), e com `FB_APP_ID` e `FB_APP_SECRET` a chave é renovada sozinha antes dos 60 dias. Com a API oficial ligada, é a única via do Instagram nas Distritais. O teste está em `/api/distritais/teste-instagram-api?conta=fcporto`.
 
-O Instagram e o Facebook costumam recusar pedidos vindos de servidores de alojamento. Os pedidos passam pelas **pontes gratuitas** (ver acima), que saem por outros endereços; se o Instagram ou o Facebook recusarem também as pontes, a via que nunca falha é o retransmissor num telemóvel antigo ligado ao carregador (com ele ligado, as pausas que o Instagram e o Facebook tinham imposto ao servidor deixam de contar). A variável `IG_SESSIONID` (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) também ajuda.
+O Instagram costuma recusar pedidos vindos de servidores de alojamento. Os pedidos passam pelas **pontes gratuitas** (ver acima), que saem por outros endereços; se o Instagram recusar também as pontes, a via que nunca falha é o retransmissor num telemóvel antigo ligado ao carregador (com ele ligado, as pausas que o Instagram tinha imposto ao servidor deixam de contar). A variável `IG_SESSIONID` (a sessão de uma conta de Instagram qualquer, sem seguir ninguém) também ajuda. A forma recomendada é a API oficial (acima).
 
 As imagens passam pelo servidor (`/api/distritais/img`), porque o Instagram não as deixa abrir noutros sites. Os posts ficam em `data/pt-distritais.json` (os das últimas 3 semanas, `DISTRITAIS_DIAS`); cada post novo chega ao site no mesmo instante. `DISTRITAIS=0` desliga a secção.
 
@@ -261,7 +261,6 @@ Cada story ou post é uma **prova**, não uma ordem (`server/pt/stories/evidenci
 
 - **Stories e posts valem o mesmo, e conta o que chegar primeiro.** Muitos clubes, sobretudo nas distritais, dão os golos e o resultado em posts. Se o story chega primeiro, é ele que cria o golo (com o seu minuto) e o post do mesmo golo conta como confirmação; se o post chega primeiro, é ao contrário. O segundo só junta o que faltava: o nome do marcador ou o minuto escrito. Um clube que só publica posts tem os golos pelos posts.
 - **Posts durante o jogo**: leem-se desde o apito inicial, a cada 5 minutos (`IG_POSTS_SEGUNDOS`), e a cada 2 minutos nos clubes que já se viu atualizarem o jogo por post (`IG_POSTS_VIVO_SEGUNDOS`), até 10 clubes por volta (`IG_POSTS_POR_CICLO`) para não gastar os pedidos dos stories. Quando o clube edita a legenda do mesmo post («ATUALIZADO: 2-1»), cada versão conta como uma prova nova.
-- **Facebook nos jogos**: as páginas de Facebook dos clubes a jogar são lidas de 5 em 5 minutos (`FB_JOGOS_SEGUNDOS`, até 6 por minuto, `PT_FACEBOOK=0` desliga), e cada post conta como prova, como os do Instagram (com o OCR da imagem quando a legenda não traz o resultado). O mesmo golo dado pelo Instagram e pelo Facebook do mesmo clube conta uma vez.
 - **Post de resumo** («Resultado final 2-1 ⚽ Tiago Mendes 12', 80'»): completa os golos do clube com os marcadores e os minutos escritos, pela ordem; se não houve nada durante o jogo (ou só o resultado oficial), cria esses golos. O minuto de um golo que só aparece num post de fim de jogo, sem minuto escrito, fica desconhecido em vez de estimado pela hora do post.
 
 - O resultado só anda para a frente. Um story com um resultado anterior (publicado com atraso) fica como histórico; um que não bate certo fica «a confirmar» até haver outra prova.

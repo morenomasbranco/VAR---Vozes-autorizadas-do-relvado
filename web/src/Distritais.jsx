@@ -1,6 +1,5 @@
 // Secção «Distritais»: uma coluna por associação de futebol, à maneira da «Ronda pela atualidade», com as notícias e
-// os comunicados da própria associação, a imprensa que fala dela e os posts mais recentes dos clubes (Instagram e
-// Facebook). Os dados vêm de /api/distritais; o que é novo chega pelos eventos «distrital» (posts) e «oficial»
+// os comunicados da própria associação, a imprensa que fala dela e os posts mais recentes do Instagram dos clubes. Os dados vêm de /api/distritais; o que é novo chega pelos eventos «distrital» (posts) e «oficial»
 // (notícias, que o App passa como evento da janela «distrital-noticia»). As imagens passam pelo servidor.
 // Por cima das colunas, duas faixas à maneira do Feed: os jogos de hoje, das distritais à Liga 3 (/api/pt/aovivo), e
 // as transmissões em direto nos canais de YouTube das associações, do Canal 11 e da FPF (/api/distritais/diretos).
@@ -312,16 +311,13 @@ export default function Distritais({ API = "", now, query = "" }) {
   const vias = e.vias || {};
   const hora = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
   const ig = vias.instagram || {};
-  const fb = vias.facebook || null;
   const igPausa = agora < (ig.pausaAte || 0);
   const anonFalha = vias.anonimo && vias.anonimo.erros > 0 && !vias.anonimo.ok;
   const relayVivo = vias.retransmissor?.ultimo && agora - vias.retransmissor.ultimo < 10 * 60e3;
-  const fbPausa = fb && agora < (fb.pausaAte || 0);
-  const fbFalha = fb && fb.erros > 0 && !fb.ok;
-  // nada está a chegar: o Instagram recusa, os visualizadores falham, o Facebook também (ou não há) e não há retransmissor
+  // nada está a chegar: o Instagram recusa, os visualizadores falham e não há retransmissor
   const api = e.instagramApi || null; // Instagram pela API oficial da Meta
   const apiPausa = api && agora < (api.pausaAte || 0);
-  const bloqueado = !api && igPausa && anonFalha && !relayVivo && !e.casa && (!fb || fbPausa || fbFalha);
+  const bloqueado = !api && igPausa && anonFalha && !relayVivo && !e.casa;
   const total = Object.values(d.posts || {}).reduce((t, l) => t + l.length, 0);
   const totalNoticias = Object.values(d.noticias || {}).reduce((t, l) => t + l.length, 0);
   const porLer = (e.lidosTotal || 0) < (e.perfis || e.clubes || 0);
@@ -334,7 +330,7 @@ export default function Distritais({ API = "", now, query = "" }) {
         </div>
       </div>
       <p className="muted dnota">
-        Notícias e comunicados de cada associação, a imprensa que fala dela e os posts do Instagram e do Facebook dos clubes ({totalNoticias} notícias e comunicados).{" "}
+        Notícias e comunicados de cada associação, a imprensa que fala dela e os posts do Instagram dos clubes ({totalNoticias} notícias e comunicados).{" "}
         {porLer ? `A ler as páginas dos clubes: ${e.lidosTotal || 0} de ${e.perfis || e.clubes} já lidas, ${total} posts.` : `${e.perfis || e.clubes} páginas de clubes, relidas ao longo do dia.`}
       </p>
       <ul className="muted dvias">
@@ -350,14 +346,13 @@ export default function Distritais({ API = "", now, query = "" }) {
             {igPausa ? ` · o Instagram está a limitar os pedidos deste servidor (${ig.ultimoErro || "recusa"}); volta a tentar às ${hora(ig.pausaAte)}, mais devagar` : ig.ultimoOk ? " · a ler" : ""}
           </li>
         )}
-        {fb && <li>Facebook: {e.lidosFacebook ?? 0} de {e.paginasFacebook ?? fb.paginas} páginas lidas{fbPausa ? ` · o Facebook está a recusar os pedidos (${fb.ultimoErro || "recusa"}); volta a tentar às ${hora(fb.pausaAte)}` : fbFalha ? ` · ainda sem leituras certas (${fb.ultimoErro || "erro"})` : fb.ok ? " · a ler" : ""}</li>}
-        {e.casa && <li>Retransmissor de casa ligado: o Instagram e o Facebook dos clubes são lidos pela ligação de casa, em tempo real</li>}
+        {e.casa && <li>Retransmissor de casa ligado: o Instagram dos clubes é lido pela ligação de casa, em tempo real</li>}
         {relayVivo && <li>Retransmissor dos stories: {vias.retransmissor.ok} perfis recebidos</li>}
       </ul>
       {bloqueado && (
         <p className="ptwarn dnota">
           Neste momento nenhuma das vias está a trazer posts dos clubes (as notícias das associações e da imprensa continuam a chegar).{" "}
-          O Instagram e o Facebook recusam os servidores de alojamento. O servidor experimenta sozinho as pontes gratuitas configuradas (Google, Cloudflare, Netlify); se nenhuma passar, a via que nunca falha é um telemóvel antigo ligado ao carregador com o retransmissor (npm run retransmissor).
+          O Instagram recusa os servidores de alojamento. O servidor experimenta sozinho as pontes gratuitas configuradas (Google, Cloudflare, Netlify); se nenhuma passar, a via que nunca falha é um telemóvel antigo ligado ao carregador com o retransmissor (npm run retransmissor).
           {ig.comSessao ? "" : " Também ajuda juntar ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém)."}
         </p>
       )}

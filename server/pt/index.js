@@ -29,7 +29,6 @@ import { lerTexto } from "./stories/parser.js";
 import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
-import { paginaFacebook, lerPaginaFacebook, urlPlugin, lerPlugin } from "./facebook.js";
 import { buscar, buscarPor, motivo } from "../ponte.js";
 import { grafoAtivo, descobrir, postsDoGrafo, estadoGrafo } from "./instagram-grafo.js";
 import { createYoutube } from "./youtube.js";
@@ -153,7 +152,6 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const org = comp?.org;
     const ch = clubes.encontrar(j.casa, org), cf = clubes.encontrar(j.fora, org);
     j.igCasa = ch?.instagram || null; j.igFora = cf?.instagram || null;
-    j.fbCasa = ch?.facebook || null; j.fbFora = cf?.facebook || null;
     j.nomes = { h: nomesDe(j.casa, org), a: nomesDe(j.fora, org) };
   }
 
@@ -849,7 +847,6 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     })();
     distritais.start(); // DISTRITAIS=0 desliga
     youtube.start(); // YOUTUBE_DIRETOS=0 desliga
-    vigiarFacebook(); // PT_FACEBOOK=0 desliga
     ocr.verificar().then((o) => log(`[PT] OCR dos stories: ${o.tesseract ? `tesseract (${o.tesseract.linguas.join(", ") || "?"})` : "sem tesseract"}${o.ffmpeg ? " + ffmpeg" : ""}${process.env.GEMINI_API_KEY ? " + Gemini como reserva" : ""}`));
     // com sessão de uma conta qualquer (não precisa de seguir os clubes): leitura direta pelo Instagram;
     // sem conta nenhuma: visualizadores anónimos públicos (STORIES_ANONIMO=0 desliga)
@@ -860,57 +857,6 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     } else if (process.env.STORIES_ANONIMO !== "0") {
       ig = createAnonimo({ alvos, entregar: async (p) => evidencia(p), perfil: distritais.deEdges, log });
     } else log("[PT] recolha de stories desligada: os stories só entram pelo retransmissor (npm run instagram-relay), pelo formulário do site ou pela API");
-  }
-
-  // ───────── Facebook nos jogos ─────────
-  // As páginas de Facebook dos clubes que estão a jogar, pelo plugin público de página (facebook.js): de 5 em 5 min
-  // cada uma (FB_JOGOS_SEGUNDOS), até 6 por minuto. Cada post (e cada versão editada) é uma prova, como os do
-  // Instagram; o texto das imagens («RESULTADO FINAL 2-1») é lido pelo OCR quando a legenda não traz o resultado.
-  const FB_JOGOS_MS = Math.max(60, Number(process.env.FB_JOGOS_SEGUNDOS) || 300) * 1000;
-  estado.facebook = { ativo: process.env.PT_FACEBOOK !== "0", lidas: 0, provas: 0, erros: 0, ultimoErro: null, pausaAte: 0 };
-  async function vigiarFacebook() {
-    if (!estado.facebook.ativo) return;
-    const ultimo = new Map(); // página → última leitura
-    const versoes = new Map(); // post → versão do texto já entregue
-    for (;;) {
-      const agora = Date.now();
-      let feitos = 0;
-      if (agora >= estado.facebook.pausaAte) {
-        for (const j of jogosPerto(agora, 4)) {
-          const comp = st.comps[j.comp];
-          if (!comp || comp.externo || (j.oficial && j.estado === "final") || !j.inicio) continue;
-          if (agora < j.inicio - 15 * 60e3 || agora > j.inicio + DURACAO[comp.mod] + 60 * 60e3) continue;
-          for (const [fb, lado, nome] of [[j.fbCasa, "h", j.casa], [j.fbFora, "a", j.fora]]) {
-            const pg = paginaFacebook(fb);
-            if (!pg || feitos >= 6 || Date.now() - (ultimo.get(pg.chave) || 0) < FB_JOGOS_MS) continue;
-            ultimo.set(pg.chave, Date.now());
-            feitos++;
-            try {
-              const { posts } = await Promise.race([lerPaginaFacebook({ nome, org: comp.org, facebook: fb }), sleep(45e3).then(() => { throw new Error("sem resposta em 45 s"); })]);
-              estado.facebook.lidas++;
-              distritais.deFacebook(pg.chave, posts);
-              for (const p of posts.sort((a, b) => a.ts - b.ts)) {
-                if (p.ts < j.inicio - 60 * 60e3) continue;
-                const versao = hash(p.legenda || p.img || "");
-                const antes = versoes.get(p.id);
-                if (antes === versao) continue;
-                versoes.set(p.id, versao);
-                const texto = await ocr.lerStory({ url: /\d\s*[-–x]\s*\d/.test(p.legenda || "") ? null : p.img, alt: "", legenda: p.legenda || "" }).catch(() => p.legenda || "");
-                estado.facebook.provas++;
-                evidencia({ id: `${p.id}:${versao}`, tipo: "facebook", rede: "facebook", conta: `fb:${pg.chave}`, jogoId: j.id, lado, ts: antes ? Date.now() : p.ts, texto, url: p.url });
-              }
-            } catch (e) {
-              estado.facebook.erros++;
-              estado.facebook.ultimoErro = { pagina: pg.chave, erro: e.message, ts: Date.now() };
-              if ([401, 403, 429].includes(e.status)) { estado.facebook.pausaAte = Date.now() + 30 * 60e3; break; }
-            }
-          }
-          if (Date.now() < estado.facebook.pausaAte) break;
-        }
-      }
-      if (versoes.size > 20000) versoes.clear();
-      await sleep(60e3);
-    }
   }
 
   // ───────── API ─────────
@@ -1007,7 +953,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     app.get("/api/pt/jogo/:id", (req, res) => {
       const j = st.jogos[req.params.id];
       if (!j) return res.status(404).json({ erro: "jogo desconhecido" });
-      res.json({ ...compacto(j), fontes: j.fontes, relogio: j.relogio, nomes: j.nomes, fb: { h: j.fbCasa, a: j.fbFora } });
+      res.json({ ...compacto(j), fontes: j.fontes, relogio: j.relogio, nomes: j.nomes });
     });
     app.get("/api/pt/estado", (req, res) => res.json({
       ...estado, fpf: { ...fpf.estado, ativa: USAR_FPF() }, sofascore: sofa.estado, pesquisa: pesquisa.estado(), ocr: ocr.estado, instagram: ig.estado,
@@ -1028,8 +974,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
           espn: estado.espn, pesquisa: pesquisa.estado(), fpfAtiva: USAR_FPF(),
           amostraLista: curto(fpf.amostras.lista), amostraCompeticao: curto(fpf.amostras.competicao),
         },
-        distritais: { perfis: d.perfis, lidos: d.lidosTotal, instagram: d.lidosInstagram, facebook: d.lidosFacebook, pedidos: d.pedidos, ultimoErro: d.ultimoErro, vias: d.vias, comSessao: d.comSessao },
-        facebookJogos: estado.facebook,
+        distritais: { perfis: d.perfis, lidos: d.lidosTotal, instagram: d.lidosInstagram, pedidos: d.pedidos, ultimoErro: d.ultimoErro, vias: d.vias, comSessao: d.comSessao },
         ponte: { ligada: temPontes(), ...estadoPonte },
         retransmissor: resumoRetransmissor(),
         encaminhamento: estadoEncaminhamento(),
@@ -1042,34 +987,6 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     // com as notícias e os comunicados de cada associação e a imprensa sobre ela (server/sources/oficiais.js)
     app.get("/api/distritais", (req, res) => res.json({ ...distritais.feed({ org: req.query.org || null, limite: Math.min(Number(req.query.limite) || 40, 120) }), noticias: noticiasDistritais(req.query.org || null) }));
     // retransmissor de casa: pede perfis de clubes para ler e devolve os posts (chave PT_TOKEN)
-    // o que o Facebook devolve ao servidor para uma página (para perceber porque não aparecem posts)
-    let testeFb = 0;
-    app.get("/api/distritais/teste-facebook", async (req, res) => {
-      if (Date.now() - testeFb < 15e3) return res.status(429).json({ erro: "espera 15 segundos entre testes" });
-      testeFb = Date.now();
-      const pagina = paginaFacebook(String(req.query.pagina || "https://www.facebook.com/FCPorto/"));
-      if (!pagina) return res.status(400).json({ erro: "endereço de página de Facebook inválido" });
-      const url = urlPlugin(pagina.url);
-      try {
-        const via = req.query.via ? String(req.query.via) : null;
-        const r = await (via ? (u, o) => buscarPor(via, u, o) : buscar)(url, { headers: { "User-Agent": process.env.FB_UA || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.7", Referer: "https://www.google.com/" }, redirect: "follow", signal: AbortSignal.timeout(45000) });
-        const html = await r.text();
-        const texto = html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-        const posts = lerPlugin(html, { nome: "teste", org: "teste", facebook: pagina.url });
-        res.json({
-          pagina: pagina.url, via: via || "a primeira que respondeu", estado: r.status, enderecoFinal: r.url, tamanho: html.length,
-          titulo: html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || null,
-          horas: (html.match(/data-utime=/g) || []).length, pedeLogin: /login_form|\/login\/\?next=|checkpoint/i.test(html),
-          postsLidos: posts.length, posts: posts.slice(0, 3).map((p) => ({ quando: new Date(p.ts).toISOString(), texto: p.legenda.slice(0, 120), url: p.url })),
-          texto: texto.slice(0, 1500),
-          marcas: [...new Set((html.match(/\b(?:data-[a-z-]+|class="[^"]{0,40})/g) || []).slice(0, 4000))].slice(0, 60),
-          inicioHtml: html.slice(0, 4000),
-        });
-      } catch (e) { res.status(502).json({ erro: motivo(e) }); }
-    });
-    // o que o Instagram responde à sessão (IG_SESSIONID) do servidor: um pedido só, direto (nunca pelas pontes), sem
-    // mostrar a sessão; e o estado das duas partes do site que a usam
-    let testeIg = 0;
     app.get("/api/distritais/teste-instagram", async (req, res) => {
       if (Date.now() - testeIg < 15e3) return res.status(429).json({ erro: "espera 15 segundos entre testes" });
       testeIg = Date.now();
