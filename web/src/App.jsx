@@ -968,6 +968,9 @@ const CSS = `
 @keyframes evin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .apito .feedhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
 .apito .feedhead h1{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0 auto 0 0;line-height:1.1}
+.apito .feedhead.centro{justify-content:center;text-align:center}
+.apito .feedhead.centro h1{margin:0 auto}
+.apito .feedhead h1.hglos{color:var(--hist)}
 .apito .textbtn{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
 .apito .textbtn:hover{color:var(--ink)}
 .apito .pending{display:block;width:100%;margin:0 0 12px;padding:9px;border:1px dashed var(--accent);border-radius:8px;font-weight:600;font-size:14px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
@@ -1263,7 +1266,8 @@ const CSS = `
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
 /* Nesta semana */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
-.apito .efem{max-width:900px}
+.apito .efem{max-width:900px;margin:0 auto}
+.apito .efem .efdia{text-align:center}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
 .apito .eftipos .flag{vertical-align:-2px}
@@ -2364,8 +2368,8 @@ export default function App() {
         {conn === "offline" && <p className="notice">{ui.offlineNote}</p>}
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
           <main>
-            <div className="feedhead">
-              <h1>{emLingua(CAT[section], lang)}</h1>
+            <div className={`feedhead${section !== "resultados" ? " centro" : ""}`}>
+              <h1 className={section === "glossario" ? "hglos" : undefined}>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
                 <div className="seg" role="group" aria-label="Vista dos resultados">
                   <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto</button>

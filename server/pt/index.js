@@ -30,7 +30,7 @@ import { createInstagram, cookieDoEnv } from "./stories/instagram.js";
 import { createAnonimo } from "./stories/anonimo.js";
 import { createDistritais } from "./distritais.js";
 import { buscar, buscarPor, motivo } from "../ponte.js";
-import { grafoAtivo, descobrir, postsDoGrafo, estadoGrafo } from "./instagram-grafo.js";
+import { grafoAtivo, descobrir, postsDoGrafo, estadoGrafo, diagnosticarChave } from "./instagram-grafo.js";
 import { createYoutube } from "./youtube.js";
 import { verificarOidc } from "../oidc-github.js";
 import { estadoPonte, estadoEncaminhamento, temPontes } from "../ponte.js";
@@ -1040,7 +1040,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
           renovacaoAutomatica: !!(process.env.FB_APP_ID && process.env.FB_APP_SECRET), chaveExpira: estadoGrafo.expira ? new Date(estadoGrafo.expira).toISOString() : null, usoMeta: estadoGrafo.usoMeta,
         });
       } catch (e) {
-        res.json({ configurado: true, funciona: false, conta, erro: e.message, tipo: e.tipo || null, respostaDaMeta: e.meta ? { codigo: e.meta.code, subcodigo: e.meta.error_subcode, mensagem: e.meta.message } : null });
+        const diagnostico = e.tipo === "permissao" || e.tipo === "chave" || e.tipo === "pedido" ? await diagnosticarChave().catch((x) => ({ erro: x.message })) : undefined;
+        res.json({ configurado: true, funciona: false, conta, erro: e.message, tipo: e.tipo || null, respostaDaMeta: e.meta ? { codigo: e.meta.code, subcodigo: e.meta.error_subcode, mensagem: e.meta.message } : null, diagnostico });
       }
     });
     // «Distritais»: transmissões em direto no YouTube (e as marcadas) e os canais de cada organizador
