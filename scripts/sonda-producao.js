@@ -100,16 +100,6 @@ try {
     const r = await g.procurar(p, tipo).catch((e) => ({ erro: e.message }));
     linha(`== Glossário (${tipo} de ${p}) ==`, r.erro || r.sentidos.map((s) => `${s.sentido || "—"}: ${s.palavras.slice(0, 8).join(", ")}`).join(" | ") || "(nada)");
   }
-  // a estrutura da página, para afinar o leitor quando o site mudar
-  for (const u of ["https://www.sinonimos.com.br/vitoria/", "https://www.antonimos.com.br/vitoria/"]) {
-    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (VAR glossário)" }, signal: AbortSignal.timeout(15000) });
-    const html = await r.text();
-    linha("== página", u, r.status, r.url, html.length, "caracteres ==");
-    const corpo = html.slice(html.indexOf("<body"));
-    const marcas = [...corpo.matchAll(/class="[^"]*(sinon|anton|sentido|contrario)[^"]*"/gi)].slice(0, 6);
-    for (const m of marcas) linha("  …", corpo.slice(Math.max(0, m.index - 150), m.index + 450).replace(/\s+/g, " "));
-    if (!marcas.length) { const i = corpo.search(/triunfo|derrota/i); linha(corpo.slice(Math.max(0, i - 800), i + 800).replace(/\s+/g, " ")); }
-  }
   const prod = await fetch(`${SITE}/api/glossario/palavra?p=vit%C3%B3ria&tipo=sinonimos`, { signal: AbortSignal.timeout(30000) });
   linha("== Glossário em produção ==", prod.status, (await prod.text()).slice(0, 400));
 } catch (e) { linha("Glossário: erro", e.message); }

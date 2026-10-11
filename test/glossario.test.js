@@ -6,19 +6,18 @@ import { TERMOS } from "../web/src/glossario/termos.js";
 import { PAISES } from "../web/src/glossario/clubes.js";
 import { GRUPOS_COMP } from "../web/src/glossario/competicoes.js";
 
-const PAGINA = `
-<div class="s-wrapper"><div class="sentido">Sentido de triunfo:</div>
-<p class="sinonimos"><a href="/triunfo/" class="sinonimo">triunfo</a>, <a href="/exito/" class="sinonimo">&ecirc;xito</a>, sucesso, conquista.</p></div>
-<div class="s-wrapper"><div class="sentido">Sentido de vit&#243;ria militar:</div>
-<p class="sinonimos">vencimento, <a href="/batalha/">batalha</a> ganha</p></div>`;
+// excertos das páginas reais (sinonimos.com.br e antonimos.com.br, outubro de 2026)
+const PAGINA = `<div class="content-detail"><div class="content-detail--subtitle">Qualquer tipo de conquista ou triunfo:</div><p class="syn-list syn-list-1"><em class="syn-number">1</em> <a href="/conquista/" class="sinonimo">conquista</a>, <a href="/triunfo/" class="sinonimo">triunfo</a>, <a href="/exito/" class="sinonimo">&ecirc;xito</a>, sucesso.</p></div>
+<div class="content-detail"><div class="content-detail--subtitle">Vit&#243;ria militar:</div><p class="syn-list syn-list-2"><em class="syn-number">2</em> vencimento, <a href="/batalha/">batalha</a> ganha</p></div>`;
+const ANTONIMOS = `<p id="total" class="word-count">17 <strong>antônimos</strong> de vitória</p> <div class="content-detail"><div class="content-detail--subtitle">Contrário de triunfo:</div><p class="ant-list"><em class="ant-number">1</em> <a href="/derrota/">derrota</a>, <a href="/fracasso/">fracasso</a>, <a href="/espalhanco/">espalhanço</a>.</p></div>`;
 
-test("glossário (internet): lê os sinónimos de cada sentido da página", () => {
+test("glossário (internet): lê os sinónimos e os antónimos de cada sentido da página", () => {
   const s = lerPagina(PAGINA, "sinonimos");
   assert.equal(s.length, 2);
-  assert.equal(s[0].sentido, "Sentido de triunfo");
-  assert.deepEqual(s[0].palavras, ["triunfo", "êxito", "sucesso", "conquista"]);
-  assert.deepEqual(s[1], { sentido: "Sentido de vitória militar", palavras: ["vencimento", "batalha ganha"] });
-  assert.deepEqual(lerPagina('<p class="antonimos"><a class="antonimo">derrota</a>, fracasso</p>', "antonimos"), [{ sentido: null, palavras: ["derrota", "fracasso"] }]);
+  assert.deepEqual(s[0], { sentido: "Qualquer tipo de conquista ou triunfo", palavras: ["conquista", "triunfo", "êxito", "sucesso"] });
+  assert.deepEqual(s[1], { sentido: "Vitória militar", palavras: ["vencimento", "batalha ganha"] });
+  assert.deepEqual(lerPagina(ANTONIMOS, "antonimos"), [{ sentido: "Contrário de triunfo", palavras: ["derrota", "fracasso", "espalhanço"] }]);
+  assert.deepEqual(lerPagina(ANTONIMOS, "sinonimos"), []);
   assert.deepEqual(lerPagina("<p>nada</p>", "sinonimos"), []);
 });
 
@@ -38,7 +37,7 @@ test("glossário (internet): guarda as respostas e não volta a pedir a mesma pa
   const pedir = async (url) => {
     pedidos.push(url);
     if (url.includes("/inexistente/")) return new Response("", { status: 404 });
-    return new Response(PAGINA.replaceAll("sinonimos", url.includes("antonimos") ? "antonimos" : "sinonimos"), { status: 200 });
+    return new Response(url.includes("antonimos") ? ANTONIMOS : PAGINA, { status: 200 });
   };
   const g = createGlossario({ pedir });
   const r = await g.procurar("vitória", "sinonimos");

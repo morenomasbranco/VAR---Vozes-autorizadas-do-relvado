@@ -1,6 +1,6 @@
 // Glossário: sinónimos e antónimos de uma palavra, procurados na internet quando o glossário do site (web/src/glossario)
 // não tem a palavra. As páginas vêm do sinonimos.com.br e do antonimos.com.br (gratuitos, português do Brasil):
-// cada sentido da palavra é um bloco <p class="sinonimos"> (ou "antonimos") com as palavras separadas por vírgulas.
+// cada sentido da palavra é uma lista de palavras separadas por vírgulas.
 // As respostas ficam guardadas uma semana, para não se pedir a mesma palavra duas vezes.
 
 const SITES = {
@@ -29,12 +29,15 @@ const texto = (html) => String(html)
   .replace(/\s+/g, " ")
   .trim();
 
-// lê a página: uma lista por sentido, com o título do sentido («Sentido de vencer:») quando o há
+// lê a página: uma lista por sentido, com o título do sentido («Qualquer tipo de conquista ou triunfo») quando o há.
+// Cada sentido é um <div class="content-detail--subtitle"> seguido de <p class="syn-list"> (ou "ant-list" nos
+// antónimos), com o número do sentido num <em> e as palavras separadas por vírgulas.
+const LISTA = { sinonimos: "(?:syn-list|sinonimos)", antonimos: "(?:ant-list|antonimos)" };
 export function lerPagina(html, tipo) {
   const sentidos = [];
-  const re = new RegExp(`(?:<div[^>]*class="[^"]*sentido[^"]*"[^>]*>([\\s\\S]*?)</div>\\s*)?<p[^>]*class="[^"]*\\b${tipo}\\b[^"]*"[^>]*>([\\s\\S]*?)</p>`, "gi");
+  const re = new RegExp(`(?:<div[^>]*class="[^"]*(?:subtitle|sentido)[^"]*"[^>]*>([\\s\\S]*?)</div>\\s*)?<p[^>]*class="[^"]*\\b${LISTA[tipo]}\\b[^"]*"[^>]*>([\\s\\S]*?)</p>`, "gi");
   for (const m of String(html || "").matchAll(re)) {
-    const palavras = texto(m[2]).replace(/\.$/, "").split(/\s*,\s*/).map((p) => p.trim()).filter((p) => p && p.length <= 60);
+    const palavras = texto(m[2].replace(/<em[^>]*>[\s\S]*?<\/em>/gi, "")).replace(/\.$/, "").split(/\s*,\s*/).map((p) => p.trim()).filter((p) => p && p.length <= 60);
     if (palavras.length) sentidos.push({ sentido: m[1] ? texto(m[1]).replace(/:$/, "") : null, palavras: [...new Set(palavras)] });
   }
   return sentidos;
