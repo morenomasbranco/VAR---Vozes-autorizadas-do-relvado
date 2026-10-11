@@ -968,6 +968,9 @@ const CSS = `
 @keyframes evin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .apito .feedhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
 .apito .feedhead h1{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0 auto 0 0;line-height:1.1}
+.apito .feedhead.centro{justify-content:center;text-align:center}
+.apito .feedhead.centro h1{margin:0 auto}
+.apito .feedhead h1.hglos{color:var(--hist)}
 .apito .textbtn{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
 .apito .textbtn:hover{color:var(--ink)}
 .apito .pending{display:block;width:100%;margin:0 0 12px;padding:9px;border:1px dashed var(--accent);border-radius:8px;font-weight:600;font-size:14px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
@@ -1263,7 +1266,8 @@ const CSS = `
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
 /* Nesta semana */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
-.apito .efem{max-width:900px}
+.apito .efem{max-width:900px;margin:0 auto}
+.apito .efem .efdia{text-align:center}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
 .apito .eftipos .flag{vertical-align:-2px}
@@ -1937,6 +1941,22 @@ export default function App() {
     return [...map.values()].sort((a, b) => (isLive(b.score, b.upd || b.ts, now) - isLive(a.score, a.upd || a.ts, now)) || (b.upd || b.ts) - (a.upd || a.ts));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
+  // os jogos para o «Preparar um jogo» do Glossário: todos (sem o filtro da pesquisa), os que estão a decorrer primeiro
+  const jogosGlos = useMemo(() => {
+    if (section !== "glossario") return [];
+    const map = new Map();
+    for (const it of items) {
+      if (!it.score) continue;
+      const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
+      if (map.has(k) && (map.get(k).upd || map.get(k).ts) >= (it.upd || it.ts)) continue;
+      map.set(k, it);
+    }
+    return [...map.entries()].map(([k, it]) => ({
+      id: k, h: it.score.h, a: it.score.a, hs: it.score.hs, as: it.score.as, comp: leagueName(it.liga) || it.score.comp,
+      mod: it.mod || "futebol", vivo: isLive(it.score, it.upd || it.ts, now), ts: it.upd || it.ts,
+    })).sort((a, b) => (b.vivo - a.vivo) || b.ts - a.ts).slice(0, 40);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, section, now]);
 
   // todos os jogos, sem o filtro de ligas, de fontes ou de pesquisa: servem para ligar cada vídeo ao seu jogo,
   // para o cartão do Feed ter sempre o resultado e o canal mesmo quando a liga está desligada nos Resultados
@@ -2364,8 +2384,8 @@ export default function App() {
         {conn === "offline" && <p className="notice">{ui.offlineNote}</p>}
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
           <main>
-            <div className="feedhead">
-              <h1>{emLingua(CAT[section], lang)}</h1>
+            <div className={`feedhead${section !== "resultados" ? " centro" : ""}`}>
+              <h1 className={section === "glossario" ? "hglos" : undefined}>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
                 <div className="seg" role="group" aria-label="Vista dos resultados">
                   <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto</button>
@@ -2599,7 +2619,7 @@ export default function App() {
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
             ) : section === "glossario" ? (
-              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} /></Suspense>
+              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} jogos={jogosGlos} /></Suspense>
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "resultados" && resVista === "portugal" ? (

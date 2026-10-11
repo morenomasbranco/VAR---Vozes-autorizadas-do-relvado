@@ -1,9 +1,10 @@
-// Glossário › pesquisa de sinónimos e antónimos no próprio glossário: cada termo, clube e competição é um grupo de
+// Glossário › pesquisa de sinónimos e antónimos no próprio glossário: cada termo, clube, competição e país é um grupo de
 // palavras equivalentes; os antónimos vêm dos termos (e ao contrário: se «derrota» é antónimo de «vitória», os
 // sinónimos de «vitória» são antónimos de «derrota»).
 import { MODS, TERMOS } from "./termos.js";
 import { PAISES } from "./clubes.js";
 import { GRUPOS_COMP } from "./competicoes.js";
+import { PAISES_GLOS } from "./paises.js";
 
 export const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 // para comparar: sem as notas entre parênteses («torcedor (BR)» → «torcedor»)
@@ -20,6 +21,10 @@ export function indice() {
   for (const x of TERMOS) grupos.push({ palavras: [x.t, ...(x.s || [])], ant: x.a || [], origem: MODS.find((m) => m.id === x.m)?.nome, def: x.d });
   for (const p of PAISES) for (const [nome, cidade, alc] of p.clubes) grupos.push({ palavras: [nome, ...lista(alc)], ant: [], origem: `Clube · ${cidade}` });
   for (const g of GRUPOS_COMP) for (const [nome, sin] of g.provas) grupos.push({ palavras: [nome, ...lista(sin)], ant: [], origem: `Competição · ${g.nome}` });
+  for (const p of PAISES_GLOS) {
+    grupos.push({ palavras: [p.n, ...lista(p.p)], ant: [], origem: `País · ${p.g}` });
+    if (p.s && p.s !== "—") grupos.push({ palavras: [`Seleção de ${p.n}`, ...lista(p.s)], ant: [], origem: "Seleção" });
+  }
   return grupos;
 }
 

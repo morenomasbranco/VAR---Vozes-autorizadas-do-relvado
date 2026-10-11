@@ -111,3 +111,8 @@ try {
 try {
   linha("== Glossário: estado em produção ==", JSON.stringify(await j("/api/glossario/estado")));
 } catch (e) { linha("Glossário: erro", e.message); }
+
+// Instagram pela API oficial: o que a Meta responde (sem a chave)
+try {
+  linha("== Instagram (API oficial) ==", JSON.stringify(await j("/api/distritais/teste-instagram-api?conta=fcporto")).slice(0, 1500));
+} catch (e) { linha("Instagram (API oficial): erro", e.message); }

@@ -21,11 +21,11 @@ export const GRUPOS_COMP = [
     id: "en", nome: "Inglaterra", bandeira: "gb-eng",
     provas: [
       ["Premier League", "Liga inglesa · Premiership · EPL · Barclays Premier League (antes) · Campeonato inglês"],
-      ["EFL Championship", "Championship · Segundo escalão inglês · Sky Bet Championship"],
+      ["EFL Championship", "Championship · Segundo escalão inglês · Sky Bet Championship", "EFL: English Football League, a liga dos escalões abaixo da Premier League."],
       ["League One / League Two", "Terceiro e quarto escalões ingleses"],
       ["FA Cup", "Taça de Inglaterra · Emirates FA Cup · A mais antiga taça do mundo (1871)", "Final em Wembley."],
       ["EFL Cup", "Taça da Liga inglesa · Carabao Cup · League Cup"],
-      ["Community Shield", "Supertaça inglesa · Charity Shield (antes)"],
+      ["Community Shield", "Supertaça inglesa · Supertaça de Inglaterra · Charity Shield (antes)"],
     ],
   },
   {
@@ -34,7 +34,7 @@ export const GRUPOS_COMP = [
       ["LaLiga", "LaLiga EA Sports · Liga espanhola · Primera División · La Liga · Campeonato espanhol"],
       ["LaLiga Hypermotion", "Segunda División · Segunda espanhola"],
       ["Copa del Rey", "Taça do Rei · Taça de Espanha"],
-      ["Supercopa de España", "Supertaça espanhola", "Formato a quatro equipas, disputado na Arábia Saudita."],
+      ["Supercopa de España", "Supertaça espanhola · Supertaça de Espanha", "Formato a quatro equipas, disputado na Arábia Saudita."],
     ],
   },
   {
@@ -43,7 +43,7 @@ export const GRUPOS_COMP = [
       ["Serie A", "Serie A Enilive · Calcio · Liga italiana · Campeonato italiano · Scudetto (o título)"],
       ["Serie B", "Segundo escalão italiano · Serie BKT"],
       ["Coppa Italia", "Taça de Itália · Coppa Italia Frecciarossa"],
-      ["Supercoppa Italiana", "Supertaça italiana", "Formato a quatro equipas, disputado na Arábia Saudita."],
+      ["Supercoppa Italiana", "Supertaça italiana · Supertaça de Itália", "Formato a quatro equipas, disputado na Arábia Saudita."],
     ],
   },
   {
@@ -52,7 +52,7 @@ export const GRUPOS_COMP = [
       ["Bundesliga", "Liga alemã · Campeonato alemão · Meisterschale (a salva de campeão)"],
       ["2. Bundesliga", "Segunda Bundesliga · Segundo escalão alemão"],
       ["DFB-Pokal", "Taça da Alemanha · Pokal", "Final em Berlim, no Olympiastadion."],
-      ["DFL-Supercup", "Supertaça alemã"],
+      ["DFL-Supercup", "Supertaça alemã · Supertaça da Alemanha"],
     ],
   },
   {
@@ -61,7 +61,7 @@ export const GRUPOS_COMP = [
       ["Ligue 1", "Ligue 1 McDonald's · Liga francesa · Campeonato francês"],
       ["Ligue 2", "Ligue 2 BKT · Segundo escalão francês"],
       ["Coupe de France", "Taça de França"],
-      ["Trophée des Champions", "Supertaça francesa"],
+      ["Trophée des Champions", "Supertaça francesa · Supertaça de França"],
     ],
   },
   {
@@ -157,7 +157,7 @@ export const GRUPOS_COMP = [
       ["Taça de Portugal de hóquei em patins", "Taça de hóquei"],
       ["Elite Cup", "Taça da Liga de hóquei em patins"],
       ["Supertaça António Livramento", "Supertaça de hóquei em patins"],
-      ["WSE Champions League", "Liga dos Campeões de hóquei em patins · Liga Europeia (antes) · Taça dos Campeões Europeus (antes)"],
+      ["WSE Champions League", "Liga dos Campeões de hóquei em patins · Liga Europeia (antes) · Taça dos Campeões Europeus (antes)", "WSE: World Skate Europe, a entidade europeia do hóquei em patins."],
       ["WSE Cup", "Taça WSE · Taça CERS (antes)"],
       ["Taça Continental", "Supertaça europeia de hóquei em patins"],
       ["Taça Intercontinental de hóquei em patins", "Intercontinental"],
@@ -180,7 +180,7 @@ export const GRUPOS_COMP = [
       ["FIBA Europe Cup", "Taça da Europa FIBA"],
       ["NBA", "National Basketball Association · Liga norte-americana · NBA Finals (a final) · All-Star Game · Conferências Este e Oeste"],
       ["EuroBasket", "Europeu de basquetebol · Campeonato da Europa de basquetebol"],
-      ["Campeonato do Mundo de basquetebol", "FIBA Basketball World Cup · Mundial de basquetebol"],
+      ["Campeonato do Mundo de basquetebol", "FIBA Basketball World Cup · Mundial de basquetebol · Mundial FIBA", "FIBA: Federação Internacional de Basquetebol."],
     ],
   },
 ];

@@ -377,7 +377,7 @@ export default function Distritais({ API = "", now, query = "" }) {
 }
 
 export const DIST_CSS = `
-.apito .dist .dnota{font-size:12.5px;margin:0 0 12px}
+.apito .dist .dnota{font-size:12.5px;margin:0 auto 12px;text-align:center;max-width:900px}
 .apito .dbase .dlogo{width:18px;height:18px;object-fit:contain;flex:none}
 .apito .dbase .lcard{cursor:default}
 .apito .dist .dgrupos{margin:0 0 12px;flex-wrap:wrap}
@@ -398,7 +398,7 @@ export const DIST_CSS = `
 .apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
 .apito .dnot .ctitle a{color:inherit;text-decoration:none} .apito .dnot .ctitle a:hover{text-decoration:underline}
 .apito .otipo.imprensa{background:var(--raise)}
-.apito .dist .dvias{font-size:12px;margin:-6px 0 12px;padding-left:18px}
+.apito .dist .dvias{font-size:12px;margin:-6px auto 12px;padding:0;list-style:none;text-align:center;max-width:900px}
 .apito .dpost .drede{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;line-height:16px;color:#fff;flex:none}
 .apito .dpost .drede.ig{background:#C13584} .apito .dpost .drede.fb{background:#1877F2}
 .apito .dpost .dtambem{font-size:11.5px;margin:4px 0 0} .apito .dpost .dtambem a{color:inherit}

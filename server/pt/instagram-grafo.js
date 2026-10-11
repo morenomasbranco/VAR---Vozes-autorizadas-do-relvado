@@ -35,7 +35,7 @@ export function explicarErro(err = {}) {
   const c = Number(err.code), s = Number(err.error_subcode);
   if (c === 190) return { tipo: "chave", texto: "a chave (IG_GRAPH_TOKEN) é inválida ou expirou: gera outra no Graph API Explorer" };
   if ([4, 17, 32, 613].includes(c) || c === 80002) return { tipo: "limite", texto: "a Meta pediu para abrandar (limite de pedidos por hora)" };
-  if (c === 10 || c === 200 || (c >= 200 && c < 300)) return { tipo: "permissao", texto: "falta uma permissão na chave (instagram_basic, pages_show_list, pages_read_engagement) ou a app ainda não tem acesso" };
+  if (c === 10 || c === 200 || (c >= 200 && c < 300)) return { tipo: "permissao", texto: "a chave não tem as permissões precisas (instagram_basic, pages_show_list, pages_read_engagement, business_management) ou, ao gerá-la, não se escolheu a página de Facebook e a conta de Instagram" };
   if (c === 110 || s === 2207013 || /cannot be found|not.*business|professional/i.test(err.message || "")) return { tipo: "pessoal", texto: "essa conta não é profissional (Empresa ou Criador), ou não existe: a API oficial só lê contas profissionais" };
   if (c === 100) return { tipo: "pedido", texto: `a Meta não aceitou o pedido: ${err.message || "parâmetro inválido"} (o IG_GRAPH_USER_ID é o número da conta de Instagram, não o da página?)` };
   return { tipo: "outro", texto: err.message || "erro desconhecido da Meta" };
@@ -97,4 +97,36 @@ export async function renovarChave({ log = () => {} } = {}) {
     log(`[Instagram API] não consegui renovar a chave: ${e.message}`);
     return false;
   }
+}
+
+// Diagnóstico da chave, pela própria Meta (debug_token, com a chave da app): se é válida, quando expira, as permissões
+// que tem e a que páginas e contas se aplicam; e as páginas a que a chave chega, com a conta de Instagram de cada uma.
+// Não mostra a chave.
+export async function diagnosticarChave() {
+  const out = {};
+  const { FB_APP_ID, FB_APP_SECRET, IG_GRAPH_USER_ID } = process.env;
+  if (FB_APP_ID && FB_APP_SECRET) {
+    try {
+      const r = await fetch(`${BASE()}/${VERSAO()}/debug_token?input_token=${encodeURIComponent(token())}&access_token=${encodeURIComponent(`${FB_APP_ID}|${FB_APP_SECRET}`)}`, { signal: AbortSignal.timeout(15000) });
+      const d = (await r.json().catch(() => null))?.data;
+      if (d) {
+        const alvos = Object.fromEntries((d.granular_scopes || []).map((g) => [g.scope, g.target_ids || "todas"]));
+        out.chave = {
+          valida: !!d.is_valid, tipo: d.type, daApp: String(d.app_id) === String(FB_APP_ID),
+          expira: d.expires_at ? new Date(d.expires_at * 1000).toISOString() : "não expira",
+          permissoes: d.scopes || [], paraQuePaginasEContas: alvos,
+          faltam: ["instagram_basic", "pages_show_list", "pages_read_engagement", "business_management"].filter((p) => !(d.scopes || []).includes(p)),
+          contaInstagramAutorizada: Array.isArray(alvos.instagram_basic) ? alvos.instagram_basic.map(String).includes(String(IG_GRAPH_USER_ID)) : alvos.instagram_basic === "todas" ? true : null,
+        };
+        if (d.error) out.chave.erro = d.error.message;
+      }
+    } catch (e) { out.chave = { erro: e.message }; }
+  } else out.chave = { erro: "sem FB_APP_ID e FB_APP_SECRET não se pode pedir o diagnóstico da chave à Meta" };
+  try {
+    const r = await fetch(`${BASE()}/${VERSAO()}/me/accounts?fields=name,instagram_business_account{id,username}&access_token=${encodeURIComponent(token())}`, { signal: AbortSignal.timeout(15000) });
+    const j = await r.json().catch(() => null);
+    out.paginas = j?.error ? { erro: j.error.message } : (j?.data || []).map((p) => ({ pagina: p.name, instagram: p.instagram_business_account ? `${p.instagram_business_account.username || "?"} (${p.instagram_business_account.id})` : null }));
+    out.igGraphUserIdBate = Array.isArray(j?.data) ? j.data.some((p) => String(p.instagram_business_account?.id) === String(IG_GRAPH_USER_ID)) : null;
+  } catch (e) { out.paginas = { erro: e.message }; }
+  return out;
 }

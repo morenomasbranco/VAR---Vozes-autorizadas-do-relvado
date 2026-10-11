@@ -74,5 +74,5 @@ Abre `https://o-endereço-do-servidor/api/distritais/teste-instagram-api?conta=f
 - **`"funciona": true`** com os 3 últimos posts do FC Porto: está a funcionar. Na secção Distritais aparece «Instagram (API oficial da Meta)», e os posts dos clubes vão chegando ao longo das próximas horas.
 - **`"funciona": false`**: o campo `erro` explica o que falta, e `respostaDaMeta` traz a mensagem original. Os casos mais comuns:
   - **chave inválida ou expirada:** repete o passo 4;
-  - **falta uma permissão:** volta ao passo 4.2 e confirma as quatro permissões;
+  - **a chave não tem as permissões precisas** (a Meta diz «(#10) Application does not have permission for this action»): o campo `diagnostico` mostra as permissões que a chave tem (`faltam`), as páginas a que chega e se o `IG_GRAPH_USER_ID` é o da conta de Instagram dessa página. Repete os passos 4.2 a 4.5 com as quatro permissões; na janela da Meta que se abre ao gerar a chave, carrega em **Editar acesso** (ou «Escolher o que permites») e marca a **página de Facebook** e a **conta de Instagram** — sem isso a chave não chega à conta;
   - **essa conta não é profissional:** experimenta com outra conta (por exemplo `?conta=fpf`).
