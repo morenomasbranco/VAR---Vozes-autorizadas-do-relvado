@@ -5,6 +5,7 @@
 
 const GUARDA_MS = 7 * 24 * 3600e3;
 const SEM_LOGO_MS = 24 * 3600e3;
+const ERRO_MS = 30 * 60e3;
 const MAX = 800;
 
 // o identificador da página a partir do endereço: «/onze.esperancas/», «profile.php?id=123», «/p/Nome-123/», «/people/Nome/123/»
@@ -40,14 +41,21 @@ export function createLogos({ clubes, pedir = fetch, agora = () => Date.now(), b
     estado.pedidos++;
     const chave = chaveApp();
     const r = await pedir(`${base}/${encodeURIComponent(pag)}/picture?type=large&redirect=false${chave ? `&access_token=${encodeURIComponent(chave)}` : ""}`, { signal: AbortSignal.timeout(10000) });
-    const j = await r.json().catch(() => null);
-    if (!r.ok || !j?.data?.url) throw new Error(j?.error?.message || `a Meta respondeu ${r.status}`);
+    // às vezes a Meta manda logo a imagem em vez do JSON com o endereço
+    if (r.ok && /^image\//i.test(r.headers.get("content-type") || "")) return imagemDe(r);
+    const corpo = await r.text().catch(() => "");
+    let j = null;
+    try { j = JSON.parse(corpo); } catch { /* não é JSON */ }
+    if (!r.ok || !j?.data?.url) throw new Error(j?.error?.message || `a Meta respondeu ${r.status} (${(r.headers.get("content-type") || "?").split(";")[0]}: ${corpo.slice(0, 120)})`);
     if (j.data.is_silhouette) return null;
     const ri = await pedir(j.data.url, { signal: AbortSignal.timeout(10000) });
     if (!ri.ok) throw new Error(`a imagem respondeu ${ri.status}`);
-    const buf = Buffer.from(await ri.arrayBuffer());
+    return imagemDe(ri);
+  }
+  async function imagemDe(res) {
+    const buf = Buffer.from(await res.arrayBuffer());
     if (!buf.length || buf.length > 400e3) return null;
-    return { tipo: ri.headers.get("content-type") || "image/jpeg", buf };
+    return { tipo: res.headers.get("content-type") || "image/jpeg", buf };
   }
 
   // a imagem do logótipo de uma equipa (ou null)
@@ -55,7 +63,7 @@ export function createLogos({ clubes, pedir = fetch, agora = () => Date.now(), b
     const pag = pagina(nome, org);
     if (!pag) return null;
     const g = guardados.get(pag);
-    if (g && agora() - g.ts < (g.img ? GUARDA_MS : SEM_LOGO_MS)) return g.img;
+    if (g && agora() - g.ts < (g.img ? GUARDA_MS : g.erro ? ERRO_MS : SEM_LOGO_MS)) return g.img;
     if (emCurso.has(pag)) return emCurso.get(pag);
     const p = ler(pag).then((img) => {
       img ? estado.ok++ : estado.semLogo++;
@@ -64,16 +72,16 @@ export function createLogos({ clubes, pedir = fetch, agora = () => Date.now(), b
     }).catch((e) => {
       estado.erros++;
       estado.ultimoErro = { pagina: pag, erro: e.message, ts: agora() };
-      guardar(pag, null);
+      guardar(pag, null, true);
       return null;
     }).finally(() => emCurso.delete(pag));
     emCurso.set(pag, p);
     return p;
   }
 
-  function guardar(pag, img) {
+  function guardar(pag, img, erro = false) {
     if (guardados.size >= MAX) guardados.delete(guardados.keys().next().value);
-    guardados.set(pag, { ts: agora(), img });
+    guardados.set(pag, { ts: agora(), img, erro });
   }
 
   // o endereço do logótipo para pôr num jogo (só quando o clube tem página de Facebook)
