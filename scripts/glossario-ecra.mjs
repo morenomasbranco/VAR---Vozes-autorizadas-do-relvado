@@ -12,14 +12,14 @@ const abrir = async () => {
 };
 await abrir();
 await p.getByRole("button", { name: "+ Acrescentar ao glossário" }).click();
-await p.getByLabel("Expressão").fill("chocolate");
-await p.getByLabel("Definição").fill("Remate fraco, sem força");
-await p.getByLabel("Sinónimos").fill("remate mole, passe ao guarda-redes");
+await p.getByLabel("Expressão", { exact: true }).fill("chocolate");
+await p.getByLabel("Definição", { exact: true }).fill("Remate fraco, sem força");
+await p.getByLabel("Sinónimos", { exact: true }).fill("remate mole, passe ao guarda-redes");
 await p.getByRole("button", { name: "Guardar" }).click();
 console.log("== depois de guardar ==", await p.locator(".gfeito").first().innerText());
-await p.getByLabel("Categoria").selectOption("clube");
-await p.getByLabel("Clube").fill("Milan");
-await p.getByLabel("Alcunhas").fill("Os do Diabo");
+await p.getByLabel("Categoria", { exact: true }).selectOption("clube");
+await p.getByLabel("Clube", { exact: true }).fill("Milan");
+await p.getByLabel("Alcunhas", { exact: true }).fill("Os do Diabo");
 await p.getByRole("button", { name: "Guardar" }).click();
 await abrir(); // recarregar: tem de continuar lá
 console.log("== botão ==", await p.locator(".gmeus .textbtn").first().innerText());
