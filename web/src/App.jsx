@@ -27,7 +27,7 @@ const CATS = [
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
   { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
   { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
-  { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar" },
+  { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar", hl: "glos" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
@@ -970,7 +970,6 @@ const CSS = `
 .apito .feedhead h1{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0 auto 0 0;line-height:1.1}
 .apito .feedhead.centro{justify-content:center;text-align:center}
 .apito .feedhead.centro h1{margin:0 auto}
-.apito .feedhead h1.hglos{color:var(--hist)}
 /* nas secções (menos Resultados), os botões por baixo do título ficam centrados e com espaço até ao conteúdo */
 .apito main.centrado .feedhead{margin-bottom:14px}
 .apito main.centrado .ofic>.livehead{justify-content:center;margin-bottom:22px}
@@ -1274,6 +1273,8 @@ const CSS = `
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
 /* Nesta semana */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
+/* Glossário: destacado na barra das secções */
+.apito .tab.hl-glos{color:var(--hist);--tabc:var(--hist);font-weight:600}
 .apito .efem{max-width:900px;margin:0 auto}
 .apito .efem .efdia{text-align:center}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
@@ -2393,7 +2394,7 @@ export default function App() {
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
           <main className={section !== "resultados" ? "centrado" : undefined}>
             <div className={`feedhead${section !== "resultados" ? " centro" : ""}`}>
-              <h1 className={section === "glossario" ? "hglos" : undefined}>{emLingua(CAT[section], lang)}</h1>
+              <h1>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
                 <div className="seg" role="group" aria-label="Vista dos resultados">
                   <button aria-pressed={resVista === "direto"} onClick={() => setResVista("direto")}>Em direto</button>

@@ -407,6 +407,11 @@ export const DIST_CSS = `
 .apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
 .apito .dnot .ctitle a{color:inherit;text-decoration:none} .apito .dnot .ctitle a:hover{text-decoration:underline}
 .apito .otipo.imprensa{background:var(--raise)}
+/* as faixas dos jogos e do YouTube: cabeçalho e aviso centrados (as setas ficam à direita) */
+.apito .dist .dbase>.livehead,.apito .dist .dyt>.livehead{justify-content:center;flex-wrap:wrap;position:relative;text-align:center;padding:0 72px}
+.apito .dist .dyt>.livehead .varrows{position:absolute;right:0;top:50%;transform:translateY(-50%);margin:0}
+.apito .dist .jvhint{text-align:center}
+@media (max-width:640px){.apito .dist .dbase>.livehead,.apito .dist .dyt>.livehead{padding:0}}
 .apito .dist .destado{margin:0 auto 14px;text-align:center;font-size:12px}
 .apito .dist .destado summary{cursor:pointer}
 .apito .dist .destado[open]{margin-bottom:6px}
