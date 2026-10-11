@@ -592,6 +592,7 @@ const GLOS_CSS = `
 .apito .glos .gabas,.apito .glos .gmods{display:flex;width:fit-content;max-width:100%;margin:0 auto 18px;justify-content:center;flex-wrap:wrap}
 .apito .glos .gmods{border:0;background:none;gap:4px}
 .apito .glos .gmods button{border:1px solid var(--line);background:var(--raise)}
+.apito .glos .gmods button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .apito .gtermos{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:0}
 .apito .gtermo{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--raise)}
 .apito .gtermo dt{font-weight:700;font-size:16px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
