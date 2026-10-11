@@ -169,3 +169,4 @@ try {
   const p = e.pesquisa || {};
   linha(`== Portugal: arrancou ${new Date(e.arranque).toISOString()} · ${e.competicoes} competições · ${e.jogos} jogos · pesquisa ${p.ativo ? "ligada" : "desligada"}${p.pausaAte > Date.now() ? ` (em pausa até ${new Date(p.pausaAte).toISOString()})` : ""} · FPF: ${JSON.stringify(e.fpf?.ultimoErro || null).slice(0, 160)}`);
 } catch (e) { linha("Portugal: erro", e.message); }
+try { linha(`== cópia dos dados ao arrancar == ${JSON.stringify(await j("/api/copia/estado")).slice(0, 300)}`); } catch (e) { linha("cópia: erro", e.message); }

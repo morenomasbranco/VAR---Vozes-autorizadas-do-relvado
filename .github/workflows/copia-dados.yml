@@ -1,0 +1,42 @@
+# Cópia de segurança dos resultados: o Northflank apaga a pasta data/ do site a cada atualização. De hora a hora
+# (e logo a seguir a cada atualização do main, antes de o servidor novo arrancar) pede-se a cópia ao site, com um
+# token OIDC do GitHub que o servidor confirma (sem chaves a configurar), e guarda-se na release «dados» deste
+# repositório; o servidor, quando arranca sem dados, vai buscá-la (server/copia.js). Repositório público: grátis.
+name: copia-dados
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+concurrency:
+  group: copia-dados
+  cancel-in-progress: false
+permissions:
+  id-token: write
+  contents: write
+jobs:
+  copiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: cópia anterior
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download dados -p dados.json.gz -O anterior.json.gz 2>/dev/null || echo "ainda não há cópia"
+      - name: pedir a cópia ao site
+        id: copia
+        env:
+          SITE: https://p01--var--tdhb8zl9kmy6.code.run
+        run: node scripts/copia-dados.js
+      - name: guardar na release «dados»
+        if: steps.copia.outputs.guardar == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view dados >/dev/null 2>&1 || gh release create dados --prerelease --title "Cópia dos dados dos resultados" --notes "Ficheiro atualizado automaticamente pelo workflow copia-dados (o servidor vai buscá-lo quando arranca sem dados)."
+          gh release upload dados dados.json.gz --clobber

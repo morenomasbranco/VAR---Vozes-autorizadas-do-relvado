@@ -27,6 +27,7 @@ import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
 import { createGlossario } from "./glossario.js";
 import { createPortugal } from "./pt/index.js";
+import { restaurar, rotasCopia } from "./copia.js";
 import { ligarRetransmissor, resumoRetransmissor } from "./retransmissor.js";
 import { estadoEncaminhamento, testarCaminhos } from "./ponte.js";
 
@@ -317,6 +318,8 @@ const oficiais = createOficiais({ log, broadcast: (e, d) => broadcast(e, d), con
 
 // Resultados de Portugal: todos os campeonatos seniores (nacionais e distritais), jornadas, tabelas ao vivo e
 // tempo real pelos stories dos clubes (server/pt/)
+// depois de uma atualização do site a pasta data/ vem vazia: os resultados voltam da última cópia (server/copia.js)
+const copiaReposta = await restaurar({ log });
 const portugal = createPortugal({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS, noticiasDistritais: (org) => oficiais.daAssociacao(org) });
 
 const app = express();
@@ -362,6 +365,8 @@ app.get("/api/leagues", (req, res) => res.json([
   ...portugal.ligasSite(), // um filtro por organizador: Liga, FPF e cada associação distrital
 ]));
 portugal.rotas(app, express);
+rotasCopia(app);
+app.get("/api/copia/estado", (req, res) => res.json(copiaReposta));
 app.get("/api/stories", (req, res) => res.json(stories.all()));
 app.get("/api/zapping", (req, res) => res.json(zapping.all())); // grelha de transmissões (canal de cada jogo)
 app.get("/api/zapping/estado", (req, res) => res.json(zapping.estado()));
