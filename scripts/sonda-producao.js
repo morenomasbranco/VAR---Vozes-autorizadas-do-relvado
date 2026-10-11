@@ -116,3 +116,33 @@ try {
 try {
   linha("== Instagram (API oficial) ==", JSON.stringify(await j("/api/distritais/teste-instagram-api?conta=fcporto")).slice(0, 1500));
 } catch (e) { linha("Instagram (API oficial): erro", e.message); }
+
+// YouTube das associações, lido daqui: quantos vídeos tem a página «Diretos» de cada canal, quantos estão em direto ou
+// agendados para o leitor do servidor, e os títulos e etiquetas dos três primeiros (para ver o que escapa ao leitor)
+try {
+  const { canaisBase, urlCanal, lerStreams } = await import("../server/pt/youtube.js");
+  for (const c of canaisBase().filter((x) => x.canal)) {
+    const r = await fetch(`${urlCanal(c.canal)}/streams`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "pt-PT,pt;q=0.9" }, signal: AbortSignal.timeout(20000) }).catch((e) => ({ erro: e.message }));
+    if (r.erro) { linha(`YT ${c.id}: erro ${r.erro}`); continue; }
+    const html = await r.text();
+    const s = lerStreams(html);
+    const primeiros = html.split('"lockupViewModel":').slice(1, 4).map((b) => {
+      const bloco = b.slice(0, 7000);
+      const titulo = bloco.match(/"lockupMetadataViewModel":\{"title":\{"content":"([^"]{0,80})/)?.[1] || "?";
+      const etiquetas = [...new Set([...bloco.matchAll(/"(?:text|badgeStyle)":"([^"]{2,40})"/g)].map((m) => m[1]).filter((t) => !/^https?:/.test(t)))].slice(0, 6).join(" | ");
+      return `${titulo} [${etiquetas}]`;
+    });
+    linha(`YT ${c.id.padEnd(18)} ${r.status} vídeos ${s?.vistos ?? "?"} · direto/agendados ${s ? s.lista.length : "?"}${s?.lista.length ? ` (${s.lista.map((v) => v.titulo.slice(0, 50)).join("; ")})` : ""}`);
+    for (const p of primeiros) linha(`     ${p}`);
+  }
+} catch (e) { linha("YouTube: erro", e.message); }
+
+// Logótipos dos clubes (fotografia da página de Facebook): alguns exemplos e o estado
+try {
+  for (const [nome, org] of [["Académico de Viseu", "af-viseu"], ["Lusitano FC Vildemoinhos", "af-viseu"], ["Oliveirense", "fpf"], ["CD Cinfães", "af-viseu"]]) {
+    const r = await fetch(`${SITE}/api/distritais/logo?nome=${encodeURIComponent(nome)}&org=${org}`, { signal: AbortSignal.timeout(30000) }).catch((e) => ({ status: e.message, headers: new Headers() }));
+    const n = r.arrayBuffer ? (await r.arrayBuffer()).byteLength : 0;
+    linha(`== logótipo ${nome} == ${r.status} ${r.headers.get("content-type") || ""} ${n} bytes`);
+  }
+  linha("== logótipos: estado ==", JSON.stringify(await j("/api/distritais/logos/estado")));
+} catch (e) { linha("logótipos: erro", e.message); }

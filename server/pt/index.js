@@ -22,6 +22,7 @@ import * as web from "./web.js";
 import { ASSOCIACOES, FPF, ORG, ORGS, EPOCA_FPF, classificar, bonito, ordem as ordemComp } from "./catalogo.js";
 import { tabelaAoVivo } from "./tabela.js";
 import { createClubes, semEquipa } from "./clubes.js";
+import { createLogos } from "./logos.js";
 import { simil, mesmaEquipa } from "./nomes.js";
 import { aplicar, aplicarOficial, novoJogoEstado } from "./stories/evidencia.js";
 import { minutoEm, textoMinuto } from "./stories/relogio.js";
@@ -68,6 +69,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
   st.comps ||= {}; st.jogos ||= {}; st.pesquisa ||= {};
   let eventos = ler(EVENTOS, []);
   const clubes = createClubes({ log });
+  // logótipos dos clubes (a fotografia da página de Facebook de cada um), para os resultados
+  const logos = createLogos({ clubes });
   // «Distritais»: os posts mais recentes dos clubes de cada associação (secção própria do site)
   const distritais = createDistritais({ clubes, broadcast: (ev, d) => broadcast(ev, d), cookie: cookieDoEnv(), log });
   // transmissões em direto no YouTube das associações, do Canal 11 e da FPF (secção Distritais)
@@ -162,7 +165,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const m = j.estado === "direto" ? (j.relogioExterno && agora - j.relogioExterno.ts < 5 * 60e3 ? { ...j.relogioExterno.m, fonte: "explicito" } : minutoEm(j, agora, comp?.mod)) : null;
     return {
       id: j.id, comp: j.comp, compNome: comp?.nome, org: comp?.org, mod: comp?.mod, nivel: comp?.nivel, serie: j.serie, serieNome: serie?.nome || null, jornada: j.jornada,
-      casa: j.casa, fora: j.fora, logoCasa: j.logoCasa || null, logoFora: j.logoFora || null, inicio: j.inicio, semHora: !!j.semHora, local: j.local || null,
+      casa: j.casa, fora: j.fora, logoCasa: j.logoCasa || logos.endereco(j.casa, comp?.org) || null, logoFora: j.logoFora || logos.endereco(j.fora, comp?.org) || null, inicio: j.inicio, semHora: !!j.semHora, local: j.local || null,
       estado: j.estado, hs: j.hs, as: j.as, oficial: !!j.oficial, origem: j.origem, via: j.via || null, viaUrl: j.viaUrl || null,
       min: m ? { texto: textoMinuto(m), fonte: m.fonte, confianca: m.confianca } : null,
       semInfo: !!(vivo && j.estado === "agendado"), // devia estar a decorrer e ninguém disse nada
@@ -1065,6 +1068,15 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       const itens = Array.isArray(req.body?.itens) ? req.body.itens : [req.body];
       res.json({ ok: itens.slice(0, 20).map((x) => (x?.handle ? distritais.doRetransmissor(String(x.handle), x.edges) : false)) });
     });
+    // o logótipo de uma equipa (?nome=…&org=af-…), guardado no servidor
+    app.get("/api/distritais/logo", async (req, res) => {
+      try {
+        const img = await logos.logo(String(req.query.nome || "").slice(0, 120), req.query.org ? String(req.query.org).slice(0, 40) : null);
+        if (!img) return res.status(404).set("Cache-Control", "public, max-age=3600").end();
+        res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=604800" }).send(img.buf);
+      } catch { res.status(502).end(); }
+    });
+    app.get("/api/distritais/logos/estado", (req, res) => res.json(logos.estado()));
     app.get("/api/distritais/img", async (req, res) => {
       try {
         const img = await distritais.imagem(String(req.query.u || ""));

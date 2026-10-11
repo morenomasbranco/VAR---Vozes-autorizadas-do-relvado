@@ -428,7 +428,7 @@ const GLOS_CSS = `
 .apito .gpal{font-size:14px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;background:var(--bg)}
 .apito .gpal:hover{border-color:var(--ink)}
 .apito .gmais{margin-top:8px;font-size:13px}
-.apito .glos .gabas,.apito .glos .gmods{display:flex;width:fit-content;max-width:100%;margin:0 auto 12px;justify-content:center;flex-wrap:wrap}
+.apito .glos .gabas,.apito .glos .gmods{display:flex;width:fit-content;max-width:100%;margin:0 auto 18px;justify-content:center;flex-wrap:wrap}
 .apito .glos .gmods{border:0;background:none;gap:4px}
 .apito .glos .gmods button{border:1px solid var(--line);background:var(--raise)}
 .apito .gtermos{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:0}
