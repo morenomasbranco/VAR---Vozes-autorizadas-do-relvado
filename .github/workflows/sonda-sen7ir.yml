@@ -4,14 +4,23 @@ jobs:
   s:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
       - run: |
-          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-          curl -sL -A "$UA" "https://www.sen7ir.pt/js/loader.js?id=8a35a7602b1b4fa24eac107d4167599d" > /tmp/l.js
-          wc -c /tmp/l.js; head -c 800 /tmp/l.js; echo
-          echo "=== ficheiros js referidos"; grep -oE '"[^"]*\.js[^"]*"' /tmp/l.js | sort -u | head -40
-          echo "=== api no loader"; grep -oE '.{0,150}(posts2|fastly|/api/|baseURL|axios).{0,200}' /tmp/l.js | head -20
-          for f in $(grep -oE '/js/[A-Za-z0-9_./-]+\.js(\?[^"]*)?' /tmp/l.js | sort -u | head -30); do
-            curl -sL -A "$UA" "https://www.sen7ir.pt$f" > /tmp/c.js
-            n=$(grep -c -E 'posts2|fastly|st005|/posts' /tmp/c.js)
-            if [ "$n" != "0" ]; then echo "=== $f ($(wc -c </tmp/c.js) bytes)"; grep -oE '.{0,200}(posts2-api|fastly\.net|/posts\?|/v[0-9]/|tag=|tags?/).{0,250}' /tmp/c.js | head -25; fi
-          done
+          mkdir p && cd p && npm init -y >/dev/null && npm i playwright@1.56.1 >/dev/null 2>&1 && npx playwright install chromium >/dev/null 2>&1
+          cat > s.mjs <<'JS'
+          import { chromium } from "playwright";
+          const b = await chromium.launch(); const pg = await b.newPage();
+          pg.on("response", async (r) => {
+            const u = r.url();
+            if (/posts2|fastly\.net|\/api\//.test(u) && !/\.(js|css|png|jpg|webp|svg|woff2?)(\?|$)/.test(u)) {
+              let t = ""; try { t = (await r.text()).slice(0, 1500); } catch {}
+              console.log("PEDIDO", r.request().method(), r.status(), u); console.log("   ", t.replace(/\s+/g, " "));
+            }
+          });
+          await pg.goto("https://www.sen7ir.pt/t/desporto/", { waitUntil: "networkidle", timeout: 60000 });
+          await pg.waitForTimeout(4000);
+          console.log("TITULOS", JSON.stringify(await pg.$$eval("a", (as) => as.map((a) => [a.textContent.trim().replace(/\s+/g, " ").slice(0, 100), a.href]).filter(([t, h]) => t.length > 25 && /sen7ir\.pt/.test(h)).slice(0, 25))));
+          await b.close();
+          JS
+          node s.mjs
