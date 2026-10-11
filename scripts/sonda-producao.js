@@ -162,3 +162,10 @@ try {
   await fetch(`${SITE}/api/pt/aovivo`, { signal: AbortSignal.timeout(60000) }).then((x) => x.text());
   linha(`== /api/pt/aovivo (segunda vez) == ${Date.now() - t1} ms`);
 } catch (e) { linha("aovivo: erro", e.message); }
+
+// Resultados de Portugal: desde quando o servidor está ligado e o que tem carregado (competições e jogos)
+try {
+  const e = await j("/api/pt/estado");
+  const p = e.pesquisa || {};
+  linha(`== Portugal: arrancou ${new Date(e.arranque).toISOString()} · ${e.competicoes} competições · ${e.jogos} jogos · pesquisa ${p.ativo ? "ligada" : "desligada"}${p.pausaAte > Date.now() ? ` (em pausa até ${new Date(p.pausaAte).toISOString()})` : ""} · FPF: ${JSON.stringify(e.fpf?.ultimoErro || null).slice(0, 160)}`);
+} catch (e) { linha("Portugal: erro", e.message); }

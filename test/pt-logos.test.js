@@ -50,3 +50,20 @@ test("logótipos: um erro da Meta não parte nada (fica sem logótipo e anotado)
   assert.equal(await l.logo("Lusitano Vildemoinhos", "af-viseu"), null);
   assert.match(l.estado().ultimoErro.erro, /não/);
 });
+
+test("logótipos: se a Meta mandar logo a imagem usa-se essa; um erro volta a ser tentado ao fim de meia hora", async () => {
+  let agora = 0;
+  let falha = true;
+  const pedir = async (url) => {
+    if (url.includes("/lusitanofcv/picture")) return falha ? new Response("<html>ups</html>", { headers: { "content-type": "text/html" } }) : new Response(PNG, { headers: { "content-type": "image/png" } });
+    return new Response("", { status: 404 });
+  };
+  const l = createLogos({ clubes: fakeClubes(), pedir, agora: () => agora });
+  assert.equal(await l.logo("Lusitano Vildemoinhos", "af-viseu"), null);
+  assert.match(l.estado().ultimoErro.erro, /text\/html: <html>ups/);
+  falha = false;
+  agora += 10 * 60e3;
+  assert.equal(await l.logo("Lusitano Vildemoinhos", "af-viseu"), null); // ainda dentro da meia hora
+  agora += 25 * 60e3;
+  assert.equal((await l.logo("Lusitano Vildemoinhos", "af-viseu")).tipo, "image/png");
+});
