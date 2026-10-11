@@ -128,5 +128,15 @@ export async function diagnosticarChave() {
     out.paginas = j?.error ? { erro: j.error.message } : (j?.data || []).map((p) => ({ pagina: p.name, instagram: p.instagram_business_account ? `${p.instagram_business_account.username || "?"} (${p.instagram_business_account.id})` : null }));
     out.igGraphUserIdBate = Array.isArray(j?.data) ? j.data.some((p) => String(p.instagram_business_account?.id) === String(IG_GRAPH_USER_ID)) : null;
   } catch (e) { out.paginas = { erro: e.message }; }
+  // duas leituras mais simples, para ver até onde a chave chega: a própria conta e a Business Discovery só com os seguidores
+  const tentar = async (campos) => {
+    try {
+      const r = await fetch(`${BASE()}/${VERSAO()}/${encodeURIComponent(IG_GRAPH_USER_ID)}?fields=${encodeURIComponent(campos)}&access_token=${encodeURIComponent(token())}`, { signal: AbortSignal.timeout(15000) });
+      const j = await r.json().catch(() => null);
+      return j?.error ? { erro: `(${j.error.code}${j.error.error_subcode ? `/${j.error.error_subcode}` : ""}) ${j.error.message}` } : { ok: true, resposta: JSON.stringify(j).slice(0, 200) };
+    } catch (e) { return { erro: e.message }; }
+  };
+  out.propriaConta = await tentar("username,followers_count,media_count");
+  out.descobertaSimples = await tentar("business_discovery.username(fcporto){username,followers_count}");
   return out;
 }
