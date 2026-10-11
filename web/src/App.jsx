@@ -1941,6 +1941,22 @@ export default function App() {
     return [...map.values()].sort((a, b) => (isLive(b.score, b.upd || b.ts, now) - isLive(a.score, a.upd || a.ts, now)) || (b.upd || b.ts) - (a.upd || a.ts));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
+  // os jogos para o «Preparar um jogo» do Glossário: todos (sem o filtro da pesquisa), os que estão a decorrer primeiro
+  const jogosGlos = useMemo(() => {
+    if (section !== "glossario") return [];
+    const map = new Map();
+    for (const it of items) {
+      if (!it.score) continue;
+      const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
+      if (map.has(k) && (map.get(k).upd || map.get(k).ts) >= (it.upd || it.ts)) continue;
+      map.set(k, it);
+    }
+    return [...map.entries()].map(([k, it]) => ({
+      id: k, h: it.score.h, a: it.score.a, hs: it.score.hs, as: it.score.as, comp: leagueName(it.liga) || it.score.comp,
+      mod: it.mod || "futebol", vivo: isLive(it.score, it.upd || it.ts, now), ts: it.upd || it.ts,
+    })).sort((a, b) => (b.vivo - a.vivo) || b.ts - a.ts).slice(0, 40);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, section, now]);
 
   // todos os jogos, sem o filtro de ligas, de fontes ou de pesquisa: servem para ligar cada vídeo ao seu jogo,
   // para o cartão do Feed ter sempre o resultado e o canal mesmo quando a liga está desligada nos Resultados
@@ -2603,7 +2619,7 @@ export default function App() {
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
             ) : section === "glossario" ? (
-              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} /></Suspense>
+              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} jogos={jogosGlos} /></Suspense>
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "resultados" && resVista === "portugal" ? (

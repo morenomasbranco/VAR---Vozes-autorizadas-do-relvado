@@ -5,6 +5,9 @@ import { indice, procurarLocal } from "../web/src/glossario/pesquisa.js";
 import { TERMOS } from "../web/src/glossario/termos.js";
 import { PAISES } from "../web/src/glossario/clubes.js";
 import { GRUPOS_COMP } from "../web/src/glossario/competicoes.js";
+import { PAISES_GLOS } from "../web/src/glossario/paises.js";
+import { OUTROS_NOMES } from "../web/src/glossario/nomes.js";
+import { reconhecerClube, reconhecerProva, fichaDoJogo, termosDoJogo } from "../web/src/glossario/jogo.js";
 
 // excertos das páginas reais (sinonimos.com.br e antonimos.com.br, outubro de 2026)
 const PAGINA = `<div class="content-detail"><div class="content-detail--subtitle">Qualquer tipo de conquista ou triunfo:</div><p class="syn-list syn-list-1"><em class="syn-number">1</em> <a href="/conquista/" class="sinonimo">conquista</a>, <a href="/triunfo/" class="sinonimo">triunfo</a>, <a href="/exito/" class="sinonimo">&ecirc;xito</a>, sucesso.</p></div>
@@ -136,7 +139,9 @@ test("glossário: sinónimos e antónimos no próprio glossário (termos, clubes
   assert.ok(sin("equipa").includes("conjunto"));
   assert.ok(sin("torcedor").includes("adepto")); // «torcedor (BR)» também conta
   assert.ok(sin("Dragões").includes("FC Porto"));
-  assert.ok(sin("bávaros").includes("Bayern de Munique"));
+  assert.ok(sin("bávaros").includes("Bayern München"));
+  assert.ok(sin("Quinas").includes("Seleção de Portugal"));
+  assert.ok(sin("Hexágono").includes("França"));
   assert.ok(sin("Champions").includes("Liga dos Campeões"));
   assert.ok(sin("ludopédio").includes("futebol"));
   assert.ok(!sin("estádio").includes("estádio"));
@@ -161,4 +166,54 @@ test("glossário: os dados estão completos (cada termo, clube e competição te
   for (const g of GRUPOS_COMP) for (const c of g.provas) assert.ok(c[0] && c[1], `prova incompleta: ${c[0]}`);
   const nomes = PAISES.flatMap((p) => p.clubes.map((c) => c[0]));
   assert.equal(new Set(nomes).size, nomes.length, "clube repetido");
+});
+
+test("glossário: preparar um jogo reconhece os clubes, as seleções e a competição pelos nomes dos resultados", () => {
+  const nome = (n) => reconhecerClube(n)?.nome || null;
+  assert.equal(nome("AC Milan"), "Milan");
+  assert.equal(nome("Internazionale"), "Inter");
+  assert.equal(nome("Inter Milan"), "Inter");
+  assert.equal(nome("Bayern Munich"), "Bayern München");
+  assert.equal(nome("Manchester United"), "Manchester United");
+  assert.equal(nome("Manchester City"), "Manchester City");
+  assert.equal(nome("Sporting CP"), "Sporting");
+  assert.equal(nome("Sporting Gijón"), "Sporting Gijón");
+  assert.equal(nome("Vitória de Guimarães"), "Vitória SC");
+  assert.equal(nome("Paris Saint-Germain"), "PSG");
+  assert.equal(nome("Fenerbahce"), "Fenerbahçe");
+  assert.equal(nome("Red Star Belgrade"), "Estrela Vermelha");
+  assert.equal(nome("Clube que não existe"), null);
+  assert.equal(reconhecerProva("Serie A")?.nome, "Serie A");
+  assert.equal(reconhecerProva("Liga Portugal")?.nome, "Liga Portugal Betclic");
+  assert.equal(reconhecerProva("Seleção: Liga das Nações")?.nome, "Liga das Nações");
+  assert.equal(reconhecerProva("Liga Saudita")?.nome, "Saudi Pro League");
+
+  const f = fichaDoJogo({ h: "AC Milan", a: "Juventus", comp: "Serie A" });
+  assert.equal(f.casa.clube.nome, "Milan");
+  assert.equal(f.fora.clube.nome, "Juventus");
+  assert.ok(f.fora.clube.alcunhas.includes("Vecchia Signora"));
+  assert.equal(f.prova.nome, "Serie A");
+  assert.deepEqual(f.paises.map((p) => p.n), ["Itália"]);
+  // uma seleção não é confundida com um clube («Portugal» não é o Sporting Clube de Portugal)
+  const s = fichaDoJogo({ h: "Portugal", a: "Wales", comp: "Seleção: Liga das Nações" });
+  assert.equal(s.casa.selecao.n, "Portugal");
+  assert.equal(s.fora.selecao.n, "País de Gales");
+  // dérbi e clássico
+  assert.equal(fichaDoJogo({ h: "Inter", a: "Milan" }).termos[0], "dérbi");
+  assert.equal(fichaDoJogo({ h: "Benfica", a: "FC Porto" }).termos[0], "clássico");
+  const lisboa = fichaDoJogo({ h: "Benfica", a: "Sporting" }).termos;
+  assert.equal(lisboa[0], "dérbi");
+  assert.equal(lisboa.length, new Set(lisboa).size);
+  // todas as expressões sugeridas existem no glossário
+  const termos = new Set(TERMOS.map((x) => x.t));
+  for (const mod of ["futebol", "futsal", "hoquei", "basquete"]) {
+    for (const t of termosDoJogo({ casa: null, fora: null, mod })) assert.ok(termos.has(t), `${t} não está no glossário`);
+  }
+  for (const t of ["dérbi", "clássico"]) assert.ok(termos.has(t), t);
+});
+
+test("glossário: os países e os outros nomes dos clubes estão completos", () => {
+  for (const p of PAISES_GLOS) assert.ok(p.n && p.b && p.g && p.p && p.s && Array.isArray(p.en), `país incompleto: ${p.n}`);
+  const clubes = new Set(PAISES.flatMap((p) => p.clubes.map((c) => c[0])));
+  for (const k of Object.keys(OUTROS_NOMES)) assert.ok(clubes.has(k), `outros nomes de um clube que não existe: ${k}`);
 });
