@@ -103,3 +103,6 @@ try {
   const prod = await fetch(`${SITE}/api/glossario/palavra?p=vit%C3%B3ria&tipo=sinonimos`, { signal: AbortSignal.timeout(30000) });
   linha("== Glossário em produção ==", prod.status, (await prod.text()).slice(0, 400));
 } catch (e) { linha("Glossário: erro", e.message); }
+try {
+  linha("== Glossário: estado em produção ==", JSON.stringify(await j("/api/glossario/estado")));
+} catch (e) { linha("Glossário: erro", e.message); }

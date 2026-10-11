@@ -53,6 +53,10 @@ test("glossário (internet): guarda as respostas e não volta a pedir a mesma pa
   const falha = createGlossario({ pedir: async () => new Response("", { status: 503 }) });
   await assert.rejects(falha.procurar("golo"), /503/);
   assert.equal(falha.estado().erros, 1);
+  // um pedido pendurado (que nem responde nem falha) acaba no prazo
+  const pendurado = createGlossario({ pedir: () => new Promise(() => {}), prazo: 50 });
+  await assert.rejects(pendurado.procurar("golo"), /sem resposta/);
+  assert.match(pendurado.estado().ultimoErro.erro, /sem resposta/);
 });
 
 test("glossário: sinónimos e antónimos no próprio glossário (termos, clubes e competições)", () => {

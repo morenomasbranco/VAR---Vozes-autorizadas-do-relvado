@@ -43,9 +43,15 @@ export function lerPagina(html, tipo) {
   return sentidos;
 }
 
-export function createGlossario({ pedir = fetch, agora = () => Date.now() } = {}) {
+// prazo a sério: em produção, um pedido pendurado nem sempre respeita o sinal de abort (como no YouTube)
+function comPrazo(promessa, ms, msg) {
+  let t;
+  return Promise.race([promessa, new Promise((_, rejeitar) => { t = setTimeout(() => rejeitar(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
+}
+
+export function createGlossario({ pedir = fetch, agora = () => Date.now(), prazo = PRAZO_MS } = {}) {
   const guardadas = new Map();
-  const estado = { pedidos: 0, erros: 0, ultimoErro: null };
+  const estado = { pedidos: 0, erros: 0, ultimoErro: null, ultimoOk: null };
 
   async function procurar(palavra, tipo = "sinonimos") {
     if (!SITES[tipo]) throw Object.assign(new Error("tipo desconhecido"), { status: 400 });
@@ -55,23 +61,28 @@ export function createGlossario({ pedir = fetch, agora = () => Date.now() } = {}
     const g = guardadas.get(chave);
     if (g && agora() - g.ts < GUARDA_MS) return g.dados;
     estado.pedidos++;
+    const ctl = new AbortController();
+    const inicio = agora();
     try {
-      const res = await pedir(SITES[tipo](slug), {
+      const res = await comPrazo(pedir(SITES[tipo](slug), {
         headers: { "User-Agent": "Mozilla/5.0 (VAR glossário)", "Accept-Language": "pt-PT,pt;q=0.9" },
-        signal: AbortSignal.timeout(PRAZO_MS),
-      });
+        signal: ctl.signal,
+      }), prazo, `sem resposta em ${prazo / 1000} s`);
       if (res.status === 404) {
         const dados = { palavra, tipo, sentidos: [], fonte: new URL(SITES[tipo](slug)).hostname };
         guardar(chave, dados);
         return dados;
       }
       if (!res.ok) throw new Error(`o site respondeu ${res.status}`);
-      const dados = { palavra, tipo, sentidos: lerPagina(await res.text(), tipo), fonte: new URL(SITES[tipo](slug)).hostname };
+      const html = await comPrazo(res.text(), prazo, `a página não chegou em ${prazo / 1000} s`);
+      const dados = { palavra, tipo, sentidos: lerPagina(html, tipo), fonte: new URL(SITES[tipo](slug)).hostname };
       guardar(chave, dados);
+      estado.ultimoOk = { palavra, tipo, ms: agora() - inicio, ts: agora() };
       return dados;
     } catch (e) {
+      ctl.abort();
       estado.erros++;
-      estado.ultimoErro = { palavra, tipo, erro: e.message, ts: agora() };
+      estado.ultimoErro = { palavra, tipo, erro: e.message, causa: e.cause?.code || e.cause?.message || null, ms: agora() - inicio, ts: agora() };
       throw e;
     }
   }
