@@ -4,23 +4,20 @@ jobs:
   s:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
       - run: |
-          mkdir p && cd p && npm init -y >/dev/null && npm i playwright@1.56.1 >/dev/null 2>&1 && npx playwright install chromium >/dev/null 2>&1
-          cat > s.mjs <<'JS'
-          import { chromium } from "playwright";
-          const b = await chromium.launch(); const pg = await b.newPage();
-          pg.on("response", async (r) => {
-            const u = r.url();
-            if (/posts2|fastly\.net|\/api\//.test(u) && !/\.(js|css|png|jpg|webp|svg|woff2?)(\?|$)/.test(u)) {
-              let t = ""; try { t = (await r.text()).slice(0, 1500); } catch {}
-              console.log("PEDIDO", r.request().method(), r.status(), u); console.log("   ", t.replace(/\s+/g, " "));
-            }
-          });
-          await pg.goto("https://www.sen7ir.pt/t/desporto/", { waitUntil: "networkidle", timeout: 60000 });
-          await pg.waitForTimeout(4000);
-          console.log("TITULOS", JSON.stringify(await pg.$$eval("a", (as) => as.map((a) => [a.textContent.trim().replace(/\s+/g, " ").slice(0, 100), a.href]).filter(([t, h]) => t.length > 25 && /sen7ir\.pt/.test(h)).slice(0, 25))));
-          await b.close();
-          JS
-          node s.mjs
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          API="https://posts2-api.global.ssl.fastly.net/1/posts?apikey=R1iV6seoKnKRYoHZ&apitoken=rdo3zh2o4jn88em4&per_page=20&page=1&filter%5BisoLanguage%5D=pt&include=tags&filter%5Btags.slug%5D=desporto"
+          curl -s -A "$UA" "$API" > /tmp/a.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("/tmp/a.json")); p=d["data"][0]
+          print("CHAVES", sorted(p.keys())); print("L10N", sorted(p["l10n"][0].keys()))
+          for k in ("url","link","permalink","canonical","publicId","type","tags","labels"): print(k, json.dumps(p.get(k))[:300])
+          for x in d["data"]:
+            l=x["l10n"][0]; print(x["createdAt"], "|", l["title"][:80], "|", l["slug"][:60], "|", [t.get("slug") if isinstance(t,dict) else t for t in (x.get("tags") or [])][:6])
+          open("/tmp/slug","w").write(p["l10n"][0]["slug"]); open("/tmp/pid","w").write(str(p.get("publicId"))); open("/tmp/id","w").write(str(p["id"]))
+          PY
+          S=$(cat /tmp/slug); P=$(cat /tmp/pid); I=$(cat /tmp/id)
+          for u in "https://www.sen7ir.pt/$S/" "https://www.sen7ir.pt/n/$S/" "https://www.sen7ir.pt/a/$S/" "https://www.sen7ir.pt/p/$S/" "https://www.sen7ir.pt/noticia/$S/" "https://www.sen7ir.pt/$P/$S/" "https://www.sen7ir.pt/n/$P/$S/" "https://www.sen7ir.pt/$I/$S/"; do
+            r=$(curl -s -o /tmp/p -A "$UA" -w "%{http_code}" "$u"); t=$(grep -oE '<title>[^<]*' /tmp/p | head -1); echo "$r $u $t"
+          done
