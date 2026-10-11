@@ -42,6 +42,8 @@ const BLUESKY = FONTES.bluesky || [];
 const PAIS = Object.fromEntries([...RSS, ...TELEGRAM, ...BLUESKY].map((s) => [s.id, s.pais])); // país de cada fonte, para a bandeira
 // coluna dos Destaques a que a fonte pertence (proveniência): pt, en, es, it, de, fr, mundo, portugueses
 const COL = Object.fromEntries([...RSS, ...TELEGRAM, ...BLUESKY].map((s) => [s.id, s.col]));
+// secção fixa de uma fonte («secao» no fontes.json): as notícias dela entram sempre nessa secção
+const SECAO = Object.fromEntries(RSS.filter((s) => s.secao).map((s) => [s.id, s.secao]));
 const SOURCES = [
   ...[...RSS, ...TELEGRAM, ...BLUESKY].map((s) => ({ handle: s.id, name: s.nome, pais: s.pais, col: s.col })),
   { handle: "resultados", name: "Resultados em direto", col: "mundo" },
@@ -168,6 +170,7 @@ function secoes(post, ai) {
   const texto = `${post.text} ${ai.titulo_pt || ""} ${(ai.pontos_pt || []).join(" ")}`;
   const cats = new Set([...(ai.seccoes || []), ...RULES.filter(([, re]) => re.test(texto)).map(([c]) => c)]);
   if (NAO_FUTEBOL.test(texto)) cats.add("modalidades"); // outras modalidades nunca ficam sem secção
+  if (SECAO[post.src]) cats.add(SECAO[post.src]);
   if (LOTARIA.test(texto)) cats.delete("premios");
   if (foraDoMercado(texto)) cats.delete("mercado");
   // «Portugueses pelo mundo» é só para quem está fora de Portugal

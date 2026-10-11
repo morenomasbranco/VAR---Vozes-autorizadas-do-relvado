@@ -11,6 +11,19 @@
       "feed": "https://www.record.pt/rss"
     },
     {
+      "id": "sen7ir-modalidades",
+      "nome": "Sen7ir",
+      "site": "https://www.sen7ir.pt/t/desporto/",
+      "lang": "pt",
+      "pais": "pt",
+      "col": "pt",
+      "feed": "https://posts2-api.global.ssl.fastly.net/1/posts?apikey=R1iV6seoKnKRYoHZ&apitoken=rdo3zh2o4jn88em4&per_page=40&page=1&filter%5BisoLanguage%5D=pt&filter%5Btags.slug%5D=desporto",
+      "artigo": "https://www.sen7ir.pt/{publicId}/{slug}/",
+      "filtro": "andebol|h[oó]quei|\\b[oó]quei\\b|\\boc\\b|\\bha cambra\\b|patins|basquet|voleibol|v[oó]lei\\b|futsal|futebol de praia|\\bbtt\\b|ciclis|bicicleta|atletismo|corrida|maratona|\\btrail\\b|nata[cç][aã]o|piscinas?\\b|t[eé]nis|p[aá]del|xadrez|karat[eé]|jud[oô]\\b|taekwondo|\\bboxe\\b|kickbox|gin[aá]stica|rolamentos|motocross|\\brali\\b|automobilismo|karting|canoagem|\\bremo\\b|\\bsurf|escalada|triatlo|columbofilia|\\bpesca\\b|equita[cç][aã]o|hipismo|golfe|r[aá]guebi|rugby|desporto adaptado|petanca|bilhar|dardos|\\behf\\b",
+      "secao": "modalidades",
+      "semGoogle": true
+    },
+    {
       "id": "abola",
       "nome": "A Bola",
       "site": "https://www.abola.pt",
