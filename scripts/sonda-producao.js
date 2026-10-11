@@ -146,3 +146,19 @@ try {
   }
   linha("== logótipos: estado ==", JSON.stringify(await j("/api/distritais/logos/estado")));
 } catch (e) { linha("logótipos: erro", e.message); }
+
+// Jogos de hoje (a faixa das Distritais): quanto tempo demora a resposta, quantos jogos e quantos das distritais à Liga 3
+try {
+  const t0 = Date.now();
+  const r = await fetch(`${SITE}/api/pt/aovivo`, { signal: AbortSignal.timeout(60000) });
+  const l = await r.json();
+  const NAC = /liga 3|campeonato de portugal|campeonato (de futebol )?dos a[cç]ores/i;
+  const base = l.filter((j) => (j.mod || "futebol") === "futebol" && (String(j.org || "").startsWith("af-") || (j.org === "fpf" && NAC.test(j.compNome || ""))));
+  const estados = {};
+  for (const j of base) estados[j.estado] = (estados[j.estado] || 0) + 1;
+  linha(`== /api/pt/aovivo == ${r.status} em ${Date.now() - t0} ms · ${l.length} jogos · das distritais à Liga 3: ${base.length} ${JSON.stringify(estados)} · com logótipo: ${base.filter((j) => j.logoCasa || j.logoFora).length}`);
+  for (const j of base.slice(0, 6)) linha(`   ${j.compNome} | ${j.casa} ${j.hs ?? ""}-${j.as ?? ""} ${j.fora} | ${j.estado} | ${j.logoCasa || "-"}`);
+  const t1 = Date.now();
+  await fetch(`${SITE}/api/pt/aovivo`, { signal: AbortSignal.timeout(60000) }).then((x) => x.text());
+  linha(`== /api/pt/aovivo (segunda vez) == ${Date.now() - t1} ms`);
+} catch (e) { linha("aovivo: erro", e.message); }
