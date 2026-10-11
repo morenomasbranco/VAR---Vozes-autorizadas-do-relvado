@@ -110,4 +110,8 @@ test("Sen7ir: a API em JSON lê-se como um feed, e o filtro separa o futebol (AF
   assert.equal(onde("Manhouce recebe primeiro Passeio BTT Solidário com percurso de 42 quilómetros"), "modalidades");
   assert.equal(onde("Castro Daire recebe etapa do Campeonato de Portugal de Carrinhos de Rolamentos"), "modalidades");
   assert.equal(onde("Jovens ciclistas reuniram-se em Castro Daire para encontro regional de BTT"), "modalidades");
+  assert.equal(onde("HA Cambra conquista Torneio do Castelo após final convincente"), "modalidades"); // hóquei em patins
+  assert.equal(onde("Termas OC apresenta equipa técnica para a época 2026/2027"), "modalidades"); // Óquei Clube
+  assert.equal(onde("Portugal vence País de Gales na estreia de Jorge Jesus. Um tiro de fora da área deu a vitória"), "viseu");
+  assert.equal(onde("UD Sampedrense e HDA Cinfães empatam no arranque da época de futsal"), "modalidades");
 });
