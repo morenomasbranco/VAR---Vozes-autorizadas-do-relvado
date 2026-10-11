@@ -5,13 +5,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-          curl -sL -A "$UA" https://www.sen7ir.pt/t/desporto/ > /tmp/d
-          echo "=== scripts"; grep -oE '<script[^>]*src="[^"]+"' /tmp/d | head -20
-          echo "=== inline (api, posts, tag)"; grep -oE '.{0,160}(posts2-api|api/|apiUrl|API_URL|tag_id|tagId|slug).{0,200}' /tmp/d | head -20
-          for s in $(grep -oE '<script[^>]*src="[^"]+"' /tmp/d | grep -oE 'src="[^"]+"' | cut -d'"' -f2 | grep -vE 'google|facebook|gtag|ads' | head -8); do
-            case "$s" in http*) u="$s";; //*) u="https:$s";; *) u="https://www.sen7ir.pt$s";; esac
-            echo "=== JS $u"; curl -sL -A "$UA" "$u" | grep -oE '.{0,120}(posts2-api|/api/|endpoint|fetch\().{0,160}' | head -15
+          for q in "site:sen7ir.pt" "site:sen7ir.pt futebol" "site:sen7ir.pt futebol -futsal -andebol -basquetebol -voleibol -hóquei -atletismo -ciclismo" "site:sen7ir.pt (futsal OR andebol OR basquetebol OR voleibol OR hóquei OR atletismo OR ciclismo OR natação OR ténis OR padel OR rugby OR râguebi OR karaté OR judo)"; do
+            for w in "when:7d" ""; do
+              echo "=== $q $w"
+              curl -s "https://news.google.com/rss/search?q=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$q $w")&hl=pt-PT&gl=PT&ceid=PT:pt-150" | python3 -c '
+          import sys,re
+          x=sys.stdin.read(); its=re.findall(r"<item>(.*?)</item>",x,re.S); print(len(its),"itens")
+          for i in its[:12]:
+            t=re.search(r"<title>(.*?)</title>",i,re.S).group(1); d=re.search(r"<pubDate>(.*?)</pubDate>",i).group(1); s=re.search(r"<source url=\"([^\"]*)\"",i); print("  ",d[:16],"|",s.group(1) if s else "","|",t[:110])'
+            done
           done
-          echo "=== tentativas de API"
-          for u in "https://posts2-api.global.ssl.fastly.net/" "https://posts2-api.global.ssl.fastly.net/posts?tag=desporto" "https://www.sen7ir.pt/api/posts?tag=desporto"; do echo "--- $u"; curl -sL -A "$UA" -H "Origin: https://www.sen7ir.pt" -w "\n%{http_code} %{content_type}\n" "$u" | head -c 700; echo; done
