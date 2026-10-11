@@ -96,9 +96,14 @@ try {
 try {
   const { createGlossario } = await import("../server/glossario.js");
   const g = createGlossario();
-  for (const [p, tipo] of [["vitória", "sinonimos"], ["vitória", "antonimos"], ["estádio", "sinonimos"], ["traquejo", "sinonimos"]]) {
+  for (const [p, tipo] of [["vitória", "sinonimos"], ["vitória", "antonimos"], ["estádio", "sinonimos"], ["traquejo", "sinonimos"], ["xptoabc", "sinonimos"]]) {
     const r = await g.procurar(p, tipo).catch((e) => ({ erro: e.message }));
-    linha(`== Glossário (${tipo} de ${p}) ==`, r.erro || r.sentidos.map((s) => `${s.sentido || "—"}: ${s.palavras.slice(0, 8).join(", ")}`).join(" | ") || "(nada)");
+    linha(`== Glossário (${tipo} de ${p}) ==`, r.erro || `[${r.fonte}]`, r.erro ? "" : r.sentidos.map((s) => `${s.sentido || "—"}: ${s.palavras.slice(0, 8).join(", ")}`).join(" | ") || "(nada)");
+  }
+  const { lerWiki } = await import("../server/glossario.js");
+  for (const p of ["vitória", "golo", "derrota"]) {
+    const w = await fetch(`https://pt.wiktionary.org/w/api.php?action=parse&format=json&formatversion=2&prop=wikitext&redirects=1&page=${encodeURIComponent(p)}`, { headers: { "User-Agent": "Mozilla/5.0 (VAR glossário)" } }).then((r) => r.json()).catch((e) => ({ erro: e.message }));
+    linha(`== Wikcionário (${p}) ==`, w.erro || `sinónimos: ${lerWiki(w.parse?.wikitext, "sinonimos").flatMap((x) => x.palavras).join(", ") || "—"} · antónimos: ${lerWiki(w.parse?.wikitext, "antonimos").flatMap((x) => x.palavras).join(", ") || "—"}`);
   }
   const prod = await fetch(`${SITE}/api/glossario/palavra?p=vit%C3%B3ria&tipo=sinonimos`, { signal: AbortSignal.timeout(30000) });
   linha("== Glossário em produção ==", prod.status, (await prod.text()).slice(0, 400));

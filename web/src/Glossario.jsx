@@ -1,7 +1,7 @@
 // Secção «Glossário»: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol), alcunhas
 // e cidades dos clubes, sinónimos das competições, citações e ideias, e uma pesquisa de sinónimos e antónimos.
 // A pesquisa procura primeiro no próprio glossário (web/src/glossario) e, quando é preciso, na internet
-// (/api/glossario/palavra, que lê o sinonimos.com.br e o antonimos.com.br). Os dados só se carregam ao abrir a secção.
+// (/api/glossario/palavra: sinonimos.com.br e antonimos.com.br, e o Wikcionário). Os dados só se carregam ao abrir a secção.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MODS, TERMOS } from "./glossario/termos.js";
 import { PAISES } from "./glossario/clubes.js";
@@ -61,7 +61,7 @@ function Pesquisa({ API, grupos }) {
           {net?.estado === "erro" && <p className="muted">Não foi possível procurar na internet agora.{!local.length && ` O glossário não tem ${nome} de «${pedida.palavra}».`}</p>}
           {net?.estado === "ok" && (net.dados.sentidos.length ? net.dados.sentidos.map((s, i) => (
             <div key={i} className="gbloco">
-              <p className="gorig muted">Na internet · {net.dados.fonte} (português do Brasil){s.sentido && <span> — {s.sentido}</span>}</p>
+              <p className="gorig muted">Na internet · {net.dados.fonte === "pt.wiktionary.org" ? "Wikcionário" : `${net.dados.fonte} (português do Brasil)`}{s.sentido && <span> — {s.sentido}</span>}</p>
               <div className="gpals">{s.palavras.map((p) => <Palavra key={p} p={p} />)}</div>
             </div>
           )) : <p className="muted">Não há {nome} de «{pedida.palavra}» {local.length ? "na internet." : "nem no glossário nem na internet."}</p>)}
