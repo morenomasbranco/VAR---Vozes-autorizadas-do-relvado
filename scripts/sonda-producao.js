@@ -73,3 +73,20 @@ try {
   linha("== Sport TV ==", r.status, lista.length, "vídeos");
   for (const v of lista.slice(0, 10)) linha("   ", v.title);
 } catch (e) { linha("Sport TV: erro", e.message); }
+
+// Sen7ir: as últimas notícias de desporto e a coluna para onde cada uma vai (AF Viseu, Modalidades ou nenhuma)
+try {
+  const fs = await import("node:fs");
+  const { dePosts2, passaFiltro } = await import("../server/sources/rss.js");
+  const ofic = JSON.parse(fs.readFileSync(new URL("../oficiais.json", import.meta.url))).fontes.find((s) => s.id === "sen7ir-futebol");
+  const mod = JSON.parse(fs.readFileSync(new URL("../fontes.json", import.meta.url))).rss.find((s) => s.id === "sen7ir-modalidades");
+  if (ofic) {
+    const r = await fetch(ofic.url);
+    const f = dePosts2(await r.json(), ofic.artigo);
+    linha("== Sen7ir ==", r.status, f.items.length, "notícias");
+    for (const it of f.items) {
+      const t = `${it.title} ${it.contentSnippet}`;
+      linha("  ", (passaFiltro(ofic, t) ? "AF VISEU   " : passaFiltro(mod, t) ? "MODALIDADES" : "nenhuma    "), "|", it.isoDate?.slice(0, 10), "|", it.title.slice(0, 90));
+    }
+  }
+} catch (e) { linha("Sen7ir: erro", e.message); }

@@ -13,7 +13,7 @@
 // da imprensa sobre cada associação (pesquisa do Google News, uma por associação).
 import fs from "node:fs";
 import { sleep, hash, norm, lerTexto, entidades, conserta } from "../util.js";
-import { readFeed } from "./rss.js";
+import { readFeed, passaFiltro } from "./rss.js";
 import { traduzirGoogle } from "../gtradutor.js";
 import { ASSOCIACOES, orgPorNome, associacaoDoTexto } from "../pt/catalogo.js";
 // a FPF e os sites das associações (*.fpf.pt) bloqueiam os servidores de alojamento: estes pedidos passam pelo
@@ -270,11 +270,11 @@ export async function datarArtigo(url, lang, tz = LISBOA) {
 /* ───────── Leitores ───────── */
 const LEITORES = {
   async rss(s) {
-    const feed = await readFeed(s.url, s._cache || (s._cache = {}));
+    const feed = await readFeed(s.url, s._cache || (s._cache = {}), { artigo: s.artigo });
     if (!feed) return null; // 304: nada de novo
     return (feed.items || []).slice(0, 40).map((it) => {
       const ts = Date.parse(it.isoDate || it.pubDate || "") || null;
-      return { titulo: limpa(it.title), url: it.link, ts, dia: false };
+      return { titulo: limpa(it.title), url: it.link, ts, dia: false, resumo: limpa(it.contentSnippet || "").slice(0, 600), meio: s.tipo === "imprensa" ? s.org : undefined };
     });
   },
   async sitemap(s) {
@@ -580,7 +580,8 @@ export function createOficiais({ broadcast = () => {}, log = () => {}, config = 
     const novos = [];
     let datadasAgora = 0;
     // do mais antigo para o mais recente, para chegarem ao site pela ordem certa
-    const ordenada = [...lista].filter((x) => x.url && x.titulo).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    // o filtro próprio da fonte, no título e no resumo (por exemplo, só o futebol de um jornal regional)
+    const ordenada = [...lista].filter((x) => x.url && x.titulo && passaFiltro(s, `${x.titulo} ${x.resumo || ""}`)).sort((a, b) => (a.ts || 0) - (b.ts || 0));
     for (const x of ordenada) {
       const k = canon(x.url);
       if (v.has(k)) continue;

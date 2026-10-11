@@ -95,7 +95,30 @@ export async function discover(site) {
   return best ? abs(best) : null;
 }
 
-export async function readFeed(url, cache = {}) {
+// Lista de notícias em JSON, no formato da API de publicações usada por alguns jornais (o Sen7ir: posts2-api…/posts):
+// { data: [{ publicId, createdAt: "2026/10/10 19:11:15 +0100", l10n: [{ title, slug, description }] }] }.
+// O endereço de cada notícia sai do modelo «artigo» da fonte ({publicId} e {slug}). Devolve o mesmo formato que o
+// leitor de RSS (items com title, link, isoDate e contentSnippet), ou null se não for este formato.
+export function dePosts2(j, artigo) {
+  if (!j || !Array.isArray(j.data) || !artigo) return null;
+  const items = j.data.map((p) => {
+    const l = (p.l10n || [])[0] || {};
+    if (!l.title || !l.slug || !p.publicId) return null;
+    const d = String(p.createdAt || l.publishedAt || "").match(/^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})$/);
+    const iso = d ? new Date(`${d[1]}-${d[2]}-${d[3]}T${d[4]}${d[5]}:${d[6]}`).toISOString() : undefined;
+    const link = artigo.replace("{publicId}", p.publicId).replace("{slug}", l.slug);
+    return { title: l.title, link, guid: link, isoDate: iso, contentSnippet: l.description || "" };
+  }).filter(Boolean);
+  return { items };
+}
+
+// o filtro de uma fonte: «filtro» (o texto tem de ter) e «exclui» (não pode ter), no título e no resumo
+export function passaFiltro(s, texto) {
+  const t = String(texto || "");
+  return (!s.filtro || new RegExp(s.filtro, "i").test(t)) && (!s.exclui || !new RegExp(s.exclui, "i").test(t));
+}
+
+export async function readFeed(url, cache = {}, opcoes = {}) {
   const headers = { Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8" };
   if (cache.etag) headers["If-None-Match"] = cache.etag;
   if (cache.lastModified) headers["If-Modified-Since"] = cache.lastModified;
@@ -105,7 +128,9 @@ export async function readFeed(url, cache = {}) {
   cache.etag = res.headers.get("etag");
   cache.lastModified = res.headers.get("last-modified");
   try {
-    return await parser.parseString(await lerTexto(res));
+    const texto = await lerTexto(res);
+    if (opcoes.artigo && /^\s*\{/.test(texto)) return dePosts2(JSON.parse(texto), opcoes.artigo) || (() => { throw new Error("json"); })();
+    return await parser.parseString(texto);
   } catch {
     throw fail("o endereço não é um feed RSS válido", { parse: true });
   }
@@ -155,7 +180,7 @@ export function startRss(sources, onPost, log, estado = new Map()) {
           log(`[RSS] ${s.nome}: feed ${feed}`);
         }
         const t0 = Date.now();
-        const parsed = await readFeed(feed, cache);
+        const parsed = await readFeed(feed, cache, { artigo: google ? null : s.artigo });
         const nota = estado.get(s.id);
         if (nota) Object.assign(nota, { via: google ? "Google News" : "RSS", feed, ok: true, erro: null, at: Date.now(), ms: Date.now() - t0, ...(parsed ? { itens: (parsed.items || []).length } : {}) });
         if (parsed) {
@@ -202,6 +227,8 @@ export function startRss(sources, onPost, log, estado = new Map()) {
                 if (!DESPORTO.test(`${title} ${it.contentSnippet || ""}`)) continue;
               }
             }
+            // filtro próprio da fonte (por exemplo, só as notícias de outras modalidades de um jornal regional)
+            if ((s.filtro || s.exclui) && !passaFiltro(s, `${title} ${it.contentSnippet || ""}`)) continue;
             const body = google ? "" : clean(it.contentSnippet || it.content || it.summary || "").replace(/\s*submitted by\s+\/u\/\S+[\s\S]*$/i, "");
             onPost({
               postId: `${s.id}:${hash(key)}`,

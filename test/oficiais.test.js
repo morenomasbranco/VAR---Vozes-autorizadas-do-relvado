@@ -83,3 +83,31 @@ test("Portugal: pelo Google News, os lances, os resumos e as fichas de jogadores
   assert.equal(fpf("Nomeações profissionais").tipo, "comunicado");
   assert.equal(fpf("França foi mais feliz").fora, undefined);
 });
+
+test("Sen7ir: a API em JSON lê-se como um feed, e o filtro separa o futebol (AF Viseu) das outras modalidades", async () => {
+  const fs = await import("node:fs");
+  const { dePosts2, passaFiltro } = await import("../server/sources/rss.js");
+  const j = { data: [
+    { publicId: 1349394580, createdAt: "2026/10/10 19:11:15 +0100", l10n: [{ title: "Academia de Andebol de São Pedro do Sul perde com Maccabi", slug: "academia-de-andebol", description: "Women’s EHF European Cup" }] },
+    { publicId: 1, createdAt: "2026/10/04 17:41:23 +0100", l10n: [{ title: "AD Castro Daire vence Estrela da Calheta FC por 3-0 esta tarde", slug: "ad-castro-daire" }] },
+    { publicId: 2, l10n: [{ title: "sem slug" }] },
+  ] };
+  const f = dePosts2(j, "https://www.sen7ir.pt/{publicId}/{slug}/");
+  assert.equal(f.items.length, 2);
+  assert.equal(f.items[0].link, "https://www.sen7ir.pt/1349394580/academia-de-andebol/");
+  assert.equal(f.items[0].isoDate, "2026-10-10T18:11:15.000Z");
+  assert.equal(dePosts2({ rss: 1 }, "x"), null);
+
+  const ofic = JSON.parse(fs.readFileSync(new URL("../oficiais.json", import.meta.url))).fontes.find((s) => s.id === "sen7ir-futebol");
+  const mod = JSON.parse(fs.readFileSync(new URL("../fontes.json", import.meta.url))).rss.find((s) => s.id === "sen7ir-modalidades");
+  assert.equal(ofic.assoc, "af-viseu"); assert.equal(mod.secao, "modalidades");
+  const onde = (t) => (passaFiltro(ofic, t) ? "viseu" : passaFiltro(mod, t) ? "modalidades" : "nenhum");
+  assert.equal(onde("AD Castro Daire vence Estrela da Calheta FC por 3-0 esta tarde"), "viseu");
+  assert.equal(onde("Vítor Severino assume comando técnico do FC Arouca"), "viseu");
+  assert.equal(onde("Taça PECOL: Resultados da 3.ª Jornada definem apurados"), "viseu");
+  assert.equal(onde("ADR Alvarenga vence dérbi das Montanhas Mágicas no arranque do campeonato"), "viseu");
+  assert.equal(onde("Academia de Andebol de São Pedro do Sul perde com Maccabi"), "modalidades");
+  assert.equal(onde("Manhouce recebe primeiro Passeio BTT Solidário com percurso de 42 quilómetros"), "modalidades");
+  assert.equal(onde("Castro Daire recebe etapa do Campeonato de Portugal de Carrinhos de Rolamentos"), "modalidades");
+  assert.equal(onde("Jovens ciclistas reuniram-se em Castro Daire para encontro regional de BTT"), "modalidades");
+});
