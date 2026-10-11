@@ -5,13 +5,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          for q in "site:sen7ir.pt" "site:sen7ir.pt futebol" "site:sen7ir.pt futebol -futsal -andebol -basquetebol -voleibol -hóquei -atletismo -ciclismo" "site:sen7ir.pt (futsal OR andebol OR basquetebol OR voleibol OR hóquei OR atletismo OR ciclismo OR natação OR ténis OR padel OR rugby OR râguebi OR karaté OR judo)"; do
-            for w in "when:7d" ""; do
-              echo "=== $q $w"
-              curl -s "https://news.google.com/rss/search?q=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$q $w")&hl=pt-PT&gl=PT&ceid=PT:pt-150" | python3 -c '
-          import sys,re
-          x=sys.stdin.read(); its=re.findall(r"<item>(.*?)</item>",x,re.S); print(len(its),"itens")
-          for i in its[:12]:
-            t=re.search(r"<title>(.*?)</title>",i,re.S).group(1); d=re.search(r"<pubDate>(.*?)</pubDate>",i).group(1); s=re.search(r"<source url=\"([^\"]*)\"",i); print("  ",d[:16],"|",s.group(1) if s else "","|",t[:110])'
-            done
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          curl -sL -A "$UA" "https://www.sen7ir.pt/js/loader.js?id=8a35a7602b1b4fa24eac107d4167599d" > /tmp/l.js
+          wc -c /tmp/l.js; head -c 800 /tmp/l.js; echo
+          echo "=== ficheiros js referidos"; grep -oE '"[^"]*\.js[^"]*"' /tmp/l.js | sort -u | head -40
+          echo "=== api no loader"; grep -oE '.{0,150}(posts2|fastly|/api/|baseURL|axios).{0,200}' /tmp/l.js | head -20
+          for f in $(grep -oE '/js/[A-Za-z0-9_./-]+\.js(\?[^"]*)?' /tmp/l.js | sort -u | head -30); do
+            curl -sL -A "$UA" "https://www.sen7ir.pt$f" > /tmp/c.js
+            n=$(grep -c -E 'posts2|fastly|st005|/posts' /tmp/c.js)
+            if [ "$n" != "0" ]; then echo "=== $f ($(wc -c </tmp/c.js) bytes)"; grep -oE '.{0,200}(posts2-api|fastly\.net|/posts\?|/v[0-9]/|tag=|tags?/).{0,250}' /tmp/c.js | head -25; fi
           done
