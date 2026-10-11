@@ -1,0 +1,22 @@
+# TEMPORÁRIO (sai antes de integrar): abre o Glossário num browser e experimenta acrescentar palavras
+name: glossario-ecra
+on:
+  push:
+    branches-ignore: [main]
+jobs:
+  ecra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm i --no-save playwright@1.47.2 && npx playwright install --with-deps chromium
+      - name: glossário no browser
+        run: |
+          PORT=3001 node server/index.js > servidor.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3001/ && break; sleep 2; done
+          node scripts/glossario-ecra.mjs
