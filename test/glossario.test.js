@@ -120,6 +120,11 @@ test("glossário (internet): a página que chega devagar e para a meio serve com
   assert.equal(r.fonte, "www.sinonimos.com.br");
   assert.deepEqual(r.sentidos[0].palavras, ["conquista", "triunfo", "êxito", "sucesso"]);
   assert.equal(g.estado().fontes["www.sinonimos.com.br"].ultimo.completo, false);
+  // o CSS do cabeçalho fala de «content-reviewer» e de «footer» antes das listas: não se para aí
+  const cabecalho = "<html><head><style>.content-reviewer{color:red} footer{}</style><footer-x></head><body>";
+  const aosBocados = () => new Response(new ReadableStream({ start(c) { for (const b of [cabecalho, PAGINA, '<div class="content-reviewer">fim</div>']) c.enqueue(enc.encode(b)); c.close(); } }), { status: 200 });
+  const comCss = createGlossario({ pedir: falso({ "sinonimos.com.br": aosBocados }).pedir });
+  assert.equal((await comCss.procurar("vitória")).sentidos.length, 2);
 });
 
 test("glossário: sinónimos e antónimos no próprio glossário (termos, clubes e competições)", () => {

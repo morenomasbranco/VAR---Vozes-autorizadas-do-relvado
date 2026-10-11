@@ -80,6 +80,7 @@ function comPrazo(promessa, ms, msg) {
 
 // lê o corpo da resposta à medida que chega, até ao fim da parte que interessa (ou até ao prazo): se a página
 // parar a meio, fica o que já chegou
+const INICIO_LISTAS = /class="[^"]*\b(?:syn-list|ant-list)\b/i;
 const FIM_LISTAS = /content-reviewer|<footer/i;
 async function lerCorpo(res, prazo) {
   const leitor = res.body?.getReader?.();
@@ -94,7 +95,9 @@ async function lerCorpo(res, prazo) {
       if (!r) return { html, completo: false };
       if (r.done) return { html: html + dec.decode(), completo: true };
       html += dec.decode(r.value, { stream: true });
-      if (FIM_LISTAS.test(html) || html.length > 2e6) return { html, completo: true };
+      // o fim só conta depois da primeira lista (o CSS do cabeçalho também fala de «content-reviewer»)
+      const i = html.search(INICIO_LISTAS);
+      if ((i >= 0 && FIM_LISTAS.test(html.slice(i))) || html.length > 2e6) return { html, completo: true };
     }
   } finally {
     leitor.cancel().catch(() => {});
