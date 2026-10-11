@@ -971,6 +971,14 @@ const CSS = `
 .apito .feedhead.centro{justify-content:center;text-align:center}
 .apito .feedhead.centro h1{margin:0 auto}
 .apito .feedhead h1.hglos{color:var(--hist)}
+/* nas secções (menos Resultados), os botões por baixo do título ficam centrados e com espaço até ao conteúdo */
+.apito main.centrado .feedhead{margin-bottom:14px}
+.apito main.centrado .ofic>.livehead{justify-content:center;margin-bottom:22px}
+.apito main.centrado>.mods,.apito main.centrado .eftipos{display:flex;width:fit-content;max-width:100%;margin-left:auto;margin-right:auto;justify-content:center}
+.apito main.centrado>.mods{margin-bottom:22px}
+.apito main.centrado .eftipos{margin-bottom:22px}
+.apito main.centrado .dist .dhead{justify-content:center;margin-bottom:18px}
+.apito main.centrado .dist .dgrupos{display:flex;width:fit-content;max-width:100%;margin:0 auto 16px;justify-content:center}
 .apito .textbtn{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
 .apito .textbtn:hover{color:var(--ink)}
 .apito .pending{display:block;width:100%;margin:0 0 12px;padding:9px;border:1px dashed var(--accent);border-radius:8px;font-weight:600;font-size:14px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
@@ -2383,7 +2391,7 @@ export default function App() {
       <div className="wrap">
         {conn === "offline" && <p className="notice">{ui.offlineNote}</p>}
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
-          <main>
+          <main className={section !== "resultados" ? "centrado" : undefined}>
             <div className={`feedhead${section !== "resultados" ? " centro" : ""}`}>
               <h1 className={section === "glossario" ? "hglos" : undefined}>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (

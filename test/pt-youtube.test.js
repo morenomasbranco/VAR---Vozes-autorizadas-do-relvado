@@ -34,13 +34,13 @@ test("YouTube: a pesquisa de canais e o reconhecimento do canal de cada associa�
   assert.equal(urlCanal(canaisBase().find((c) => c.id === "af-lisboa").canal), "https://www.youtube.com/channel/UCXSPgjw-KXn86J_upO98LWg");
   assert.equal(urlCanal("@FPF.Oficial"), "https://www.youtube.com/@FPF.Oficial");
   assert.equal(urlCanal("https://www.youtube.com/@x/"), "https://www.youtube.com/@x");
-  // 22 associações (a AF Viana com dois canais), Canal 11 e FPF
-  assert.equal(canaisBase().length, 25);
-  assert.deepEqual(canaisBase().filter((c) => c.assoc === "af-viana").map((c) => c.id), ["af-viana", "af-viana:2"]);
+  // 22 associações (um canal cada), Canal 11 e FPF
+  assert.equal(canaisBase().length, 24);
+  assert.deepEqual(canaisBase().filter((c) => c.assoc === "af-viana").map((c) => c.id), ["af-viana"]);
   assert.equal(canaisBase().find((c) => c.id === "af-ponta-delgada").canal, "@afpd_tv");
   assert.equal(canaisBase().find((c) => c.id === "canal11").canal, "@Canal11Oficial");
-  // todas as associações têm canal conhecido (as que não tivessem seriam procuradas pelo nome)
-  assert.deepEqual(canaisBase().filter((c) => !c.canal).map((c) => c.id), []);
+  // só a AF Portalegre não tem canal conhecido: é procurada pelo nome (o «APF TV» que estava era um canal brasileiro)
+  assert.deepEqual(canaisBase().filter((c) => !c.canal).map((c) => c.id), ["af-portalegre"]);
   assert.equal(canaisBase().find((c) => c.id === "af-coimbra").canal, "@af.coimbra");
 });
 

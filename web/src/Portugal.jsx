@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+// os logótipos que passam pelo servidor vêm com o endereço relativo (/api/distritais/logo…); os que faltam escondem-se
+const logoSrc = (u) => (u && u.startsWith("/") ? (import.meta.env.VITE_API_URL || "") + u : u);
+const escondeImg = (e) => { e.currentTarget.style.display = "none"; };
 import { ChevronLeft, ChevronRight, Search, RotateCcw } from "lucide-react";
 
 // Resultados de Portugal: todos os campeonatos seniores (Liga, FPF e as 22 associações), com a jornada da semana,
@@ -92,9 +95,9 @@ function Jogo({ j, agora, mostrarComp = false, onComp, form }) {
   return (
     <li className={`ptj ${vivo(j) ? "on" : ""} ${j.estado === "final" ? "ft" : ""}`}>
       {mostrarComp && <button className="ptcomp" onClick={() => onComp?.(j)}>{j.compNome}{j.serieNome ? ` · ${j.serieNome}` : ""}{j.jornada ? ` · ${j.jornada}.ª j.` : ""}</button>}
-      <span className="pth">{j.logoCasa && <img src={j.logoCasa} alt="" loading="lazy" />}{j.casa}</span>
+      <span className="pth">{j.logoCasa && <img src={logoSrc(j.logoCasa)} alt="" loading="lazy" onError={escondeImg} />}{j.casa}</span>
       <span className={`ptr ${temRes ? "" : "vs"}`} translate="no">{temRes ? `${j.hs}–${j.as}` : "–"}</span>
-      <span className="pta">{j.logoFora && <img src={j.logoFora} alt="" loading="lazy" />}{j.fora}</span>
+      <span className="pta">{j.logoFora && <img src={logoSrc(j.logoFora)} alt="" loading="lazy" onError={escondeImg} />}{j.fora}</span>
       <span className="ptst" translate="no"><Estado j={j} agora={agora} /></span>
       {(golos.length > 0 || j.conflito || j.local) && (
         <span className="ptg">
@@ -160,8 +163,11 @@ function Progresso({ p, agora, API = "", curto = false }) {
   const fila = (p.filas?.alta || 0) + (p.filas?.normal || 0) + (p.filas?.baixa || 0);
   const pq = p.pesquisa;
   const espnErros = Object.entries(p.espn?.erros || {});
+  // os avisos técnicos ficam num «Estado da leitura» fechado (aberto só enquanto ainda não há nada para mostrar)
+  const avisos = (pq && !pq.ativo) || (pq?.ativo && pq.pausaAte > agora) || !!fpfErro;
   return (
-    <div className={`ptprog ${curto ? "curto" : ""}`} role="status">
+    <details className={`ptprog ${curto ? "curto" : ""}`} role="status" open={!curto}>
+      <summary className="ptsum">Estado da leitura dos resultados{avisos ? " · há avisos" : ""}</summary>
       {!curto && <p className="ptprogt">A procurar os campeonatos: Liga e Taça pela ESPN, os restantes nacionais e as distritais pela pesquisa na web…</p>}
       <p className="muted">
         {pq?.ativo ? `Organizadores pesquisados: ${pq.lidos} de ${pq.alvos}` : ""}
@@ -183,7 +189,7 @@ function Progresso({ p, agora, API = "", curto = false }) {
         <p className="ptwarn">A FPF respondeu, mas não reconheci nenhuma competição na resposta. O que ela devolveu está em <a href={`${API}/api/pt/amostra`} target="_blank" rel="noreferrer">/api/pt/amostra</a>.</p>
       )}
       {!curto && <p className="muted small">Na primeira vez (ou depois de o servidor recomeçar sem os dados guardados), as competições vão aparecendo ao longo de uns minutos: um organizador a cada meio minuto, as 22 associações em cerca de um quarto de hora.</p>}
-    </div>
+    </details>
   );
 }
 
@@ -465,6 +471,8 @@ export const PT_CSS = `
 .apito .ptsrc.of{color:var(--ink);border-color:var(--ink)}
 .apito .ptig{display:inline-flex;gap:8px} .apito .ptig a{color:var(--muted);text-decoration:none} .apito .ptig a:hover{text-decoration:underline}
 .apito .ptwarn{color:var(--accent);font-weight:700}
+.apito .ptsum{cursor:pointer;font-size:12.5px;color:var(--muted);margin:0 0 6px}
+.apito details.ptprog:not([open]){margin-bottom:8px}
 .apito .pulse.pausa{color:var(--accent)} .apito .pulse.pausa i{background:var(--accent)}
 .apito .ptnota{font-size:12px;margin:8px 0 0}
 .apito .ptenvb{font-size:11.5px;padding:0 6px;border:1px solid var(--line);border-radius:999px;margin-left:auto}

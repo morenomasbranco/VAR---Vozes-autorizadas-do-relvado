@@ -3,6 +3,9 @@
 // (notícias, que o App passa como evento da janela «distrital-noticia»). As imagens passam pelo servidor.
 // Por cima das colunas, duas faixas à maneira do Feed: os jogos de hoje, das distritais à Liga 3 (/api/pt/aovivo), e
 // as transmissões em direto nos canais de YouTube das associações, do Canal 11 e da FPF (/api/distritais/diretos).
+// os logótipos que passam pelo servidor vêm com o endereço relativo (/api/distritais/logo…); os que faltam escondem-se
+const logoSrc = (u) => (u && u.startsWith("/") ? (import.meta.env.VITE_API_URL || "") + u : u);
+const escondeImg = (e) => { e.currentTarget.style.display = "none"; };
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // das distritais à Liga 3: as provas das associações e, da FPF, a Liga 3, o Campeonato de Portugal e o dos Açores
@@ -102,8 +105,8 @@ function JogosDaBase({ itens, total, vivos, titulo, nomeDe }) {
               <li key={j.id}>
                 <div className={`lcard ${f === 0 ? "" : f === 1 ? "next" : "done"}`}>
                   <span className="lcomp" title={[j.compNome, j.serieNome].filter(Boolean).join(" · ")}>{j.compNome}{j.serieNome ? ` · ${j.serieNome}` : ""}</span>
-                  <span className="lrow"><span className="lteam">{j.logoCasa && <img className="dlogo" src={j.logoCasa} alt="" loading="lazy" />}{j.casa}</span>{placar && <b translate="no">{j.hs}</b>}</span>
-                  <span className="lrow"><span className="lteam">{j.logoFora && <img className="dlogo" src={j.logoFora} alt="" loading="lazy" />}{j.fora}</span>{placar && <b translate="no">{j.as}</b>}</span>
+                  <span className="lrow"><span className="lteam">{j.logoCasa && <img className="dlogo" src={logoSrc(j.logoCasa)} alt="" loading="lazy" onError={escondeImg} />}{j.casa}</span>{placar && <b translate="no">{j.hs}</b>}</span>
+                  <span className="lrow"><span className="lteam">{j.logoFora && <img className="dlogo" src={logoSrc(j.logoFora)} alt="" loading="lazy" onError={escondeImg} />}{j.fora}</span>{placar && <b translate="no">{j.as}</b>}</span>
                   <span className="lfoot">
                     {f === 0 ? <span className={`lmin ${j.estado === "intervalo" ? "pausa" : ""}`} translate="no">{j.estado === "intervalo" ? "Intervalo" : j.min?.texto || (j.semInfo ? "A decorrer (sem info)" : "Em direto")}</span>
                       : f === 1 ? <span className="muted small" translate="no">{j.inicio && !j.semHora ? hhmm(j.inicio) : "Hoje"}</span>
@@ -330,7 +333,12 @@ export default function Distritais({ API = "", now, query = "" }) {
         </div>
       </div>
       <p className="muted dnota">
-        Notícias e comunicados de cada associação, a imprensa que fala dela e os posts do Instagram dos clubes ({totalNoticias} notícias e comunicados).{" "}
+        Notícias e comunicados de cada associação, a imprensa que fala dela e os posts do Instagram dos clubes ({totalNoticias} notícias e comunicados).
+      </p>
+      {/* o estado técnico da leitura fica fechado, para quem o quiser ver */}
+      <details className="destado">
+        <summary className="muted">Estado da leitura{apiPausa || igPausa || bloqueado ? " · há avisos" : ""}</summary>
+      <p className="muted dnota">
         {porLer ? `A ler as páginas dos clubes: ${e.lidosTotal || 0} de ${e.perfis || e.clubes} já lidas, ${total} posts.` : `${e.perfis || e.clubes} páginas de clubes, relidas ao longo do dia.`}
       </p>
       <ul className="muted dvias">
@@ -356,6 +364,7 @@ export default function Distritais({ API = "", now, query = "" }) {
           {ig.comSessao ? "" : " Também ajuda juntar ao servidor a variável IG_SESSIONID (a sessão de uma conta de Instagram qualquer, sem seguir ninguém)."}
         </p>
       )}
+      </details>
       <div className="cols dcols">
         {colunas.map((c) => {
           const k = n[c.key] || 12;
@@ -398,6 +407,9 @@ export const DIST_CSS = `
 .apito .dist .dhead{margin:0 0 10px} .apito .dist .dhead .seg{margin:0}
 .apito .dnot .ctitle a{color:inherit;text-decoration:none} .apito .dnot .ctitle a:hover{text-decoration:underline}
 .apito .otipo.imprensa{background:var(--raise)}
+.apito .dist .destado{margin:0 auto 14px;text-align:center;font-size:12px}
+.apito .dist .destado summary{cursor:pointer}
+.apito .dist .destado[open]{margin-bottom:6px}
 .apito .dist .dvias{font-size:12px;margin:-6px auto 12px;padding:0;list-style:none;text-align:center;max-width:900px}
 .apito .dpost .drede{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;line-height:16px;color:#fff;flex:none}
 .apito .dpost .drede.ig{background:#C13584} .apito .dpost .drede.fb{background:#1877F2}

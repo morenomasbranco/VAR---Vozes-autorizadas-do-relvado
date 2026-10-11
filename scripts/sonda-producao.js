@@ -136,3 +136,13 @@ try {
     for (const p of primeiros) linha(`     ${p}`);
   }
 } catch (e) { linha("YouTube: erro", e.message); }
+
+// Logótipos dos clubes (fotografia da página de Facebook): alguns exemplos e o estado
+try {
+  for (const [nome, org] of [["Académico de Viseu", "af-viseu"], ["Lusitano FC Vildemoinhos", "af-viseu"], ["Oliveirense", "fpf"], ["CD Cinfães", "af-viseu"]]) {
+    const r = await fetch(`${SITE}/api/distritais/logo?nome=${encodeURIComponent(nome)}&org=${org}`, { signal: AbortSignal.timeout(30000) }).catch((e) => ({ status: e.message, headers: new Headers() }));
+    const n = r.arrayBuffer ? (await r.arrayBuffer()).byteLength : 0;
+    linha(`== logótipo ${nome} == ${r.status} ${r.headers.get("content-type") || ""} ${n} bytes`);
+  }
+  linha("== logótipos: estado ==", JSON.stringify(await j("/api/distritais/logos/estado")));
+} catch (e) { linha("logótipos: erro", e.message); }

@@ -40,11 +40,11 @@ export const CANAIS_CONHECIDOS = {
   "af-lisboa": ["UCXSPgjw-KXn86J_upO98LWg"], // «AFL TV»
   "af-madeira": ["@AFMadeiraTV"],
   "af-ponta-delgada": ["@afpd_tv"],
-  "af-portalegre": ["@apftv85"], // «APF TV»
+  // «af-portalegre»: o «@apftv85» que aqui estava é de um canal brasileiro (Copa, São Caetano, Tatuí…); sem canal conhecido
   "af-porto": ["@associacaodefuteboldoporto"],
   "af-santarem": ["@AFSantarem"],
   "af-setubal": ["@afsetubal2570"],
-  "af-viana": ["@AFVC1923", "UCItukc3FMSu7zL-8V2_11Kw"], // «AFVC TV»
+  "af-viana": ["@AFVC1923"], // «AFVC TV» (o «UCItukc3FMSu7zL-8V2_11Kw» era o mesmo canal)
   "af-vila-real": ["UC733i_NcTy8c9mZJIUN2ewA"],
   "af-viseu": ["@AFViseuTV"],
 };
