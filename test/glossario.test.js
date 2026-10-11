@@ -105,6 +105,10 @@ test("glossário (internet): quando o site não tem a palavra, falha ou não res
   const falha = createGlossario({ pedir: f.pedir });
   await assert.rejects(falha.procurar("golo"), /503/);
   assert.equal(falha.estado().erros, 1);
+  // um pedido pendurado (que nem responde nem falha) acaba no prazo
+  const pendurado = createGlossario({ pedir: () => new Promise(() => {}), prazo: 50 });
+  await assert.rejects(pendurado.procurar("golo"), /sem resposta/);
+  assert.match(pendurado.estado().ultimoErro.erro, /sem resposta/);
 });
 
 test("glossário (internet): a página que chega devagar e para a meio serve com o que já chegou", async () => {
