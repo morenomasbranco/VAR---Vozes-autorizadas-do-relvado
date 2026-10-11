@@ -86,7 +86,8 @@ try {
     linha("== Sen7ir ==", r.status, f.items.length, "notícias");
     for (const it of f.items) {
       const t = `${it.title} ${it.contentSnippet}`;
-      linha("  ", (passaFiltro(ofic, t) ? "AF VISEU   " : passaFiltro(mod, t) ? "MODALIDADES" : "nenhuma    "), "|", it.isoDate?.slice(0, 10), "|", it.title.slice(0, 90));
+      const porque = !passaFiltro(ofic, t) && new RegExp(ofic.filtro, "i").test(t) ? `  [excluída por «${t.match(new RegExp(ofic.exclui, "i"))[0]}»]` : "";
+      linha("  ", (passaFiltro(ofic, t) ? "AF VISEU   " : passaFiltro(mod, t) ? "MODALIDADES" : "nenhuma    "), "|", it.isoDate?.slice(0, 10), "|", it.title.slice(0, 90) + porque);
     }
   }
 } catch (e) { linha("Sen7ir: erro", e.message); }
