@@ -105,8 +105,10 @@ try {
     const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (VAR glossário)" }, signal: AbortSignal.timeout(15000) });
     const html = await r.text();
     linha("== página", u, r.status, r.url, html.length, "caracteres ==");
-    const i = html.search(/triunfo|derrota/i);
-    linha(i < 0 ? html.slice(0, 1500) : html.slice(Math.max(0, i - 1200), i + 600));
+    const corpo = html.slice(html.indexOf("<body"));
+    const marcas = [...corpo.matchAll(/class="[^"]*(sinon|anton|sentido|contrario)[^"]*"/gi)].slice(0, 6);
+    for (const m of marcas) linha("  …", corpo.slice(Math.max(0, m.index - 150), m.index + 450).replace(/\s+/g, " "));
+    if (!marcas.length) { const i = corpo.search(/triunfo|derrota/i); linha(corpo.slice(Math.max(0, i - 800), i + 800).replace(/\s+/g, " ")); }
   }
   const prod = await fetch(`${SITE}/api/glossario/palavra?p=vit%C3%B3ria&tipo=sinonimos`, { signal: AbortSignal.timeout(30000) });
   linha("== Glossário em produção ==", prod.status, (await prod.text()).slice(0, 400));
