@@ -71,6 +71,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
   const clubes = createClubes({ log });
   // logótipos dos clubes (a fotografia da página de Facebook de cada um), para os resultados
   const logos = createLogos({ clubes });
+  // o logótipo de uma equipa para os jogos: se a procura falhar, o jogo aparece na mesma (sem logótipo)
+  const logoDe = (nome, org) => { try { return logos.endereco(nome, org); } catch { return null; } };
   // «Distritais»: os posts mais recentes dos clubes de cada associação (secção própria do site)
   const distritais = createDistritais({ clubes, broadcast: (ev, d) => broadcast(ev, d), cookie: cookieDoEnv(), log });
   // transmissões em direto no YouTube das associações, do Canal 11 e da FPF (secção Distritais)
@@ -165,7 +167,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const m = j.estado === "direto" ? (j.relogioExterno && agora - j.relogioExterno.ts < 5 * 60e3 ? { ...j.relogioExterno.m, fonte: "explicito" } : minutoEm(j, agora, comp?.mod)) : null;
     return {
       id: j.id, comp: j.comp, compNome: comp?.nome, org: comp?.org, mod: comp?.mod, nivel: comp?.nivel, serie: j.serie, serieNome: serie?.nome || null, jornada: j.jornada,
-      casa: j.casa, fora: j.fora, logoCasa: j.logoCasa || logos.endereco(j.casa, comp?.org) || null, logoFora: j.logoFora || logos.endereco(j.fora, comp?.org) || null, inicio: j.inicio, semHora: !!j.semHora, local: j.local || null,
+      casa: j.casa, fora: j.fora, logoCasa: j.logoCasa || logoDe(j.casa, comp?.org) || null, logoFora: j.logoFora || logoDe(j.fora, comp?.org) || null, inicio: j.inicio, semHora: !!j.semHora, local: j.local || null,
       estado: j.estado, hs: j.hs, as: j.as, oficial: !!j.oficial, origem: j.origem, via: j.via || null, viaUrl: j.viaUrl || null,
       min: m ? { texto: textoMinuto(m), fonte: m.fonte, confianca: m.confianca } : null,
       semInfo: !!(vivo && j.estado === "agendado"), // devia estar a decorrer e ninguém disse nada
