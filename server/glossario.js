@@ -1,6 +1,8 @@
 // Glossário: sinónimos e antónimos de uma palavra, procurados na internet quando o glossário do site (web/src/glossario)
-// não tem a palavra. As páginas vêm do sinonimos.com.br e do antonimos.com.br (gratuitos, português do Brasil):
-// cada sentido da palavra é uma lista de palavras separadas por vírgulas.
+// não tem a palavra. Primeiro no sinonimos.com.br e no antonimos.com.br (gratuitos, português do Brasil), onde cada
+// sentido da palavra é uma lista de palavras separadas por vírgulas; quando não dão nada (ou não respondem a tempo),
+// no Wikcionário em português (API da Wikimedia, gratuita).
+// A página dos sites lê-se à medida que chega: em produção chega devagar, e as listas vêm logo no início.
 // As respostas ficam guardadas uma semana, para não se pedir a mesma palavra duas vezes.
 
 const SITES = {
@@ -43,15 +45,102 @@ export function lerPagina(html, tipo) {
   return sentidos;
 }
 
+// o Wikcionário: as listas das secções de sinónimos (ou antónimos) da parte em português da página
+const WIKI = (p) => `https://pt.wiktionary.org/w/api.php?action=parse&format=json&formatversion=2&prop=wikitext&redirects=1&page=${encodeURIComponent(p)}`;
+const TITULO_WIKI = { sinonimos: /-sin-|sin[oóô]nimo/i, antonimos: /-ant-|ant[oóô]nimo/i };
+export function lerWiki(wikitext, tipo) {
+  let t = String(wikitext || "");
+  // só a parte em português (= {{-pt-}} =), até à língua seguinte
+  const pt = t.search(/^=\s*\{\{-pt-\}\}\s*=\s*$/m);
+  if (pt >= 0) {
+    t = t.slice(pt);
+    const outra = t.slice(1).search(/^=\s*\{\{-[a-z-]+-\}\}\s*=\s*$/m);
+    if (outra >= 0) t = t.slice(0, outra + 1);
+  }
+  const palavras = [];
+  let dentro = false;
+  for (const linha of t.split("\n")) {
+    const h = linha.match(/^(=+)\s*(.*?)\s*\1\s*$/);
+    if (h) { dentro = TITULO_WIKI[tipo].test(h[2]); continue; }
+    if (!dentro) continue;
+    for (const m of linha.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
+      const p = m[1].trim();
+      if (p && !p.includes(":") && p.length <= 60) palavras.push(p);
+    }
+  }
+  const unicas = [...new Set(palavras)];
+  return unicas.length ? [{ sentido: null, palavras: unicas }] : [];
+}
+
 // prazo a sério: em produção, um pedido pendurado nem sempre respeita o sinal de abort (como no YouTube)
 function comPrazo(promessa, ms, msg) {
   let t;
   return Promise.race([promessa, new Promise((_, rejeitar) => { t = setTimeout(() => rejeitar(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
 }
 
+// lê o corpo da resposta à medida que chega, até ao fim da parte que interessa (ou até ao prazo): se a página
+// parar a meio, fica o que já chegou
+const FIM_LISTAS = /content-reviewer|<footer/i;
+async function lerCorpo(res, prazo) {
+  const leitor = res.body?.getReader?.();
+  if (!leitor) return { html: await comPrazo(res.text(), prazo, "a página não chegou a tempo"), completo: true };
+  const dec = new TextDecoder();
+  const limite = Date.now() + prazo;
+  let html = "";
+  try {
+    for (;;) {
+      const falta = limite - Date.now();
+      const r = falta > 0 ? await comPrazo(leitor.read(), falta, "prazo").catch(() => null) : null;
+      if (!r) return { html, completo: false };
+      if (r.done) return { html: html + dec.decode(), completo: true };
+      html += dec.decode(r.value, { stream: true });
+      if (FIM_LISTAS.test(html) || html.length > 2e6) return { html, completo: true };
+    }
+  } finally {
+    leitor.cancel().catch(() => {});
+  }
+}
+
 export function createGlossario({ pedir = fetch, agora = () => Date.now(), prazo = PRAZO_MS } = {}) {
   const guardadas = new Map();
-  const estado = { pedidos: 0, erros: 0, ultimoErro: null, ultimoOk: null };
+  const estado = { pedidos: 0, erros: 0, ultimoErro: null, ultimoOk: null, fontes: {} };
+  const daFonte = (host) => (estado.fontes[host] ||= { ok: 0, vazias: 0, erros: 0, ultimo: null });
+  const CABECALHOS = { "User-Agent": "Mozilla/5.0 (VAR glossário)", "Accept-Language": "pt-PT,pt;q=0.9" };
+
+  // um pedido com prazo; anota em estado.fontes o que aconteceu
+  async function pedirCom(url, ler) {
+    const host = new URL(url).hostname;
+    const f = daFonte(host);
+    const ctl = new AbortController();
+    const inicio = agora();
+    try {
+      const res = await comPrazo(pedir(url, { headers: CABECALHOS, signal: ctl.signal }), prazo, `${host}: sem resposta em ${prazo / 1000} s`);
+      const r = await ler(res);
+      f[r.sentidos.length ? "ok" : "vazias"]++;
+      f.ultimo = { ms: agora() - inicio, sentidos: r.sentidos.length, ...(r.info || {}), ts: agora() };
+      return { sentidos: r.sentidos, fonte: host };
+    } catch (e) {
+      ctl.abort();
+      f.erros++;
+      f.ultimo = { erro: e.message, causa: e.cause?.code || e.cause?.message || null, ms: agora() - inicio, ts: agora() };
+      throw e;
+    }
+  }
+
+  const doSite = (tipo, slug) => pedirCom(SITES[tipo](slug), async (res) => {
+    if (res.status === 404) return { sentidos: [] };
+    if (!res.ok) throw new Error(`o site respondeu ${res.status}`);
+    const { html, completo } = await lerCorpo(res, prazo);
+    const sentidos = lerPagina(html, tipo);
+    if (!sentidos.length && !completo) throw new Error(`a página não chegou em ${prazo / 1000} s (${html.length} caracteres)`);
+    return { sentidos, info: { caracteres: html.length, completo } };
+  });
+
+  const daWiki = (palavra, tipo) => pedirCom(WIKI(palavra.trim().toLowerCase()), async (res) => {
+    if (!res.ok) throw new Error(`o Wikcionário respondeu ${res.status}`);
+    const j = await comPrazo(res.json(), prazo, "o Wikcionário não respondeu a tempo");
+    return { sentidos: j?.parse?.wikitext ? lerWiki(j.parse.wikitext, tipo) : [] };
+  });
 
   async function procurar(palavra, tipo = "sinonimos") {
     if (!SITES[tipo]) throw Object.assign(new Error("tipo desconhecido"), { status: 400 });
@@ -61,30 +150,20 @@ export function createGlossario({ pedir = fetch, agora = () => Date.now(), prazo
     const g = guardadas.get(chave);
     if (g && agora() - g.ts < GUARDA_MS) return g.dados;
     estado.pedidos++;
-    const ctl = new AbortController();
-    const inicio = agora();
-    try {
-      const res = await comPrazo(pedir(SITES[tipo](slug), {
-        headers: { "User-Agent": "Mozilla/5.0 (VAR glossário)", "Accept-Language": "pt-PT,pt;q=0.9" },
-        signal: ctl.signal,
-      }), prazo, `sem resposta em ${prazo / 1000} s`);
-      if (res.status === 404) {
-        const dados = { palavra, tipo, sentidos: [], fonte: new URL(SITES[tipo](slug)).hostname };
-        guardar(chave, dados);
-        return dados;
-      }
-      if (!res.ok) throw new Error(`o site respondeu ${res.status}`);
-      const html = await comPrazo(res.text(), prazo, `a página não chegou em ${prazo / 1000} s`);
-      const dados = { palavra, tipo, sentidos: lerPagina(html, tipo), fonte: new URL(SITES[tipo](slug)).hostname };
-      guardar(chave, dados);
-      estado.ultimoOk = { palavra, tipo, ms: agora() - inicio, ts: agora() };
-      return dados;
-    } catch (e) {
-      ctl.abort();
-      estado.erros++;
-      estado.ultimoErro = { palavra, tipo, erro: e.message, causa: e.cause?.code || e.cause?.message || null, ms: agora() - inicio, ts: agora() };
-      throw e;
+    let achado = null, erro = null;
+    try { achado = await doSite(tipo, slug); } catch (e) { erro = e; }
+    if (!achado?.sentidos.length) {
+      try { const w = await daWiki(palavra, tipo); if (w.sentidos.length || !achado) achado = w; } catch (e) { erro ||= e; }
     }
+    if (!achado) {
+      estado.erros++;
+      estado.ultimoErro = { palavra, tipo, erro: erro?.message, ts: agora() };
+      throw erro || new Error("sem resposta");
+    }
+    const dados = { palavra, tipo, ...achado };
+    guardar(chave, dados);
+    estado.ultimoOk = { palavra, tipo, fonte: achado.fonte, ts: agora() };
+    return dados;
   }
 
   function guardar(chave, dados) {
