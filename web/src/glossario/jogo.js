@@ -1,11 +1,9 @@
 // Glossário › preparar um jogo: reconhece os clubes (ou as seleções) e a competição de um jogo, a partir dos nomes que
 // chegam dos resultados (em inglês, com a designação completa…), e junta as palavras que fazem sentido para esse jogo:
 // as alcunhas, a cidade e o estádio de cada clube, os sinónimos da competição e dos países, e as expressões úteis.
-import { PAISES } from "./clubes.js";
 import { OUTROS_NOMES } from "./nomes.js";
-import { GRUPOS_COMP } from "./competicoes.js";
 import { PAISES_GLOS } from "./paises.js";
-import { norm, lista } from "./pesquisa.js";
+import { norm, lista, BASE } from "./pesquisa.js";
 
 // palavras que não distinguem um clube de outro (siglas da forma jurídica, «de», escalões…)
 const VAZIAS = new Set(("fc cf sc ac as ss ssc afc cd ud rc rcd sd ca sl cp club clube de da do dos das the bsc sv vfb vfl tsg fsv ogc " +
@@ -21,36 +19,38 @@ const frase = (n) => norm(n).replace(/^sele[cç][aã]o:\s*/, "").replace(/[^a-z0
 
 // o país (do glossário) de cada coluna de clubes
 const PAIS_DA_COLUNA = { pt: "Portugal", en: "Inglaterra", es: "Espanha", it: "Itália", de: "Alemanha", fr: "França", br: "Brasil", sa: "Arábia Saudita", tr: "Turquia", nl: "Países Baixos" };
-const paisPorNome = new Map(PAISES_GLOS.map((p) => [p.n, p]));
-export function paisDoClube(clube) {
-  if (PAIS_DA_COLUNA[clube.coluna]) return paisPorNome.get(PAIS_DA_COLUNA[clube.coluna]) || null;
+export function paisDoClube(clube, paisesGlos = PAISES_GLOS) {
+  const paisPorNome = (n) => paisesGlos.find((p) => p.n === n) || null;
+  if (PAIS_DA_COLUNA[clube.coluna]) return paisPorNome(PAIS_DA_COLUNA[clube.coluna]);
   const m = String(clube.cidade || "").match(/\(([^)]+)\)\s*$/);
-  return m ? paisPorNome.get(m[1]) || null : null;
+  return m ? paisPorNome(m[1]) : null;
 }
 
-let INDICE = null;
-function indice() {
-  if (INDICE) return INDICE;
+// um índice por conjunto de dados (o do glossário e o que tem também as palavras de cada um)
+const INDICES = new WeakMap();
+function indice(dados = BASE) {
+  if (INDICES.has(dados)) return INDICES.get(dados);
   const clubes = [];
-  for (const p of PAISES) for (const [nome, cidade, alcunhas, estadio, nota] of p.clubes) {
+  for (const p of dados.PAISES) for (const [nome, cidade, alcunhas, estadio, nota] of p.clubes) {
     const c = { nome, cidade, alcunhas: lista(alcunhas), estadio: estadio || null, nota: nota || null, coluna: p.id, bandeira: p.bandeira };
-    c.pais = paisDoClube(c);
+    c.pais = paisDoClube(c, dados.PAISES_GLOS);
     c.chaves = [...new Set([nome, ...(OUTROS_NOMES[nome] || [])].map(chave).filter(Boolean))];
     clubes.push(c);
   }
   const exatos = new Map();
   for (const c of clubes) for (const k of c.chaves) if (!exatos.has(k)) exatos.set(k, c);
   const paises = new Map();
-  for (const p of PAISES_GLOS) for (const n of [p.n, ...p.en]) paises.set(chave(n), p);
+  for (const p of dados.PAISES_GLOS) for (const n of [p.n, ...(p.en || [])]) paises.set(chave(n), p);
   const provas = [];
-  for (const g of GRUPOS_COMP) for (const [nome, sin, nota] of g.provas) provas.push({ nome, sinonimos: lista(sin), nota: nota || null, grupo: g.nome, bandeira: g.bandeira, frases: [nome, ...lista(sin)].map(frase).filter(Boolean) });
-  INDICE = { clubes, exatos, paises, provas };
-  return INDICE;
+  for (const g of dados.GRUPOS_COMP) for (const [nome, sin, nota] of g.provas) provas.push({ nome, sinonimos: lista(sin), nota: nota || null, grupo: g.nome, bandeira: g.bandeira, frases: [nome, ...lista(sin)].map(frase).filter(Boolean) });
+  const i = { clubes, exatos, paises, provas, paisesGlos: dados.PAISES_GLOS };
+  INDICES.set(dados, i);
+  return i;
 }
 
 // o clube com este nome (ou null, se não houver um claro)
-export function reconhecerClube(nome) {
-  const { clubes, exatos } = indice();
+export function reconhecerClube(nome, dados) {
+  const { clubes, exatos } = indice(dados);
   const k = chave(nome);
   if (!k) return null;
   if (exatos.has(k)) return exatos.get(k);
@@ -70,13 +70,13 @@ export function reconhecerClube(nome) {
 }
 
 // a seleção (o país) com este nome
-export const reconhecerPais = (nome) => indice().paises.get(chave(nome)) || null;
+export const reconhecerPais = (nome, dados) => indice(dados).paises.get(chave(nome)) || null;
 
 // a competição com este nome: igual ao nome ou a um sinónimo; ou um deles começa pelo outro
-export function reconhecerProva(nome) {
+export function reconhecerProva(nome, dados) {
   const f = frase(nome);
   if (!f) return null;
-  const { provas } = indice();
+  const { provas } = indice(dados);
   return provas.find((p) => p.frases.includes(f))
     || provas.find((p) => p.frases.some((x) => Math.min(x.length, f.length) >= 6 && (x.startsWith(f) || f.startsWith(x))))
     || null;
@@ -100,17 +100,17 @@ export function termosDoJogo({ casa, fora, mod = "futebol" }) {
 }
 
 // a ficha de um jogo: { casa, fora, prova, paises, termos }; casa e fora: { nome, clube } ou { nome, selecao }
-export function fichaDoJogo({ h, a, comp, mod = "futebol" }) {
+export function fichaDoJogo({ h, a, comp, mod = "futebol" }, dados) {
   const lado = (nome) => {
     if (!nome) return null;
     // primeiro as seleções («Portugal» não é o Sporting Clube de Portugal)
-    const selecao = reconhecerPais(nome);
+    const selecao = reconhecerPais(nome, dados);
     if (selecao) return { nome, selecao };
-    const clube = reconhecerClube(nome);
+    const clube = reconhecerClube(nome, dados);
     return clube ? { nome, clube } : { nome };
   };
   const casa = lado(h), fora = lado(a);
-  const prova = comp ? reconhecerProva(comp) : null;
+  const prova = comp ? reconhecerProva(comp, dados) : null;
   const paises = [];
   for (const l of [casa, fora]) {
     const p = l?.selecao || l?.clube?.pais;
@@ -120,7 +120,7 @@ export function fichaDoJogo({ h, a, comp, mod = "futebol" }) {
 }
 
 // para escolher à mão: os nomes de todos os clubes e países, e de todas as competições
-export const nomesParaEscolher = () => {
-  const { clubes, provas } = indice();
-  return { equipas: [...clubes.map((c) => c.nome), ...PAISES_GLOS.map((p) => p.n)], provas: provas.map((p) => p.nome) };
+export const nomesParaEscolher = (dados) => {
+  const { clubes, provas, paisesGlos } = indice(dados);
+  return { equipas: [...clubes.map((c) => c.nome), ...paisesGlos.map((p) => p.n)], provas: provas.map((p) => p.nome) };
 };

@@ -217,3 +217,47 @@ test("glossário: os países e os outros nomes dos clubes estão completos", () 
   const clubes = new Set(PAISES.flatMap((p) => p.clubes.map((c) => c[0])));
   for (const k of Object.keys(OUTROS_NOMES)) assert.ok(clubes.has(k), `outros nomes de um clube que não existe: ${k}`);
 });
+
+test("glossário: as palavras de cada um juntam-se ao glossário, à pesquisa e ao preparar um jogo", async () => {
+  const { VAZIO, acrescentar, apagar, juntar, contar, limpar, fundir } = await import("../web/src/glossario/meus.js");
+  let m = VAZIO();
+  m = acrescentar(m, "termo", { nome: "vitória", s: "êxito retumbante, sucesso", a: "desaire" });
+  m = acrescentar(m, "termo", { nome: "chocolate", m: "futebol", d: "Remate fraco", s: "remate mole" });
+  m = acrescentar(m, "clube", { nome: "Milan", alc: "Os do Diabo" });
+  m = acrescentar(m, "clube", { nome: "Repesenses", pais: "pt", cidade: "Viseu", alc: "Os da Ribeira" });
+  m = acrescentar(m, "prova", { nome: "Serie A", sin: "campeonato transalpino" });
+  m = acrescentar(m, "pais", { nome: "Itália", s: "La Nazionale" });
+  m = acrescentar(m, "citacao", { t: "Uma frase minha", a: "Moreno" });
+  m = acrescentar(m, "ideia", { tema: "Rádio", t: "Uma ideia minha" });
+  m = acrescentar(m, "termo", { nome: "" }); // sem nome não acrescenta nada
+  assert.equal(contar(m), 12);
+  const d = juntar(m);
+  // só as palavras que não estavam no glossário ficam assinaladas como da pessoa
+  assert.ok(d.minhas.has("êxito retumbante") && !d.minhas.has("sucesso"));
+  assert.ok(d.TERMOS.find((x) => x.t === "vitória").s.includes("êxito retumbante"));
+  assert.equal(d.TERMOS.find((x) => x.t === "chocolate").d, "Remate fraco");
+  assert.ok(d.PAISES.find((p) => p.id === "pt").clubes.some((c) => c[0] === "Repesenses" && c[1] === "Viseu"));
+  assert.ok(d.CITACOES.some((c) => c.meu && c.t === "Uma frase minha"));
+  // a pesquisa e o preparar um jogo usam as palavras da pessoa
+  const g = indice(d);
+  assert.ok(procurarLocal(g, "êxito retumbante", "sinonimos").flatMap((r) => r.palavras).includes("triunfo"));
+  assert.ok(procurarLocal(g, "Os da Ribeira", "sinonimos").flatMap((r) => r.palavras).includes("Repesenses"));
+  const f = fichaDoJogo({ h: "AC Milan", a: "Repesenses", comp: "Serie A" }, d);
+  assert.ok(f.casa.clube.alcunhas.includes("Os do Diabo"));
+  assert.equal(f.fora.clube.nome, "Repesenses");
+  assert.ok(f.prova.sinonimos.includes("campeonato transalpino"));
+  // sem as palavras da pessoa, o glossário fica como estava
+  assert.ok(!fichaDoJogo({ h: "AC Milan", a: "Juventus" }).casa.clube.alcunhas.includes("Os do Diabo"));
+  // apagar uma palavra, uma entrada, uma citação
+  m = apagar(m, "clube", "Milan", "alc", "Os do Diabo");
+  assert.ok(!m.clubes.Milan);
+  m = apagar(m, "termo", "chocolate");
+  assert.ok(!m.termos.chocolate);
+  m = apagar(m, "citacao", "0");
+  assert.equal(m.citacoes.length, 0);
+  // importar: um ficheiro mexido à mão não parte nada, e junta-se sem repetir
+  assert.deepEqual(limpar({ termos: { x: { s: "a, b" } }, ideias: "lixo", clubes: [1] }).termos.x.s, ["a", "b"]);
+  const f2 = fundir(m, { clubes: { Repesenses: { alc: ["Os da Ribeira", "Repe"] } }, ideias: [{ tema: "Rádio", t: "Uma ideia minha" }] });
+  assert.deepEqual(f2.clubes.Repesenses.alc, ["Os da Ribeira", "Repe"]);
+  assert.equal(f2.ideias.length, 1);
+});

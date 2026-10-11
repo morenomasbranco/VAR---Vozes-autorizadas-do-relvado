@@ -15,13 +15,16 @@ export const unicos = (arr, tirar = "") => {
   return arr.filter((p) => { const k = nucleo(p); if (!k || vistos.has(k)) return false; vistos.add(k); return true; });
 };
 
+// os dados do glossário (as palavras de cada um juntam-se com meus.js e passam por aqui)
+export const BASE = { TERMOS, PAISES, GRUPOS_COMP, PAISES_GLOS };
+
 // o índice de pesquisa: cada termo, clube e competição é um grupo de palavras equivalentes, com os antónimos do termo
-export function indice() {
+export function indice(dados = BASE) {
   const grupos = [];
-  for (const x of TERMOS) grupos.push({ palavras: [x.t, ...(x.s || [])], ant: x.a || [], origem: MODS.find((m) => m.id === x.m)?.nome, def: x.d });
-  for (const p of PAISES) for (const [nome, cidade, alc] of p.clubes) grupos.push({ palavras: [nome, ...lista(alc)], ant: [], origem: `Clube · ${cidade}` });
-  for (const g of GRUPOS_COMP) for (const [nome, sin] of g.provas) grupos.push({ palavras: [nome, ...lista(sin)], ant: [], origem: `Competição · ${g.nome}` });
-  for (const p of PAISES_GLOS) {
+  for (const x of dados.TERMOS) grupos.push({ palavras: [x.t, ...(x.s || [])], ant: x.a || [], origem: MODS.find((m) => m.id === x.m)?.nome, def: x.d });
+  for (const p of dados.PAISES) for (const [nome, cidade, alc] of p.clubes) grupos.push({ palavras: [nome, ...lista(alc)], ant: [], origem: `Clube · ${cidade}` });
+  for (const g of dados.GRUPOS_COMP) for (const [nome, sin] of g.provas) grupos.push({ palavras: [nome, ...lista(sin)], ant: [], origem: `Competição · ${g.nome}` });
+  for (const p of dados.PAISES_GLOS) {
     grupos.push({ palavras: [p.n, ...lista(p.p)], ant: [], origem: `País · ${p.g}` });
     if (p.s && p.s !== "—") grupos.push({ palavras: [`Seleção de ${p.n}`, ...lista(p.s)], ant: [], origem: "Seleção" });
   }
