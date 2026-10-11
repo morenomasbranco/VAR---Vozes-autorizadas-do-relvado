@@ -100,6 +100,14 @@ try {
     const r = await g.procurar(p, tipo).catch((e) => ({ erro: e.message }));
     linha(`== Glossário (${tipo} de ${p}) ==`, r.erro || r.sentidos.map((s) => `${s.sentido || "—"}: ${s.palavras.slice(0, 8).join(", ")}`).join(" | ") || "(nada)");
   }
+  // a estrutura da página, para afinar o leitor quando o site mudar
+  for (const u of ["https://www.sinonimos.com.br/vitoria/", "https://www.antonimos.com.br/vitoria/"]) {
+    const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0 (VAR glossário)" }, signal: AbortSignal.timeout(15000) });
+    const html = await r.text();
+    linha("== página", u, r.status, r.url, html.length, "caracteres ==");
+    const i = html.search(/triunfo|derrota/i);
+    linha(i < 0 ? html.slice(0, 1500) : html.slice(Math.max(0, i - 1200), i + 600));
+  }
   const prod = await fetch(`${SITE}/api/glossario/palavra?p=vit%C3%B3ria&tipo=sinonimos`, { signal: AbortSignal.timeout(30000) });
   linha("== Glossário em produção ==", prod.status, (await prod.text()).slice(0, 400));
 } catch (e) { linha("Glossário: erro", e.message); }
