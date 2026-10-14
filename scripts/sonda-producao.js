@@ -209,14 +209,15 @@ try {
       const h = (await r.text()).slice(0, 2e6);
       extra = `${r.status} ${new URL(r.url).hostname} | video src: ${(h.match(/<video[^>]+src="([^"]+)"/)?.[1] || "-").slice(0, 60)} | og:video: ${(h.match(/og:video(?::secure_url|:url)?["'][^>]+content=["']([^"']+)/i)?.[1] || "-").slice(0, 60)} | grande: ${/too big|VIEW IN TELEGRAM|message_media_not_supported/i.test(h) ? "sim" : "não"} | m3u8/mp4 no html: ${(h.match(/https?:[^"'\s]+\.(?:mp4|m3u8)[^"'\s]*/i)?.[0] || "-").slice(0, 70)}`;
     } catch (err) { extra = `erro ${err.message}`; }
-    linha(`   SEM LEITOR ${v.source} | ${v.video_url} | ${extra}`);
+    const min = (t) => (t ? `${Math.round((Date.now() - t) / 60000)} min` : "?");
+    linha(`   SEM LEITOR ${v.source} | ${v.video_url} | publicado há ${min(v.created_time)} · no site há ${min(v.first_seen)} | ${extra}`);
   }
   // os vídeos grandes do Telegram, servidos pelo próprio site (precisam da conta do Telegram, TG_SESSION)
   for (const v of lista.filter((x) => x.embed?.servidor).slice(0, 3)) {
     const r = await fetch(SITE + v.embed.src, { headers: { Range: "bytes=0-1023" }, signal: AbortSignal.timeout(30000) }).catch((e) => ({ status: e.message, headers: new Headers() }));
     linha(`   TELEGRAM PELO SITE ${v.embed.src} | ${r.status} ${r.headers.get("content-type") || ""} ${r.headers.get("content-range") || ""}`);
   }
-  try { const e = await j("/api/videos/estado"); linha(`== vídeos: conta do Telegram ligada: ${e.contaTelegram} · encontrados depois: ${e.encontradosDepois || 0}`); } catch (e) { linha("estado dos vídeos: erro", e.message); }
+  try { const e = await j("/api/videos/estado"); const pr = e.procura; linha(`== vídeos: conta do Telegram ligada: ${e.contaTelegram} · encontrados depois: ${e.encontradosDepois || 0} · última procura: ${pr ? `começou há ${Math.round((Date.now() - pr.inicio) / 60000)} min, ${pr.fila} vídeo(s), ${pr.fim ? `acabou em ${Math.round((pr.fim - pr.inicio) / 1000)} s` : "AINDA A DECORRER"}` : "-"}`); } catch (e) { linha("estado dos vídeos: erro", e.message); }
   // Sport TV sem leitor: o manifesto que a página do vídeo usa e o que a Kaltura responde
   for (const v of lista.filter((x) => !x.embed && /sporttv/.test(x.video_url)).slice(0, 3)) {
     try {

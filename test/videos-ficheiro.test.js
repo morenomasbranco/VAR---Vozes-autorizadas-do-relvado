@@ -100,6 +100,8 @@ test("vídeos: a procura dos ficheiros em falta faz quatro vídeos de cada vez",
   for (let i = 0; i < 8; i++) {
     await videos.add({ fonte: "sporttv", post_id: `sporttv:1_bbbbbbb${i}`, video_url: `https://www.sporttv.pt/videos/1/x/video/1_bbbbbbb${i}/golo-${i}`, title: `Golo ${i}' Equipa ${i} 1-0 Outra ${i}`, hls: null, mp4: null, iframe: null, entry: `1_bbbbbbb${i}`, created_time: Date.now() - i * 1000 });
   }
+  await new Promise((r) => setTimeout(r, 100)); // a procura de cada um à chegada
+  max = 0;
   await videos.procurarEmFalta();
   assert.equal(max, 4);
 });
@@ -110,4 +112,29 @@ test("vídeos: os vídeos de ontem que ainda estão no Feed também voltam a ser
   await videos.add({ fonte: "telegram", post_id: "tg:canal:9", canal: "canal", video_url: "https://t.me/canal/9", title: "Golo de ontem", hls: null, mp4: null, iframe: null, created_time: Date.now() - 30 * 3600e3 });
   await videos.procurarEmFalta();
   assert.equal(videos.latest()[0].embed?.src, "/api/videos/tg/canal/9");
+});
+
+test("vídeos: um vídeo novo do Telegram toca logo que chega, sem esperar pela volta dos vídeos em falta", async () => {
+  const videos = createVideos();
+  videos.procurarFicheiro("telegram", (s) => ({ mp4: `/api/videos/tg/canal/${s.video_url.split("/").pop()}` }));
+  await videos.add({ fonte: "telegram", post_id: "tg:canal:11", canal: "canal", video_url: "https://t.me/canal/11", title: "Golo acabado de chegar", hls: null, mp4: null, iframe: null, created_time: Date.now() });
+  for (let i = 0; i < 50 && !videos.latest()[0].embed; i++) await new Promise((r) => setTimeout(r, 10));
+  assert.equal(videos.latest()[0].embed?.src, "/api/videos/tg/canal/11");
+});
+
+test("vídeos: um procurador que nunca responde não prende a procura dos outros vídeos", async () => {
+  const videos = createVideos({ prazoProcura: 50 });
+  const vivo = setInterval(() => {}, 1000); // o prazo não segura o processo (unref); aqui segura-o o teste
+  videos.procurarFicheiro("sporttv", () => new Promise(() => {})); // ligação pendurada
+  videos.procurarFicheiro("telegram", (s) => (s.video_url.endsWith("/13") && pronto ? { mp4: "/api/videos/tg/canal/13" } : null));
+  let pronto = false;
+  const base = { hls: null, mp4: null, iframe: null, created_time: Date.now() };
+  for (let i = 0; i < 5; i++) await videos.add({ ...base, fonte: "sporttv", post_id: `sporttv:1_ccccccc${i}`, video_url: `https://www.sporttv.pt/videos/1/x/video/1_ccccccc${i}/golo-${i}`, title: `Golo ${i}' Clube ${i} 1-0 Rival ${i}`, entry: `1_ccccccc${i}` });
+  await videos.add({ ...base, fonte: "telegram", post_id: "tg:canal:13", canal: "canal", video_url: "https://t.me/canal/13", title: "Golo do Telegram" });
+  await new Promise((r) => setTimeout(r, 120));
+  pronto = true;
+  await videos.procurarEmFalta();
+  assert.equal(videos.latest().find((v) => v.video_url === "https://t.me/canal/13").embed?.src, "/api/videos/tg/canal/13");
+  assert.ok(videos.estado().procura.fim, "a volta acabou");
+  clearInterval(vivo);
 });
