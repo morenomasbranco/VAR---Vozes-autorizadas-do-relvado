@@ -17,14 +17,22 @@ const fichas = (n) => norm(n).replace(/[^a-z0-9]+/g, " ").split(" ").filter((t) 
 const chave = (n) => fichas(n).join(" ");
 const frase = (n) => norm(n).replace(/^sele[cç][aã]o:\s*/, "").replace(/[^a-z0-9]+/g, " ").trim();
 
-// o país (do glossário) de cada coluna de clubes
-const PAIS_DA_COLUNA = { pt: "Portugal", en: "Inglaterra", es: "Espanha", it: "Itália", de: "Alemanha", fr: "França", br: "Brasil", sa: "Arábia Saudita", tr: "Turquia", nl: "Países Baixos" };
+// o país (do glossário) de cada coluna de clubes (as outras colunas dizem o país entre parênteses, a seguir à cidade)
+const PAIS_DA_COLUNA = { pt: "Portugal", en: "Inglaterra", es: "Espanha", it: "Itália", de: "Alemanha", fr: "França", br: "Brasil", sa: "Arábia Saudita", tr: "Turquia", nl: "Países Baixos",
+  sc: "Escócia", be: "Bélgica", gr: "Grécia", ar: "Argentina", mx: "México", mls: "Estados Unidos", nba: "Estados Unidos", nhl: "Estados Unidos", nfl: "Estados Unidos" };
 export function paisDoClube(clube, paisesGlos = PAISES_GLOS) {
   const paisPorNome = (n) => paisesGlos.find((p) => p.n === n) || null;
-  if (PAIS_DA_COLUNA[clube.coluna]) return paisPorNome(PAIS_DA_COLUNA[clube.coluna]);
   const m = String(clube.cidade || "").match(/\(([^)]+)\)\s*$/);
-  return m ? paisPorNome(m[1]) : null;
+  if (m && paisPorNome(m[1])) return paisPorNome(m[1]);
+  if (PAIS_DA_COLUNA[clube.coluna]) return paisPorNome(PAIS_DA_COLUNA[clube.coluna]);
+  return null;
 }
+
+// as modalidades dos resultados (App.jsx) e as do glossário (termos.js)
+const MOD_GLOS = { basquetebol: "basquete", hoquei_patins: "hoquei" };
+export const modDoGlossario = (mod) => MOD_GLOS[mod] || mod || "futebol";
+// as colunas de clubes de uma só modalidade (NBA, NHL, NFL) têm «mod»; as outras são de futebol (e dos clubes ecléticos)
+const modDaColuna = (mod) => (mod === "basquete" ? "basquetebol" : mod || null);
 
 // um índice por conjunto de dados (o do glossário e o que tem também as palavras de cada um)
 const INDICES = new WeakMap();
@@ -32,13 +40,21 @@ function indice(dados = BASE) {
   if (INDICES.has(dados)) return INDICES.get(dados);
   const clubes = [];
   for (const p of dados.PAISES) for (const [nome, cidade, alcunhas, estadio, nota] of p.clubes) {
-    const c = { nome, cidade, alcunhas: lista(alcunhas), estadio: estadio || null, nota: nota || null, coluna: p.id, bandeira: p.bandeira };
+    const c = { nome, cidade, alcunhas: lista(alcunhas), estadio: estadio || null, nota: nota || null, coluna: p.id, bandeira: p.bandeira, mod: p.mod || null };
     c.pais = paisDoClube(c, dados.PAISES_GLOS);
     c.chaves = [...new Set([nome, ...(OUTROS_NOMES[nome] || [])].map(chave).filter(Boolean))];
+    // nas ligas norte-americanas os resultados trazem só a alcunha («Flyers», «Maple Leafs», «49ers»)
+    if (p.mod) { const f = fichas(nome); c.chaves.push(...new Set([f.slice(-1).join(" "), f.slice(-2).join(" ")])); }
     clubes.push(c);
   }
+  // um mapa de nomes exatos por modalidade («Rangers» é o de Glasgow no futebol e o de Nova Iorque no hóquei no gelo);
+  // cada nome pode ser de mais de um clube («Santos» no Brasil e no México)
   const exatos = new Map();
-  for (const c of clubes) for (const k of c.chaves) if (!exatos.has(k)) exatos.set(k, c);
+  for (const c of clubes) {
+    if (!exatos.has(c.mod)) exatos.set(c.mod, new Map());
+    const m = exatos.get(c.mod);
+    for (const k of c.chaves) { if (!m.has(k)) m.set(k, []); if (!m.get(k).includes(c)) m.get(k).push(c); }
+  }
   const paises = new Map();
   for (const p of dados.PAISES_GLOS) for (const n of [p.n, ...(p.en || [])]) paises.set(chave(n), p);
   const provas = [];
@@ -48,13 +64,24 @@ function indice(dados = BASE) {
   return i;
 }
 
-// o clube com este nome (ou null, se não houver um claro)
-export function reconhecerClube(nome, dados) {
+// o clube com este nome (ou null, se não houver um claro); mod é a modalidade do jogo (como vem dos resultados):
+// num jogo da NBA, da NHL ou da NFL procura-se primeiro nessas equipas e depois nos clubes (o Benfica também joga basquetebol).
+// Com o país do jogo, um nome que é de mais de um clube fica com o desse país
+export function reconhecerClube(nome, dados, mod = null, paisNome = null) {
   const { clubes, exatos } = indice(dados);
   const k = chave(nome);
   if (!k) return null;
-  if (exatos.has(k)) return exatos.get(k);
-  const fs = k.split(" ");
+  const propria = modDaColuna(mod);
+  const tem = exatos.has(propria) && propria !== null;
+  for (const m of tem ? [propria, null] : [null]) {
+    const cs = exatos.get(m)?.get(k);
+    if (cs) return (paisNome && cs.find((c) => c.pais?.n === paisNome)) || cs[0];
+  }
+  const deste = (c) => c.mod === (tem ? propria : null);
+  return procurar(fichas(nome), clubes.filter(deste)) || (tem ? procurar(fichas(nome), clubes.filter((c) => c.mod === null)) : null);
+}
+function procurar(fs, clubes) {
+  if (!fs.length) return null;
   let melhor = null, nota = 0, empate = false;
   for (const c of clubes) {
     for (const ck of c.chaves) {
@@ -72,14 +99,16 @@ export function reconhecerClube(nome, dados) {
 // a seleção (o país) com este nome
 export const reconhecerPais = (nome, dados) => indice(dados).paises.get(chave(nome)) || null;
 
-// a competição com este nome: igual ao nome ou a um sinónimo; ou um deles começa pelo outro
-export function reconhecerProva(nome, dados) {
+// a competição com este nome: igual ao nome ou a um sinónimo; ou um deles começa pelo outro. Com o país do jogo,
+// prefere-se a prova desse país («Torneo Apertura» há na Argentina e no México)
+export function reconhecerProva(nome, dados, paisNome = null) {
   const f = frase(nome);
   if (!f) return null;
   const { provas } = indice(dados);
-  return provas.find((p) => p.frases.includes(f))
-    || provas.find((p) => p.frases.some((x) => Math.min(x.length, f.length) >= 6 && (x.startsWith(f) || f.startsWith(x))))
-    || null;
+  const doPais = (lst) => (paisNome && lst.find((p) => p.grupo === paisNome || p.nome.includes(`(${paisNome}`) || p.frases.some((x) => x.includes(frase(paisNome))))) || lst[0] || null;
+  const iguais = provas.filter((p) => p.frases.includes(f));
+  if (iguais.length) return doPais(iguais);
+  return doPais(provas.filter((p) => p.frases.some((x) => Math.min(x.length, f.length) >= 6 && (x.startsWith(f) || f.startsWith(x)))));
 }
 
 const GRANDES_PT = new Set(["Benfica", "FC Porto", "Sporting"]);
@@ -95,22 +124,25 @@ export function termosDoJogo({ casa, fora, mod = "futebol" }) {
   if (mod === "basquete") t.push("triplo", "afundanço", "ressalto", "lance livre", "duplo-duplo", "buzzer beater");
   else if (mod === "futsal") t.push("pivô", "fixo", "guarda-redes avançado", "faltas acumuladas");
   else if (mod === "hoquei") t.push("stick", "rinque", "cartão azul", "livre direto (hóquei)");
+  else if (mod === "hoquei_gelo" || mod === "futebol_americano") t.push("prolongamento");
   else t.push("golo", "goleada", "ponta de lança", "guarda-redes", "grande penalidade", "descontos");
   return [...new Set(t)];
 }
 
-// a ficha de um jogo: { casa, fora, prova, paises, termos }; casa e fora: { nome, clube } ou { nome, selecao }
-export function fichaDoJogo({ h, a, comp, mod = "futebol" }, dados) {
+// a ficha de um jogo: { casa, fora, prova, paises, termos }; casa e fora: { nome, clube } ou { nome, selecao }.
+// mod é a modalidade como vem dos resultados (basquetebol, hoquei_gelo…) ou do glossário (basquete, hoquei…)
+export function fichaDoJogo({ h, a, comp, mod: modJogo = "futebol", paisNome = null }, dados) {
+  const mod = modDoGlossario(modJogo);
   const lado = (nome) => {
     if (!nome) return null;
     // primeiro as seleções («Portugal» não é o Sporting Clube de Portugal)
     const selecao = reconhecerPais(nome, dados);
     if (selecao) return { nome, selecao };
-    const clube = reconhecerClube(nome, dados);
+    const clube = reconhecerClube(nome, dados, modJogo, paisNome);
     return clube ? { nome, clube } : { nome };
   };
   const casa = lado(h), fora = lado(a);
-  const prova = comp ? reconhecerProva(comp, dados) : null;
+  const prova = comp ? reconhecerProva(comp, dados, paisNome) : null;
   const paises = [];
   for (const l of [casa, fora]) {
     const p = l?.selecao || l?.clube?.pais;

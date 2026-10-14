@@ -1,7 +1,8 @@
 // Secção «Glossário»: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol), alcunhas
 // e cidades dos clubes, sinónimos das competições e dos países, citações e ideias, e uma pesquisa de sinónimos e antónimos.
-// «Preparar um jogo»: escolhe-se um jogo (dos que estão a decorrer, que o App passa em «jogos») ou escrevem-se as
-// equipas, e o glossário destaca as palavras que fazem sentido; cada palavra pode ir para «a minha lista».
+// «Preparar um jogo»: escolhe-se um jogo (dos resultados, que o App passa em «jogos», arrumados por modalidade, país e
+// competição) ou escrevem-se as equipas, e o glossário destaca as palavras que fazem sentido e sugere títulos para o
+// jogo; cada palavra pode ir para «a minha lista».
 // A pesquisa procura primeiro no próprio glossário (web/src/glossario) e, quando é preciso, na internet
 // (/api/glossario/palavra: sinonimos.com.br e antonimos.com.br, e o Wikcionário). Os dados só se carregam ao abrir a secção.
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +10,7 @@ import { MODS } from "./glossario/termos.js";
 import { norm, lista, unicos, indice, procurarLocal } from "./glossario/pesquisa.js";
 import { lerMeus, gravarMeus, juntar, acrescentar, apagar, fundir, contar, limpar } from "./glossario/meus.js";
 import { fichaDoJogo, nomesParaEscolher } from "./glossario/jogo.js";
+import { titulosDoJogo } from "./glossario/titulos.js";
 
 const bandeira = (code) => `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`;
 
@@ -96,42 +98,118 @@ function Palavra({ p, lista: minha, alternar, titulo }) {
   return <button type="button" className={`chip gchip${tem ? " on" : ""}${minha_ ? " meu" : ""}`} aria-pressed={tem} title={titulo || `${minha_ ? "Acrescentada por ti · " : ""}${tem ? "Tirar da minha lista" : "Juntar à minha lista"}`} onClick={() => alternar(p)}>{p}</button>;
 }
 
-// «Preparar um jogo»: escolher um jogo (dos que estão a decorrer ou dos de hoje) ou escrever as equipas e a prova
+// as modalidades do «escolher à mão» (as do glossário e as das ligas norte-americanas)
+const MODS_MAO = [
+  { id: "futebol", nome: "Futebol" }, { id: "futsal", nome: "Futsal" }, { id: "hoquei", nome: "Hóquei em patins" },
+  { id: "basquete", nome: "Basquetebol" }, { id: "hoquei_gelo", nome: "Hóquei no gelo" }, { id: "futebol_americano", nome: "Futebol americano" },
+];
+const NOME_MOD = Object.fromEntries(MODS_MAO.map((m) => [m.id, m.nome]));
+const mesmoJogo = (a, b) => !!a && !!b && a.h === b.h && a.a === b.a && (a.comp || "") === (b.comp || "");
+// conta e ordena: os que têm mais jogos primeiro (o futebol à frente das outras modalidades)
+const contar_ = (lst, k) => [...lst.reduce((m, j) => m.set(k(j), (m.get(k(j)) || 0) + 1), new Map())];
+
+// «Preparar um jogo»: escolher um jogo (arrumados por modalidade, país e competição) ou escrever as equipas e a prova
 function PrepararJogo({ jogos, jogo, setJogo, dados }) {
   const [aMao, setAMao] = useState(false);
-  const [forma, setForma] = useState({ h: "", a: "", comp: "", mod: "futebol" });
+  const [forma, setForma] = useState({ h: "", a: "", comp: "", mod: "futebol", res: "" });
+  const [desp, setDesp] = useState(() => ler("glos-desp", "todos"));
+  const [paisF, setPaisF] = useState("todos");
+  useEffect(() => { gravar("glos-desp", desp); }, [desp]);
   const nomes = useMemo(() => nomesParaEscolher(dados), [dados]);
-  const igual = (j) => jogo && j.h === jogo.h && j.a === jogo.a && (j.comp || "") === (jogo.comp || "");
+  const modNome = (j) => j.modNome || NOME_MOD[j.mod] || "Futebol";
+  const desportos = useMemo(() => contar_(jogos, modNome)
+    .sort((a, b) => (b[0] === "Futebol") - (a[0] === "Futebol") || b[1] - a[1] || a[0].localeCompare(b[0], "pt")), [jogos]);
+  const daMod = jogos.filter((j) => desp === "todos" || modNome(j) === desp);
+  const paises = useMemo(() => contar_(daMod.filter((j) => j.paisNome), (j) => `${j.pais}|${j.paisNome}`)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt")), [daMod]);
+  const visiveis = daMod.filter((j) => paisF === "todos" || `${j.pais}|${j.paisNome}` === paisF);
+  // modalidade → competição (com o país): os grupos pela ordem dos desportos e, dentro de cada um, pelo país
+  const grupos = useMemo(() => {
+    const out = [];
+    for (const [d] of desportos) {
+      const destes = visiveis.filter((j) => modNome(j) === d);
+      if (!destes.length) continue;
+      const comps = new Map();
+      for (const j of destes) {
+        const k = `${j.paisNome || ""}|${j.comp || ""}`;
+        if (!comps.has(k)) comps.set(k, { comp: j.comp || "Outros jogos", pais: j.pais, paisNome: j.paisNome, jogos: [] });
+        comps.get(k).jogos.push(j);
+      }
+      out.push({ d, comps: [...comps.values()].sort((a, b) => (b.jogos.some((j) => j.vivo) - a.jogos.some((j) => j.vivo)) || (a.paisNome || "~").localeCompare(b.paisNome || "~", "pt") || a.comp.localeCompare(b.comp, "pt")) });
+    }
+    return out;
+  }, [desportos, visiveis]);
+  useEffect(() => { if (desp !== "todos" && jogos.length && !desportos.some(([d]) => d === desp)) setDesp("todos"); }, [desportos, desp, jogos.length]);
+  useEffect(() => { if (paisF !== "todos" && !paises.some(([p]) => p === paisF)) setPaisF("todos"); }, [paises, paisF]);
+  const escolher = (j) => setJogo(mesmoJogo(j, jogo) ? null : { h: j.h, a: j.a, comp: j.comp, mod: j.mod, modNome: j.modNome, paisNome: j.paisNome, hs: j.hs, as: j.as, vivo: j.vivo, ft: j.ft });
+  const preparar = (e) => {
+    e.preventDefault();
+    if (!forma.h && !forma.a) return;
+    const r = String(forma.res).match(/^\s*(\d{1,3})\s*[-–x:]\s*(\d{1,3})\s*$/i);
+    setJogo({ h: forma.h, a: forma.a, comp: forma.comp, mod: forma.mod, modNome: NOME_MOD[forma.mod], hs: r ? Number(r[1]) : null, as: r ? Number(r[2]) : null, vivo: false, ft: !!r });
+  };
   return (
     <section className="gjogo" aria-label="Preparar um jogo">
       <div className="gjogo-cab">
         <h2 className="gh2">Preparar um jogo</h2>
-        <p className="muted">Escolhe um jogo e o glossário destaca as palavras que fazem sentido para ele.</p>
+        <p className="muted">Escolhe um jogo: o glossário destaca as palavras que fazem sentido para ele e sugere títulos.</p>
       </div>
       {jogos.length > 0 ? (
-        <div className="gjogos">
-          {jogos.slice(0, 16).map((j) => (
-            <button key={j.id} className={`gjg${j.vivo ? " vivo" : ""}`} aria-pressed={!!igual(j)} onClick={() => setJogo(igual(j) ? null : { h: j.h, a: j.a, comp: j.comp, mod: j.mod })}>
-              {j.vivo && <i className="gpulso" aria-label="em direto" />}
-              <b>{j.h}</b> <span translate="no">{j.hs ?? ""}{j.hs != null ? "–" : "x"}{j.as ?? ""}</span> <b>{j.a}</b>
-              {j.comp && <span className="muted"> · {j.comp}</span>}
-            </button>
-          ))}
-        </div>
-      ) : <p className="muted gsem">Não há jogos a decorrer agora: escolhe à mão.</p>}
+        <>
+          {desportos.length > 1 && (
+            <div className="seg gfiltro" role="group" aria-label="Modalidade">
+              <button aria-pressed={desp === "todos"} onClick={() => setDesp("todos")}>Todas <span className="gn">{jogos.length}</span></button>
+              {desportos.map(([d, n]) => <button key={d} aria-pressed={desp === d} onClick={() => setDesp(d)}>{d} <span className="gn">{n}</span></button>)}
+            </div>
+          )}
+          {paises.length > 1 && (
+            <div className="seg gfiltro" role="group" aria-label="País">
+              <button aria-pressed={paisF === "todos"} onClick={() => setPaisF("todos")}>Todos os países</button>
+              {paises.map(([k, n]) => {
+                const [code, nome] = k.split("|");
+                return <button key={k} aria-pressed={paisF === k} onClick={() => setPaisF(k)}>{code && <img className="flag" src={bandeira(code)} alt="" width="16" height="12" loading="lazy" />} {nome} <span className="gn">{n}</span></button>;
+              })}
+            </div>
+          )}
+          <div className="gdesps">
+            {grupos.map((g) => (
+              <div key={g.d} className="gdesp">
+                <p className="gdesp-t">{g.d}</p>
+                {g.comps.map((c) => (
+                  <div key={`${c.paisNome}|${c.comp}`} className="gcompj">
+                    <p className="gcompj-t">
+                      {c.pais && <img className="flag" src={bandeira(c.pais)} alt="" width="16" height="12" loading="lazy" />}
+                      <b>{c.comp}</b>{c.paisNome && <span className="muted"> · {c.paisNome}</span>}
+                    </p>
+                    <div className="gjogos">
+                      {c.jogos.map((j) => (
+                        <button key={j.id} className={`gjg${j.vivo ? " vivo" : ""}`} aria-pressed={mesmoJogo(j, jogo)} onClick={() => escolher(j)}>
+                          {j.vivo && <i className="gpulso" aria-label="em direto" />}
+                          <b>{j.h}</b> <span translate="no">{j.hs ?? ""}{j.hs != null ? "–" : "x"}{j.as ?? ""}</span> <b>{j.a}</b>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : <p className="muted gsem">Não há jogos nos resultados agora: escolhe à mão.</p>}
       <div className="gjogo-acoes">
         <button className="textbtn" onClick={() => setAMao((v) => !v)} aria-expanded={aMao}>{aMao ? "Fechar" : "Escolher à mão"}</button>
         {jogo && <button className="textbtn" onClick={() => setJogo(null)}>Limpar o jogo</button>}
       </div>
       {aMao && (
-        <form className="gform gmao" onSubmit={(e) => { e.preventDefault(); if (forma.h || forma.a) setJogo({ ...forma }); }}>
+        <form className="gform gmao" onSubmit={preparar}>
           <datalist id="glos-equipas">{nomes.equipas.map((n) => <option key={n} value={n} />)}</datalist>
           <datalist id="glos-provas">{nomes.provas.map((n) => <option key={n} value={n} />)}</datalist>
           <input list="glos-equipas" value={forma.h} onChange={(e) => setForma({ ...forma, h: e.target.value })} placeholder="Equipa da casa (ex.: Milan)" aria-label="Equipa da casa" />
           <input list="glos-equipas" value={forma.a} onChange={(e) => setForma({ ...forma, a: e.target.value })} placeholder="Equipa de fora (ex.: Juventus)" aria-label="Equipa de fora" />
           <input list="glos-provas" value={forma.comp} onChange={(e) => setForma({ ...forma, comp: e.target.value })} placeholder="Competição (ex.: Serie A)" aria-label="Competição" />
+          <input className="gres-in" value={forma.res} onChange={(e) => setForma({ ...forma, res: e.target.value })} placeholder="Resultado (ex.: 2-1)" aria-label="Resultado (opcional)" inputMode="numeric" maxLength={9} />
           <select value={forma.mod} onChange={(e) => setForma({ ...forma, mod: e.target.value })} aria-label="Modalidade">
-            {MODS.filter((m) => ["futebol", "futsal", "hoquei", "basquete"].includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+            {MODS_MAO.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
           </select>
           <button type="submit" className="gir">Preparar</button>
         </form>
@@ -140,8 +218,30 @@ function PrepararJogo({ jogos, jogo, setJogo, dados }) {
   );
 }
 
+// as sugestões de títulos para o jogo escolhido (cada uma copia-se com um toque)
+function Titulos({ ficha, jogo }) {
+  const titulos = useMemo(() => titulosDoJogo(ficha, jogo), [ficha, jogo]);
+  const [copiado, setCopiado] = useState(null);
+  if (!titulos.length) return null;
+  const copiar = (t) => navigator.clipboard?.writeText(t).then(() => { setCopiado(t); setTimeout(() => setCopiado(null), 1500); }).catch(() => {});
+  const estado = jogo.hs == null ? "antes do jogo" : jogo.vivo ? "durante o jogo" : "depois do jogo";
+  return (
+    <div className="gfcard gflarga gtits">
+      <p className="gmod">Sugestões de títulos ({estado})</p>
+      <ul className="gtitulos">
+        {titulos.map((t) => (
+          <li key={t}>
+            <span className="gtit">{t}</span>
+            <button className="textbtn" onClick={() => copiar(t)}>{copiado === t ? "Copiado" : "Copiar"}</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // a ficha do jogo escolhido: as palavras de cada equipa, da prova, dos países e as expressões que dão jeito
-function FichaDoJogo({ ficha, minha, alternar, termos }) {
+function FichaDoJogo({ ficha, jogo, minha, alternar, termos }) {
   const TERMO = useMemo(() => new Map(termos.map((x) => [x.t, x])), [termos]);
   const P = (p) => <Palavra key={p} p={p} lista={minha} alternar={alternar} />;
   const lado = (l, papel) => {
@@ -172,6 +272,7 @@ function FichaDoJogo({ ficha, minha, alternar, termos }) {
   return (
     <section className="gficha" aria-label="Palavras para este jogo">
       <div className="gfcards">
+        <Titulos ficha={ficha} jogo={jogo} />
         {lado(ficha.casa, "Casa · visitado")}
         {lado(ficha.fora, "Fora · visitante")}
         {ficha.prova && (
@@ -190,7 +291,7 @@ function FichaDoJogo({ ficha, minha, alternar, termos }) {
           </div>
         ))}
         <div className="gfcard gflarga">
-          <p className="gmod">Expressões que dão jeito ({MOD_NOME[ficha.mod] || "Futebol"})</p>
+          <p className="gmod">Expressões que dão jeito ({jogo.modNome || NOME_MOD[ficha.mod] || MOD_NOME[ficha.mod] || "Futebol"})</p>
           <ul className="gftermos">
             {ficha.termos.map((t) => TERMO.get(t)).filter(Boolean).map((x) => (
               <li key={x.t}>{P(x.t)} {x.s?.length > 0 && <span className="muted">{unicos(x.s).slice(0, 6).join(", ")}</span>}</li>
@@ -377,8 +478,12 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
     navigator.clipboard?.writeText(minha.join(", ")).then(() => { setCopiado(true); setTimeout(() => setCopiado(false), 1500); }).catch(() => {});
   };
 
-  // o jogo escolhido e o que se destaca em cada parte do glossário
-  const ficha = useMemo(() => (jogo ? fichaDoJogo(jogo, dados) : null), [jogo, dados]);
+  // o jogo escolhido (com o resultado do momento, se ainda está nos resultados) e o que se destaca em cada parte do glossário
+  const jogoAtual = useMemo(() => {
+    const j = jogo && jogos.find((x) => mesmoJogo(x, jogo));
+    return j ? { ...jogo, hs: j.hs, as: j.as, vivo: j.vivo, ft: j.ft, modNome: j.modNome, paisNome: j.paisNome } : jogo;
+  }, [jogo, jogos]);
+  const ficha = useMemo(() => (jogoAtual ? fichaDoJogo(jogoAtual, dados) : null), [jogoAtual, dados]);
   const dest = useMemo(() => ({
     clubes: new Set([ficha?.casa?.clube?.nome, ficha?.fora?.clube?.nome].filter(Boolean)),
     prova: ficha?.prova?.nome || null,
@@ -415,7 +520,7 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
       <style>{GLOS_CSS}</style>
       <Pesquisa API={API} grupos={grupos} />
       <PrepararJogo jogos={jogos} jogo={jogo} setJogo={setJogo} dados={dados} />
-      {ficha && <FichaDoJogo ficha={ficha} minha={minha} alternar={alternar} termos={TERMOS} />}
+      {ficha && <FichaDoJogo ficha={ficha} jogo={jogoAtual} minha={minha} alternar={alternar} termos={TERMOS} />}
       {minha.length > 0 && (
         <section className="gminha" aria-label="A minha lista">
           <p className="gmod">A minha lista ({minha.length})</p>
@@ -549,33 +654,48 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
 const GLOS_CSS = `
 .apito .glos{max-width:1200px;margin:0 auto;padding-bottom:40px}
 .apito .gbusca,.apito .gjogo,.apito .gminha{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--raise);padding:12px 14px;margin:0 0 16px}
-.apito .gjogo{border-left-color:var(--hist)}
+.apito .gjogo{border-left-color:var(--accent)}
 .apito .gminha{border-left-color:var(--ink)}
 .apito .gjogo-cab{text-align:center}
 .apito .gjogo-cab .gh2{justify-content:center;margin:0 0 2px}
 .apito .gjogo-cab p{margin:0 0 10px;font-size:13px}
 .apito .gjogos{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 .apito .gjg{font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--bg);display:inline-flex;align-items:center;gap:4px}
-.apito .gjg[aria-pressed="true"]{border-color:var(--hist);box-shadow:0 0 0 1px var(--hist)}
+.apito .gjg[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .apito .gpulso{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-right:2px}
 .apito .gsem{text-align:center;font-size:13px;margin:0}
+.apito .glos .gfiltro{display:flex;width:fit-content;max-width:100%;margin:0 auto 8px;justify-content:center;flex-wrap:wrap;border:0;background:none;gap:4px}
+.apito .glos .gfiltro button{border:1px solid var(--line);background:var(--bg);display:inline-flex;align-items:center;gap:5px}
+.apito .glos .gfiltro button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.apito .gn{font-size:10px;font-weight:700;background:var(--accent);color:#1B1B1B;border-radius:999px;padding:0 5px;line-height:15px;min-width:15px;text-align:center}
+.apito .gdesps{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.apito .gdesp{border-top:1px solid var(--line);padding-top:8px}
+.apito .gdesp-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);text-align:center;margin:0 0 6px}
+.apito .gcompj{margin:0 0 8px}
+.apito .gcompj-t{font-size:13px;text-align:center;margin:0 0 5px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.apito .gtits{border-color:var(--accent)}
+.apito .gtitulos{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:4px 18px}
+.apito .gtitulos li{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+.apito .gtit{font-family:var(--display);font-weight:600;font-size:15px;line-height:1.25}
+.apito .gtitulos .textbtn{flex:none;font-size:12.5px}
+.apito .gmao .gres-in{flex:0 1 150px}
 .apito .gjogo-acoes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
 .apito .gmao{margin-top:8px;justify-content:center}
 .apito .gmao input{flex:1 1 180px}
 .apito .gmao select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 10px}
 .apito .gficha{margin:0 0 16px}
 .apito .gfcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.apito .gfcard{border:1px solid var(--hist);border-radius:8px;padding:10px 12px;background:var(--raise)}
+.apito .gfcard{border:1px solid var(--accent);border-radius:8px;padding:10px 12px;background:var(--raise)}
 .apito .gfcard h3{margin:2px 0;font-size:15px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .apito .gflarga{grid-column:1/-1}
 .apito .gftermos{list-style:none;margin:4px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px;font-size:13px}
 .apito .gchip{cursor:pointer;font-weight:500;color:var(--ink);background:var(--bg)}
 .apito .gchip:hover{border-color:var(--ink)}
-.apito .gchip.on{background:var(--hist);border-color:var(--hist);color:#fff}
+.apito .gchip.on{background:var(--accent);border-color:var(--accent);color:#1B1B1B}
 .apito .gtermo dt .gchip{font-size:15px;font-weight:700;border:0;background:none;padding:0;line-height:1.3}
-.apito .gtermo dt .gchip.on{color:var(--hist);background:none}
+.apito .gtermo dt .gchip.on{color:var(--accent);background:none}
 .apito .gsin .gchip,.apito .gant .gchip{margin:0 3px 3px 0;line-height:18px;font-size:12.5px}
-.apito .gdest{border-color:var(--hist) !important;box-shadow:0 0 0 1px var(--hist);background:color-mix(in srgb,var(--hist) 7%,var(--raise))}
+.apito .gdest{border-color:var(--accent) !important;box-shadow:0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--raise))}
 .apito .gcomp li.gdest{padding:8px 10px;border-radius:8px}
 .apito .gsub{margin:8px 0 0}
 .apito .gform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -621,8 +741,8 @@ const GLOS_CSS = `
 .apito .gideias li{padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px}
 .apito .gmeus-barra{display:flex;flex-direction:column;align-items:center;gap:4px;margin:-6px 0 16px}
 .apito .gacres,.apito .gmeus{width:100%;text-align:center}
-.apito .gacres-abrir{font-weight:600;color:var(--hist)}
-.apito .gacres-form{justify-content:center;margin:8px auto 0;max-width:900px;padding:12px;border:1px dashed var(--hist);border-radius:10px;background:var(--raise)}
+.apito .gacres-abrir{font-weight:600;color:var(--accent)}
+.apito .gacres-form{justify-content:center;margin:8px auto 0;max-width:900px;padding:12px;border:1px dashed var(--accent);border-radius:10px;background:var(--raise)}
 .apito .gacres-form input{flex:1 1 220px}
 .apito .gacres-form select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 10px;max-width:100%}
 .apito .gfeito{flex-basis:100%;font-size:13px;margin:4px 0 0;text-align:center}
@@ -631,10 +751,10 @@ const GLOS_CSS = `
 .apito .gmeu-campo{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-left:8px}
 .apito .gx{font-size:14px;line-height:1;color:var(--muted);padding:0 4px;border-radius:4px}
 .apito .gx:hover{color:var(--live)}
-.apito .gchip.meu{border-style:dashed;border-color:var(--hist)}
-.apito .gcita.meu{border-left-style:dashed;border-left-color:var(--hist)}
+.apito .gchip.meu{border-style:dashed;border-color:var(--accent)}
+.apito .gcita.meu{border-left-style:dashed;border-left-color:var(--accent)}
 .apito .gideias li.meu{border-bottom-style:dashed}
 @media (max-width:640px){
-  .apito .gtermos,.apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos{grid-template-columns:minmax(0,1fr)}
+  .apito .gtermos,.apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos,.apito .gtitulos{grid-template-columns:minmax(0,1fr)}
 }
 `;

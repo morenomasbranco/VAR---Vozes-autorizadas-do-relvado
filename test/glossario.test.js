@@ -8,6 +8,7 @@ import { GRUPOS_COMP } from "../web/src/glossario/competicoes.js";
 import { PAISES_GLOS } from "../web/src/glossario/paises.js";
 import { OUTROS_NOMES } from "../web/src/glossario/nomes.js";
 import { reconhecerClube, reconhecerProva, fichaDoJogo, termosDoJogo } from "../web/src/glossario/jogo.js";
+import { titulosDoJogo, plural } from "../web/src/glossario/titulos.js";
 
 // excertos das páginas reais (sinonimos.com.br e antonimos.com.br, outubro de 2026)
 const PAGINA = `<div class="content-detail"><div class="content-detail--subtitle">Qualquer tipo de conquista ou triunfo:</div><p class="syn-list syn-list-1"><em class="syn-number">1</em> <a href="/conquista/" class="sinonimo">conquista</a>, <a href="/triunfo/" class="sinonimo">triunfo</a>, <a href="/exito/" class="sinonimo">&ecirc;xito</a>, sucesso.</p></div>
@@ -260,4 +261,56 @@ test("glossário: as palavras de cada um juntam-se ao glossário, à pesquisa e 
   const f2 = fundir(m, { clubes: { Repesenses: { alc: ["Os da Ribeira", "Repe"] } }, ideias: [{ tema: "Rádio", t: "Uma ideia minha" }] });
   assert.deepEqual(f2.clubes.Repesenses.alc, ["Os da Ribeira", "Repe"]);
   assert.equal(f2.ideias.length, 1);
+});
+
+test("glossário: preparar um jogo das ligas norte-americanas e de outros países (pelo desporto e pelo país)", () => {
+  const f = (h, a, comp, mod, paisNome) => fichaDoJogo({ h, a, comp, mod, paisNome });
+  // «Rangers» é o de Glasgow no futebol e o de Nova Iorque no hóquei no gelo
+  assert.equal(f("Rangers", "Canucks", "NHL", "hoquei_gelo").casa.clube.nome, "New York Rangers");
+  assert.equal(f("Rangers", "Celtic", "Scottish Premiership", "futebol").casa.clube.nome, "Rangers");
+  assert.equal(f("Flyers", "Hurricanes", "NHL", "hoquei_gelo").fora.clube.nome, "Carolina Hurricanes");
+  assert.equal(f("Hornets", "Bucks", "NBA", "basquetebol").prova.nome, "NBA");
+  assert.equal(f("Seahawks", "49ers", "NFL", "futebol_americano").fora.clube.nome, "San Francisco 49ers");
+  assert.equal(f("Maple Leafs", "Canadiens", "NHL", "hoquei_gelo").paises[0].n, "Canadá");
+  // o Benfica também joga basquetebol
+  assert.equal(f("Benfica", "Real Madrid", "EuroLeague", "basquetebol").casa.clube.nome, "Benfica");
+  // «Santos» no México é o Santos Laguna, e o «Torneo Apertura» é o do país do jogo
+  const mx = f("Atl. San Luis", "Santos", "Torneo Apertura", "futebol", "México");
+  assert.equal(mx.casa.clube.nome, "Atlético San Luis");
+  assert.equal(mx.fora.clube.nome, "Santos Laguna");
+  assert.equal(mx.prova.nome, "Liga MX (México)");
+  assert.equal(f("Santos", "Flamengo", "Brasileirão", "futebol", "Brasil").casa.clube.nome, "Santos");
+  assert.equal(f("Racing", "Belgrano", "Torneo Clausura", "futebol", "Argentina").prova.nome, "Liga Profesional (Argentina)");
+  assert.equal(f("St. Louis", "LA Galaxy", "MLS", "futebol").casa.clube.nome, "St. Louis City");
+  assert.equal(f("Qarabag", "Benfica", "Liga dos Campeões", "futebol").casa.clube.pais.n, "Azerbaijão");
+});
+
+test("glossário: sugestões de títulos para o jogo (antes, durante e depois)", () => {
+  const t = (j) => titulosDoJogo(fichaDoJogo(j), j);
+  const antes = t({ h: "Benfica", a: "Sporting", comp: "Liga Portugal" });
+  assert.ok(antes.includes("Liga Portugal: Benfica recebe Sporting"), antes.join(" | "));
+  const golea = t({ h: "Benfica", a: "Sporting", hs: 3, as: 0, comp: "Liga Portugal", ft: true });
+  assert.ok(golea.includes("Benfica vence o dérbi (3–0)"), golea.join(" | "));
+  assert.ok(golea.includes("Benfica goleia Sporting por 3–0"));
+  assert.ok(golea.includes("Águias esmagam Leões"));
+  const fora = t({ h: "Gil Vicente", a: "FC Porto", hs: 1, as: 3 });
+  assert.ok(fora.includes("FC Porto bate Gil Vicente em Barcelos"), fora.join(" | "));
+  assert.ok(fora.includes("Dragões superam Gilistas"));
+  const nulo = t({ h: "Bahia", a: "Mirassol", hs: 0, as: 0, comp: "Brasileirão" });
+  assert.ok(nulo.includes("Nulo entre Bahia e Mirassol"), nulo.join(" | "));
+  // nas ligas norte-americanas, o verbo vai para o plural e conta-se em pontos
+  const nba = t({ h: "Cavaliers", a: "Magic", hs: 42, as: 33, comp: "NBA", mod: "basquetebol", vivo: true });
+  assert.ok(nba.includes("Cavaliers estão a vencer Magic (42–33)"), nba.join(" | "));
+  const nfl = t({ h: "Cardinals", a: "Lions", hs: 21, as: 45, comp: "NFL", mod: "futebol_americano" });
+  assert.ok(nfl.includes("Lions arrasam Cardinals (45–21)"), nfl.join(" | "));
+  for (const lst of [antes, golea, fora, nulo, nba, nfl]) {
+    assert.ok(lst.length >= 4 && lst.length <= 8);
+    assert.equal(new Set(lst).size, lst.length);
+    for (const x of lst) assert.ok(!/undefined|null|\s{2}|\s$/.test(x), x);
+  }
+  assert.equal(plural("Dragões"), true);
+  assert.equal(plural("Rossoneri"), true);
+  assert.equal(plural("Mengão"), false);
+  assert.equal(plural("Thrylos"), false);
+  assert.equal(plural("Os da Luz"), true);
 });

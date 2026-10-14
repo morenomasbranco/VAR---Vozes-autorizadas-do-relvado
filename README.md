@@ -185,7 +185,7 @@ Nos Destaques do Feed ficam de fora os vídeos «todos pretos» e os que só tê
 
 ## Distritais
 
-A secção **Distritais** (ao lado de «Portugueses pelo mundo») tem uma coluna por associação de futebol (as 22), à maneira da «Ronda pela atualidade», com tudo junto e do mais recente para o mais antigo, e um filtro Tudo · Associação · Imprensa · Clubes:
+A secção **Distritais** (ao lado de «Prémios»; «Portugueses pelo mundo» já não está na barra, só na coluna do Feed) tem uma coluna por associação de futebol (as 22), à maneira da «Ronda pela atualidade», com tudo junto e do mais recente para o mais antigo, e um filtro Tudo · Associação · Imprensa · Clubes:
 
 - **as notícias e os comunicados da própria associação** (os sites das associações, lidos como as outras fontes do `oficiais.json`; se um site não responder, passa a ser lido pelo Google News com `site:`);
 - **a imprensa que fala da associação**: uma pesquisa do Google News por associação («AF Braga», «Associação de Futebol de Braga», «distrital de Braga»), de 20 em 20 minutos, com o nome do jornal (`OFICIAIS_IMPRENSA=0` desliga);
