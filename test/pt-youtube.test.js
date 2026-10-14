@@ -111,7 +111,7 @@ test("Relay do YouTube: o servidor só aceita tokens OIDC do GitHub deste reposi
   const { createYoutube } = await import("../server/pt/youtube.js");
   process.env.YOUTUBE_DIRETOS = "0";
   const yt = createYoutube();
-  yt.receber({ "af-viseu": [{ videoId: "DSUP2qpjacE", titulo: "UD Vilamaiorense x CD Santacruzense", marcada: true, inicio: 1791727200000, url: "https://mau.exemplo" }, { videoId: "<script>", aoVivo: true }, { videoId: "Antigo00001" }] });
+  yt.receber({ "af-viseu": [{ videoId: "DSUP2qpjacE", titulo: "UD Vilamaiorense x CD Santacruzense", marcada: true, inicio: Date.now() + 2 * 3600e3, url: "https://mau.exemplo" }, { videoId: "<script>", aoVivo: true }, { videoId: "Antigo00001" }] });
   const d = yt.diretos();
   assert.deepEqual(d.aSeguir.map((x) => x.videoId), ["DSUP2qpjacE"]);
   assert.equal(d.aSeguir[0].url, "https://www.youtube.com/watch?v=DSUP2qpjacE");
