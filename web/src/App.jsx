@@ -24,7 +24,8 @@ const CATS = [
   { id: "modalidades", pt: "Modalidades", en: "Other sports", es: "Otros deportes", fr: "Autres sports", it: "Altri sport", de: "Andere Sportarten" },
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
   { id: "premios", pt: "Prémios", en: "Awards", es: "Premios", fr: "Trophées", it: "Premi", de: "Auszeichnungen" },
-  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland" },
+  // não aparece na barra de secções (as notícias continuam na coluna «Portugueses pelo mundo» do Feed)
+  { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland", semBarra: true },
   { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
   { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
   { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar", hl: "glos" },
@@ -69,6 +70,8 @@ const semAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u03
 
 // secções onde não aparece, à direita de cada notícia, a etiqueta com o nome da secção
 const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
+// secções em que a lista de notícias fica numa coluna centrada
+const LISTA_CENTRADA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
 
 const inSection = (it, s) => {
   if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais" || s === "glossario") return false;
@@ -422,7 +425,9 @@ const GB_PARTS = {
 };
 function countryName(code, lang) {
   const own = COUNTRIES[code] || GB_PARTS[code];
-  if (own) return own[lang] || own.en;
+  // COUNTRIES tem [português, inglês]; nas outras línguas, o nome vem do browser (menos a Europa e o «Internacional»)
+  if (Array.isArray(own) && (lang === "pt" || lang === "en" || code === "eu" || code === "un")) return lang === "pt" ? own[0] : own[1];
+  if (own && !Array.isArray(own)) return own[lang] || own.en;
   try { return new Intl.DisplayNames([UI[lang]?.locale || "pt-PT"], { type: "region" }).of(code.toUpperCase()); } catch { return code.toUpperCase(); }
 }
 function Flag({ code, lang, title }) {
@@ -976,6 +981,8 @@ const CSS = `
 .apito main.centrado>.mods,.apito main.centrado .eftipos{display:flex;width:fit-content;max-width:100%;margin-left:auto;margin-right:auto;justify-content:center}
 .apito main.centrado>.mods{margin-bottom:22px}
 .apito main.centrado .eftipos{margin-bottom:22px}
+.apito main.lista-centrada .feed{max-width:860px;margin:0 auto}
+.apito main.lista-centrada .empty{margin:0 auto;padding-left:0;text-align:center}
 .apito main.centrado .dist .dhead{justify-content:center;margin-bottom:18px}
 .apito main.centrado .dist .dgrupos{display:flex;width:fit-content;max-width:100%;margin:0 auto 16px;justify-content:center}
 .apito .textbtn{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
@@ -1274,7 +1281,7 @@ const CSS = `
 /* Nesta semana */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
 /* Glossário: destacado na barra das secções */
-.apito .tab.hl-glos{color:var(--hist);--tabc:var(--hist);font-weight:600}
+.apito .tab.hl-glos{color:var(--accent);--tabc:var(--accent);font-weight:600}
 .apito .efem{max-width:900px;margin:0 auto}
 .apito .efem .efdia{text-align:center}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
@@ -1962,8 +1969,9 @@ export default function App() {
     }
     return [...map.entries()].map(([k, it]) => ({
       id: k, h: it.score.h, a: it.score.a, hs: it.score.hs, as: it.score.as, comp: leagueName(it.liga) || it.score.comp,
-      mod: it.mod || "futebol", vivo: isLive(it.score, it.upd || it.ts, now), ts: it.upd || it.ts,
-    })).sort((a, b) => (b.vivo - a.vivo) || b.ts - a.ts).slice(0, 40);
+      mod: it.mod || "futebol", modNome: modName(it.mod || "futebol", "pt"), pais: topicOf(it) || null, paisNome: topicOf(it) ? countryName(topicOf(it), "pt") : null,
+      vivo: isLive(it.score, it.upd || it.ts, now), ft: !!it.score.ft, ts: it.upd || it.ts,
+    })).sort((a, b) => (b.vivo - a.vivo) || b.ts - a.ts).slice(0, 80);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, section, now]);
 
@@ -2378,7 +2386,7 @@ export default function App() {
             </label>
           </div>
           <nav className="tabs" aria-label={ui.sectionsLabel}>
-            {CATS.map((c) => (
+            {CATS.filter((c) => !c.semBarra).map((c) => (
               <button key={c.id} className={`tab ${c.hl ? `hl hl-${c.hl}` : ""}`} aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
                 style={c.club ? { "--tabc": `var(--${c.id})` } : undefined}>
                 {emLingua(c, lang)}
@@ -2392,7 +2400,7 @@ export default function App() {
       <div className="wrap">
         {conn === "offline" && <p className="notice">{ui.offlineNote}</p>}
         <div className={`layout ${section === "resultados" ? "res" : "one"}`}>
-          <main className={section !== "resultados" ? "centrado" : undefined}>
+          <main className={section === "resultados" ? undefined : `centrado${LISTA_CENTRADA.has(section) ? " lista-centrada" : ""}`}>
             <div className={`feedhead${section !== "resultados" ? " centro" : ""}`}>
               <h1>{emLingua(CAT[section], lang)}</h1>
               {section === "resultados" && (
