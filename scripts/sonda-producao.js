@@ -170,3 +170,23 @@ try {
   linha(`== Portugal: arrancou ${new Date(e.arranque).toISOString()} · ${e.competicoes} competições · ${e.jogos} jogos · pesquisa ${p.ativo ? "ligada" : "desligada"}${p.pausaAte > Date.now() ? ` (em pausa até ${new Date(p.pausaAte).toISOString()})` : ""} · FPF: ${JSON.stringify(e.fpf?.ultimoErro || null).slice(0, 160)}`);
 } catch (e) { linha("Portugal: erro", e.message); }
 try { linha(`== cópia dos dados ao arrancar == ${JSON.stringify(await j("/api/copia/estado")).slice(0, 300)}`); } catch (e) { linha("cópia: erro", e.message); }
+
+// Glossário: os jogos das distritais que o «Preparar um jogo» mostrava como em direto (o último acontecimento de cada
+// jogo sem «final» há menos de 150 minutos) comparados com o estado do jogo no servidor
+try {
+  const ev = await j("/api/pt/eventos?limit=400");
+  const est = new Map((await j("/api/pt/aovivo")).map((x) => [x.id, x]));
+  const ult = new Map();
+  for (const it of ev) {
+    if (!it.score) continue;
+    const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
+    if (!ult.has(k) || (ult.get(k).upd || ult.get(k).ts) < (it.upd || it.ts)) ult.set(k, it);
+  }
+  const agora = Date.now();
+  const antes = [...ult.values()].filter((it) => !it.score.ft && agora - (it.upd || it.ts) < 150 * 60000);
+  linha(`== Glossário: jogos de Portugal que contavam como em direto == ${antes.length} (de ${ult.size})`);
+  for (const it of antes.slice(0, 30)) {
+    const e = est.get(it.pt?.jogo);
+    linha(`   ${it.pt?.org || "?"} | ${it.score.comp} | ${it.score.h} ${it.score.hs}-${it.score.as} ${it.score.a} | último: ${it.id.split(":").slice(2, 3).join("") || "golo"} há ${Math.round((agora - (it.upd || it.ts)) / 60000)} min | estado no servidor: ${e ? e.estado : "fora da lista de hoje"}`);
+  }
+} catch (e) { linha("Glossário: erro", e.message); }

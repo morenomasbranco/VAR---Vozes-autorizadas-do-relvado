@@ -1281,7 +1281,7 @@ const CSS = `
 /* Nesta semana */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
 /* Glossário: destacado na barra das secções */
-.apito .tab.hl-glos{color:var(--accent);--tabc:var(--accent);font-weight:600}
+.apito .tab.hl-glos{color:var(--hist);--tabc:var(--hist);font-weight:600}
 .apito .efem{max-width:900px;margin:0 auto}
 .apito .efem .efdia{text-align:center}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
@@ -1957,7 +1957,26 @@ export default function App() {
     return [...map.values()].sort((a, b) => (isLive(b.score, b.upd || b.ts, now) - isLive(a.score, a.upd || a.ts, now)) || (b.upd || b.ts) - (a.upd || a.ts));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
-  // os jogos para o «Preparar um jogo» do Glossário: todos (sem o filtro da pesquisa), os que estão a decorrer primeiro
+  // os jogos de Portugal (nacionais e distritais) que o servidor diz estarem a decorrer: no Glossário, um destes jogos só
+  // conta como em direto assim (o último acontecimento sem «final» não chega: há jogos que acabam sem ele, adiados…)
+  const [ptVivos, setPtVivos] = useState(null);
+  useEffect(() => {
+    if (section !== "glossario") return undefined;
+    let stop = false;
+    const aDecorrer = (j) => j.estado === "direto" || j.estado === "intervalo";
+    const ler = () => fetch(`${API}/api/pt/aovivo`).then((r) => r.json())
+      .then((l) => { if (!stop && Array.isArray(l)) setPtVivos(new Set(l.filter(aDecorrer).map((j) => j.id))); }).catch(() => {});
+    ler();
+    const t = setInterval(ler, 60000);
+    const mudou = (e) => {
+      const j = e.detail;
+      if (!j?.id) return;
+      setPtVivos((v) => { const n = new Set(v || []); if (aDecorrer(j)) n.add(j.id); else n.delete(j.id); return n; });
+    };
+    window.addEventListener("pt-jogo", mudou);
+    return () => { stop = true; clearInterval(t); window.removeEventListener("pt-jogo", mudou); };
+  }, [section]);
+  // os jogos para o «Preparar um jogo» do Glossário: só os que estão a decorrer (sem o filtro da pesquisa)
   const jogosGlos = useMemo(() => {
     if (section !== "glossario") return [];
     const map = new Map();
@@ -1970,10 +1989,10 @@ export default function App() {
     return [...map.entries()].map(([k, it]) => ({
       id: k, h: it.score.h, a: it.score.a, hs: it.score.hs, as: it.score.as, comp: leagueName(it.liga) || it.score.comp,
       mod: it.mod || "futebol", modNome: modName(it.mod || "futebol", "pt"), pais: topicOf(it) || null, paisNome: topicOf(it) ? countryName(topicOf(it), "pt") : null,
-      vivo: isLive(it.score, it.upd || it.ts, now), ft: !!it.score.ft, ts: it.upd || it.ts,
-    })).sort((a, b) => (b.vivo - a.vivo) || b.ts - a.ts).slice(0, 80);
+      vivo: it.pt?.jogo ? !!ptVivos?.has(it.pt.jogo) : isLive(it.score, it.upd || it.ts, now), ft: !!it.score.ft, ts: it.upd || it.ts,
+    })).filter((j) => j.vivo).sort((a, b) => b.ts - a.ts).slice(0, 80);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, section, now]);
+  }, [items, section, now, ptVivos]);
 
   // todos os jogos, sem o filtro de ligas, de fontes ou de pesquisa: servem para ligar cada vídeo ao seu jogo,
   // para o cartão do Feed ter sempre o resultado e o canal mesmo quando a liga está desligada nos Resultados
