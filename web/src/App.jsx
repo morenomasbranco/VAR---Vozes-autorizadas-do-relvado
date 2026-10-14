@@ -677,7 +677,9 @@ function AutoVideo({ embed, title }) {
 // Imagem de um vídeo, sempre com alguma coisa para mostrar: 1) a miniatura guardada pelo servidor;
 // 2) se falhar, uma imagem tirada do próprio vídeo (1.º segundo); 3) no fim, o cartão desenhado pelo servidor
 const thumbUrl = (v, svg = false) => `${API}/api/videos/thumb/${encodeURIComponent(v.video_id)}${svg ? "?svg=1" : `?t=${encodeURIComponent(v.thumbnail || "")}`}`;
-const mp4De = (v) => (v.embed?.tipo === "mp4" ? v.embed.src : v.embed?.mp4) || null;
+// o ficheiro servido pelo próprio servidor («/api/…», os vídeos grandes do Telegram) pede-se ao servidor da API
+const doServidor = (u) => (u && /^\/api\//.test(u) ? `${API}${u}` : u);
+const mp4De = (v) => doServidor(v.embed?.tipo === "mp4" ? v.embed.src : v.embed?.mp4) || null;
 // vídeo sem título, só com o nome do ficheiro («video-2026-10-07T12-59-09», «20261007_055402[1]»)
 const TITULO_FICHEIRO = /^\s*(?:video|vid|img|mov|clip|screen ?recording|whatsapp video|gravação|telegram)?[\s_-]*[\dT:._\-\[\]() ]{6,}(?:\.(?:mp4|mov|m4v|webm))?\s*$/i;
 const tituloDeFicheiro = (t) => TITULO_FICHEIRO.test(String(t || "")) && (String(t).match(/\d/g) || []).length >= 6;
@@ -695,19 +697,21 @@ function imagemEscura(img) {
   } catch { return false; } // imagem de outro sítio: o browser não deixa ler os píxeis
 }
 
+// o 1.º segundo do vídeo, para quando falta a miniatura (não nos vídeos servidos pelo servidor, que são grandes)
+const quadroDe = (v) => (v.embed?.servidor ? null : mp4De(v));
 function VideoImg({ v, onEscuro }) {
   // sem miniatura mas com o ficheiro do vídeo: mostra logo o 1.º segundo, sem esperar pelo servidor
-  const inicio = !v.thumbnail && mp4De(v) ? 1 : 0;
+  const inicio = !v.thumbnail && quadroDe(v) ? 1 : 0;
   const [fase, setFase] = useState(inicio);
   const [frame, setFrame] = useState(false);
   useEffect(() => { setFase(inicio); setFrame(false); }, [v.thumbnail, v.embed?.src]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (fase !== 1 || frame || !mp4De(v)) return undefined;
+    if (fase !== 1 || frame || !quadroDe(v)) return undefined;
     const t = setTimeout(() => setFase(2), 4000);
     return () => clearTimeout(t);
   }, [fase, frame]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (fase === 1 && mp4De(v)) {
-    return <video className="vframe" src={`${mp4De(v)}#t=1`} preload="auto" muted playsInline onLoadedData={() => setFrame(true)} onError={() => setFase(2)} aria-hidden="true" />;
+  if (fase === 1 && quadroDe(v)) {
+    return <video className="vframe" src={`${quadroDe(v)}#t=1`} preload="auto" muted playsInline onLoadedData={() => setFrame(true)} onError={() => setFase(2)} aria-hidden="true" />;
   }
   if (fase >= 1) return <img src={thumbUrl(v, true)} alt="" loading="lazy" />;
   return <img src={thumbUrl(v)} alt="" loading="lazy" onError={() => setFase(1)} onLoad={onEscuro ? (e) => { if (imagemEscura(e.currentTarget)) onEscuro(v.video_id); } : undefined} />;
@@ -733,7 +737,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
   return (
     <li className={`vcard cat-${v.category} ${mini ? "mini" : ""}`}>
       <div className="vthumb">
-        {!playing && auto && v.embed && (
+        {!playing && auto && v.embed && !v.embed.servidor && (
           <button className="vplay vautobtn" onClick={() => onPlay(v.video_id)} aria-label={tx.watch}>
             <VideoImg v={v} onEscuro={onEscuro} />
             <AutoVideo embed={v.embed} title={v.title} />
@@ -741,7 +745,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
             <span className="vsom" aria-hidden="true">🔇</span>
           </button>
         )}
-        {!playing && auto && v.embed ? null : playing && v.embed && falhou ? (
+        {!playing && auto && v.embed && !v.embed.servidor ? null : playing && v.embed && falhou ? (
           // o browser não consegue tocar o vídeo aqui: abre-se o ficheiro (ou a fonte) noutro separador
           <div className="vfalha">
             <p>Este browser não consegue tocar este vídeo aqui.</p>
@@ -752,8 +756,8 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
           </div>
         ) : playing && v.embed ? (
           v.embed.tipo === "iframe" ? <iframe src={semSom(v.embed.src)} title={v.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
-            : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={v.embed.mp4} onFalha={() => setFalhou(true)} />
-              : <video className="vplayer" src={v.embed.src} muted controls autoPlay playsInline onError={() => setFalhou(true)} onLoadedMetadata={(e) => semImagem(e) && setFalhou(true)} />
+            : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={doServidor(v.embed.mp4)} onFalha={() => setFalhou(true)} />
+              : <video className="vplayer" src={doServidor(v.embed.src)} muted controls autoPlay playsInline onError={() => setFalhou(true)} onLoadedMetadata={(e) => semImagem(e) && setFalhou(true)} />
         ) : (
           <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
             <VideoImg v={v} onEscuro={onEscuro} />

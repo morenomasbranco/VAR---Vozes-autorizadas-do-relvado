@@ -148,7 +148,12 @@ export function embedDe(v) {
   if (v.hls) return { tipo: "hls", src: v.hls, mp4: v.mp4 || null };
   // leitor do próprio alojamento (Streamain, Kaltura da Sport TV), quando não há ficheiro direto
   if (!v.mp4 && v.iframe) return { tipo: "iframe", src: v.iframe };
+  // o ficheiro servido pelo próprio servidor (vídeos grandes do Telegram): toca no site, mas não em miniatura
+  if (v.mp4 && /^\/api\//.test(v.mp4)) return { tipo: "mp4", src: v.mp4, servidor: true };
   if (v.mp4) return { tipo: /\.m3u8(\?|$)/i.test(v.mp4) ? "hls" : "mp4", src: v.mp4 };
+  // streamin (os golos do r/soccer): o ficheiro tem um endereço fixo, sem ser preciso abrir a página
+  const sm = String(v.video_url || "").match(/^https?:\/\/(?:www\.)?streamin\.[a-z]+\/v\/([a-z0-9]+)\/?$/i);
+  if (sm) return { tipo: "mp4", src: `https://c-cdn.streamin.top/uploads/${sm[1]}.mp4` };
   // Instagram sem ficheiro direto (conteúdo com direitos): o leitor oficial do Instagram, dentro do cartão
   if (k.startsWith("ig:")) return { tipo: "iframe", src: `https://www.instagram.com/p/${k.slice(3)}/embed/` };
   return null; // os restantes (streamin, dubz, X…) abrem no site de origem
@@ -281,8 +286,10 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
       pr.on("close", () => { clearTimeout(fim); const b = Buffer.concat(partes); ok(b.length > 500 ? b : null); });
     });
   }
+  // o ficheiro que o ffmpeg pode abrir (não o que o próprio servidor serve, como os vídeos grandes do Telegram)
+  const ficheiroExterno = (v) => [v.mp4, v.hls, v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null].find((u) => u && /^https?:/.test(u)) || null;
   async function fotograma(v) {
-    const src = v.mp4 || v.hls || (v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null);
+    const src = ficheiroExterno(v);
     if (!src || ffmpegFalta) return null;
     await vez();
     try {
@@ -321,7 +328,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   async function verEscuro(v) {
     if (!v || v.escuro !== undefined || ffmpegFalta) return;
     const img = v.thumbnail && await descarregaImagem(v.thumbnail);
-    const src = v.mp4 || v.hls || (v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null);
+    const src = ficheiroExterno(v);
     if (!img && !src) return;
     await vez();
     let mudou = false;
@@ -547,6 +554,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     } finally { aProcurar = false; }
   }
   setInterval(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 3 * 60e3).unref?.();
+  setTimeout(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 45e3).unref?.(); // logo depois do arranque
 
   const limpar = () => { const antes = videos.length; videos = videos.filter((v) => idade(v) < IDADE_MAX); if (videos.length !== antes) sujo = true; };
   setInterval(limpar, 10 * 60e3).unref();

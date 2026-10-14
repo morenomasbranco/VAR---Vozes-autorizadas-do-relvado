@@ -211,8 +211,13 @@ try {
     } catch (err) { extra = `erro ${err.message}`; }
     linha(`   SEM LEITOR ${v.source} | ${v.video_url} | ${extra}`);
   }
+  // os vídeos grandes do Telegram, servidos pelo próprio site (precisam da conta do Telegram, TG_SESSION)
+  for (const v of lista.filter((x) => x.embed?.servidor).slice(0, 3)) {
+    const r = await fetch(SITE + v.embed.src, { headers: { Range: "bytes=0-1023" }, signal: AbortSignal.timeout(30000) }).catch((e) => ({ status: e.message, headers: new Headers() }));
+    linha(`   TELEGRAM PELO SITE ${v.embed.src} | ${r.status} ${r.headers.get("content-type") || ""} ${r.headers.get("content-range") || ""}`);
+  }
   const codecs = (b) => ["avc1", "hvc1", "hev1", "av01", "vp09", "mp4a", "Opus"].filter((c) => b.includes(c)).join(",") || "?";
-  for (const v of lista.filter((x) => x.embed && x.embed.tipo !== "iframe").slice(0, 40)) {
+  for (const v of lista.filter((x) => x.embed && x.embed.tipo !== "iframe" && !x.embed.servidor).slice(0, 40)) {
     const e = v.embed;
     try {
       if (e.tipo === "hls") {
