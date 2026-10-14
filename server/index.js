@@ -5,7 +5,8 @@ import express from "express";
 import * as store from "./store.js";
 import { createEnricher, fallback, RULES, NAO_FUTEBOL, MODALIDADES, modalidadeDe } from "./enrich.js";
 import { startRss, eDesporto } from "./sources/rss.js";
-import { startTelegram } from "./sources/telegram.js";
+import { startTelegram, clienteTelegram } from "./sources/telegram.js";
+import { enviarVideoTelegram } from "./tgvideo.js";
 import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
 import { startEspn } from "./sources/espn.js";
@@ -20,7 +21,7 @@ import { createVideos } from "./videos.js";
 import { startReddit } from "./sources/reddit.js";
 import { startTgVideos } from "./sources/tgvideos.js";
 import { startVsports } from "./sources/vsports.js";
-import { startSportTv } from "./sources/sporttv.js";
+import { startSportTv, ficheiro as ficheiroSportTv } from "./sources/sporttv.js";
 import { startStreamain } from "./sources/streamain.js";
 import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
@@ -427,6 +428,17 @@ function cartaoSvg(v) {
 ${sub ? `<text x="320" y="332" font-family="Arial,Helvetica,sans-serif" font-size="24" fill="#fff" fill-opacity=".85" text-anchor="middle">${escXml(sub)}</text>` : ""}
 </svg>`;
 }
+// vídeo grande de um canal de vídeos do Telegram, descarregado pela conta do Telegram (só dos canais configurados)
+app.get("/api/videos/tg/:canal/:id", async (req, res) => {
+  const { canal, id } = req.params;
+  const client = clienteTelegram();
+  if (!client) return res.status(503).json({ erro: "sem ligação ao Telegram (TG_SESSION)" });
+  if (!/^\d{1,9}$/.test(id) || !(VIDEOS_CFG.telegram || []).some((c) => c.canal.toLowerCase() === canal.toLowerCase())) return res.status(404).json({ erro: "vídeo desconhecido" });
+  try { await enviarVideoTelegram(client, canal, id, req, res); } catch (e) {
+    log(`[Vídeos] Telegram ${canal}/${id}: ${e.message}`);
+    if (!res.headersSent) res.status(502).json({ erro: e.message }); else res.end();
+  }
+});
 app.get("/api/videos/thumb/:id", async (req, res) => {
   try {
     const img = req.query.svg ? { v: videos.latest({ limit: 300 }).find((x) => x.video_id === req.params.id) } : await videos.miniatura(String(req.params.id));
@@ -531,6 +543,13 @@ startReddit(VIDEOS_CFG.reddit || [], (p) => videos.add(p), log, ESTADO_VIDEOS.re
 startTgVideos(VIDEOS_CFG.telegram || [], (p) => videos.add(p), log, ESTADO_VIDEOS.telegram);
 startVsports((p) => videos.add(p), log, ESTADO_VIDEOS.vsports);
 startSportTv((p) => videos.add(p), log, ESTADO_VIDEOS.sporttv);
+// os vídeos da Sport TV que chegaram antes de a Kaltura ter o ficheiro pronto voltam a ser procurados
+videos.procurarFicheiro("sporttv", (s) => (s.entry ? ficheiroSportTv(s) : null));
+// os vídeos grandes do Telegram (sem ficheiro na página pública) tocam pelo servidor, com a conta do Telegram
+videos.procurarFicheiro("telegram", (s) => {
+  const m = String(s.video_url || "").match(/^https:\/\/t\.me\/([A-Za-z0-9_]+)\/(\d+)$/);
+  return m && clienteTelegram() ? { mp4: `/api/videos/tg/${m[1]}/${m[2]}` } : null;
+});
 startStreamain((p) => videos.add(p), log, ESTADO_VIDEOS.streamain);
 // capas.start(); — as capas saíram do site, o servidor já não as vai buscar
 efemerides.start();

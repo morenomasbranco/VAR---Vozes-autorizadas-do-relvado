@@ -190,3 +190,44 @@ try {
     linha(`   ${it.pt?.org || "?"} | ${it.score.comp} | ${it.score.h} ${it.score.hs}-${it.score.as} ${it.score.a} | último: ${it.id.split(":").slice(2, 3).join("") || "golo"} há ${Math.round((agora - (it.upd || it.ts)) / 60000)} min | estado no servidor: ${e ? e.estado : "fora da lista de hoje"}`);
   }
 } catch (e) { linha("Glossário: erro", e.message); }
+
+// Vídeos do Feed: de onde vêm, como se tocam (iframe, HLS ou MP4) e com que codec, para ver os que o Chrome e o Edge
+// no Windows não conseguem tocar (o HEVC/H.265 dos iPhones, por exemplo, que o Safari toca e eles muitas vezes não)
+try {
+  const lista = await j("/api/videos/latest?limit=80");
+  const tipos = {};
+  for (const v of lista) { const k = `${v.source?.replace(/^t\.me\/.*/, "t.me") || "?"} · ${v.embed?.tipo || "sem leitor"}`; tipos[k] = (tipos[k] || 0) + 1; }
+  linha(`== vídeos do Feed == ${lista.length}`, JSON.stringify(tipos));
+  // os que não têm leitor no site (abrem no site de origem): o endereço e o que a página de cada um oferece
+  const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" };
+  for (const v of lista.filter((x) => !x.embed).slice(0, 30)) {
+    let extra = "";
+    try {
+      const tg = v.video_url.match(/^https:\/\/t\.me\/([^/]+)\/(\d+)/);
+      const url = tg ? `https://t.me/${tg[1]}/${tg[2]}?embed=1&mode=tme` : v.video_url;
+      const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(12000) });
+      const h = (await r.text()).slice(0, 2e6);
+      extra = `${r.status} ${new URL(r.url).hostname} | video src: ${(h.match(/<video[^>]+src="([^"]+)"/)?.[1] || "-").slice(0, 60)} | og:video: ${(h.match(/og:video(?::secure_url|:url)?["'][^>]+content=["']([^"']+)/i)?.[1] || "-").slice(0, 60)} | grande: ${/too big|VIEW IN TELEGRAM|message_media_not_supported/i.test(h) ? "sim" : "não"} | m3u8/mp4 no html: ${(h.match(/https?:[^"'\s]+\.(?:mp4|m3u8)[^"'\s]*/i)?.[0] || "-").slice(0, 70)}`;
+    } catch (err) { extra = `erro ${err.message}`; }
+    linha(`   SEM LEITOR ${v.source} | ${v.video_url} | ${extra}`);
+  }
+  // os vídeos grandes do Telegram, servidos pelo próprio site (precisam da conta do Telegram, TG_SESSION)
+  for (const v of lista.filter((x) => x.embed?.servidor).slice(0, 3)) {
+    const r = await fetch(SITE + v.embed.src, { headers: { Range: "bytes=0-1023" }, signal: AbortSignal.timeout(30000) }).catch((e) => ({ status: e.message, headers: new Headers() }));
+    linha(`   TELEGRAM PELO SITE ${v.embed.src} | ${r.status} ${r.headers.get("content-type") || ""} ${r.headers.get("content-range") || ""}`);
+  }
+  const codecs = (b) => ["avc1", "hvc1", "hev1", "av01", "vp09", "mp4a", "Opus"].filter((c) => b.includes(c)).join(",") || "?";
+  for (const v of lista.filter((x) => x.embed && x.embed.tipo !== "iframe" && !x.embed.servidor).slice(0, 40)) {
+    const e = v.embed;
+    try {
+      if (e.tipo === "hls") {
+        const t = await fetch(e.src, { signal: AbortSignal.timeout(15000) }).then((r) => r.text());
+        linha(`   HLS ${v.source} | ${(t.match(/CODECS="([^"]+)"/g) || []).slice(0, 3).join(" ") || "sem CODECS"} | mp4 de reserva: ${e.mp4 ? "sim" : "não"} | ${String(v.title).slice(0, 50)}`);
+      } else {
+        const r = await fetch(e.src, { headers: { Range: "bytes=0-300000" }, signal: AbortSignal.timeout(15000) });
+        const b = Buffer.from(await r.arrayBuffer()).toString("latin1");
+        linha(`   MP4 ${v.source} | ${r.status} ${r.headers.get("content-type")} | codecs ${codecs(b)} | moov no início: ${b.includes("moov") ? "sim" : "não"} | ${new URL(e.src).hostname} | ${String(v.title).slice(0, 50)}`);
+      }
+    } catch (err) { linha(`   ${e.tipo} ${v.source} | erro ${err.message} | ${String(v.title).slice(0, 50)}`); }
+  }
+} catch (e) { linha("vídeos: erro", e.message); }

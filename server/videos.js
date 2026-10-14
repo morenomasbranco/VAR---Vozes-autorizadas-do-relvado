@@ -148,7 +148,12 @@ export function embedDe(v) {
   if (v.hls) return { tipo: "hls", src: v.hls, mp4: v.mp4 || null };
   // leitor do próprio alojamento (Streamain, Kaltura da Sport TV), quando não há ficheiro direto
   if (!v.mp4 && v.iframe) return { tipo: "iframe", src: v.iframe };
+  // o ficheiro servido pelo próprio servidor (vídeos grandes do Telegram): toca no site, mas não em miniatura
+  if (v.mp4 && /^\/api\//.test(v.mp4)) return { tipo: "mp4", src: v.mp4, servidor: true };
   if (v.mp4) return { tipo: /\.m3u8(\?|$)/i.test(v.mp4) ? "hls" : "mp4", src: v.mp4 };
+  // streamin (os golos do r/soccer): o ficheiro tem um endereço fixo, sem ser preciso abrir a página
+  const sm = String(v.video_url || "").match(/^https?:\/\/(?:www\.)?streamin\.[a-z]+\/v\/([a-z0-9]+)\/?$/i);
+  if (sm) return { tipo: "mp4", src: `https://c-cdn.streamin.top/uploads/${sm[1]}.mp4` };
   // Instagram sem ficheiro direto (conteúdo com direitos): o leitor oficial do Instagram, dentro do cartão
   if (k.startsWith("ig:")) return { tipo: "iframe", src: `https://www.instagram.com/p/${k.slice(3)}/embed/` };
   return null; // os restantes (streamin, dubz, X…) abrem no site de origem
@@ -229,11 +234,14 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
 
   function aplicaPrincipal(v) {
     const p = principal(v);
+    // o ficheiro para tocar no site: o da fonte principal ou, se ela não o tiver, o de outra fonte do mesmo vídeo
+    const temFicheiro = (x) => x.hls || x.mp4 || x.iframe;
+    const f = temFicheiro(p) ? p : v.sources.find(temFicheiro) || p;
     Object.assign(v, {
       source: p.fonte, subreddit: p.subreddit || null, canal: p.canal || null, author: p.author,
       title: p.title, reddit_url: p.reddit_url, video_url: p.video_url,
       thumbnail: p.thumbnail || v.sources.find((x) => x.thumbnail)?.thumbnail || v.thumbnail || miniaturaDe(p) || null,
-      hls: p.hls || null, mp4: p.mp4 || null, iframe: p.iframe || null, height: p.height || null, created_time: p.created_time,
+      hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null, height: f.height || null, created_time: p.created_time,
     });
     v.embed = embedDe(v);
   }
@@ -278,8 +286,10 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
       pr.on("close", () => { clearTimeout(fim); const b = Buffer.concat(partes); ok(b.length > 500 ? b : null); });
     });
   }
+  // o ficheiro que o ffmpeg pode abrir (não o que o próprio servidor serve, como os vídeos grandes do Telegram)
+  const ficheiroExterno = (v) => [v.mp4, v.hls, v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null].find((u) => u && /^https?:/.test(u)) || null;
   async function fotograma(v) {
-    const src = v.mp4 || v.hls || (v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null);
+    const src = ficheiroExterno(v);
     if (!src || ffmpegFalta) return null;
     await vez();
     try {
@@ -318,7 +328,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   async function verEscuro(v) {
     if (!v || v.escuro !== undefined || ffmpegFalta) return;
     const img = v.thumbnail && await descarregaImagem(v.thumbnail);
-    const src = v.mp4 || v.hls || (v.embed && v.embed.tipo !== "iframe" ? v.embed.src : null);
+    const src = ficheiroExterno(v);
     if (!img && !src) return;
     await vez();
     let mudou = false;
@@ -361,12 +371,15 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   // que a página indica (og:video, <video>, <source>), para o vídeo tocar sozinho no site, mesmo em miniatura.
   const SEM_PAGINA = /^(yt|st|x|tg|vr|ig|stv|sm):/;
   const resolvidos = new Map(); // chave do vídeo → endereço do ficheiro (ou null)
+  const falhou = new Map(); // chave do vídeo → quando a página não deu o ficheiro (volta a tentar-se mais tarde)
   const imagensDaPagina = new Map(); // chave do vídeo → imagem indicada pela página
   async function ficheiroDaPagina(url) {
     const k = chaveVideo(url);
     if (!k || SEM_PAGINA.test(k)) return null;
-    if (resolvidos.has(k)) return resolvidos.get(k);
+    if (resolvidos.has(k) && (resolvidos.get(k) || Date.now() - (falhou.get(k) || 0) < 5 * 60e3)) return resolvidos.get(k);
     resolvidos.set(k, null);
+    falhou.set(k, Date.now());
+    if (falhou.size > 3000) falhou.clear();
     if (resolvidos.size > 3000) resolvidos.clear();
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", Accept: "text/html,*/*" } });
@@ -518,6 +531,31 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     for (const v of videos.filter((x) => idade(x) < 12 * 3600e3).slice(0, 200)) { await resolver(v); await verEscuro(v).catch(() => {}); await new Promise((r) => setTimeout(r, 500)); }
   }, 20000).unref?.();
 
+  // Vídeos ainda sem ficheiro que toque no site: há fontes que só o têm minutos depois (a Kaltura da Sport TV ainda
+  // a preparar o vídeo, alojamentos que demoram a publicar a página…). Tenta-se de novo de 3 em 3 minutos durante as
+  // primeiras 3 horas: com o procurador que a fonte registou (procurarFicheiro) ou, sem ele, pela página do vídeo.
+  const procuradores = new Map(); // fonte → async (publicação) => { hls, mp4, iframe } | null
+  const procurarFicheiro = (fonte, fn) => procuradores.set(fonte, fn);
+  let aProcurar = false;
+  async function procurarEmFalta() {
+    if (aProcurar) return;
+    aProcurar = true;
+    try {
+      for (const v of videos.filter((x) => !x.embed && idade(x) < 3 * 3600e3).slice(0, 60)) {
+        for (const s of v.sources) {
+          if (s.hls || s.mp4 || s.iframe) continue;
+          const fn = procuradores.get(s.fonte);
+          const f = fn ? await fn(s).catch(() => null) : { mp4: await ficheiroDaPagina(s.video_url) };
+          if (f?.hls || f?.mp4 || f?.iframe) Object.assign(s, { hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null });
+        }
+        aplicaPrincipal(v);
+        if (v.embed) { v.upd = Date.now(); sujo = true; estado.encontradosDepois = (estado.encontradosDepois || 0) + 1; broadcast("video-update", v); }
+      }
+    } finally { aProcurar = false; }
+  }
+  setInterval(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 3 * 60e3).unref?.();
+  setTimeout(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 45e3).unref?.(); // logo depois do arranque
+
   const limpar = () => { const antes = videos.length; videos = videos.filter((v) => idade(v) < IDADE_MAX); if (videos.length !== antes) sujo = true; };
   setInterval(limpar, 10 * 60e3).unref();
 
@@ -540,7 +578,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     return { v }; // sem imagem nenhuma: o servidor desenha uma
   }
 
-  return { add, latest, ignorar, miniatura, estado: () => ({ ...estado, total: videos.length, categorias: contagem() }) };
+  return { add, latest, ignorar, miniatura, procurarFicheiro, procurarEmFalta, estado: () => ({ ...estado, total: videos.length, categorias: contagem() }) };
 }
 
 export const _test = { limpa, norm };

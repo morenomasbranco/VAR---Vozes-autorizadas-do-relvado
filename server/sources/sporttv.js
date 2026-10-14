@@ -115,9 +115,12 @@ async function responde(url, tipo) {
     return /video|octet-stream/i.test(ct) ? r.url : null;
   } catch { return null; }
 }
+// (a Kaltura pode ainda não ter o vídeo pronto quando ele aparece na página: uma tentativa falhada repete-se
+// passados 2 minutos, quando o servidor volta a procurar os vídeos que ainda não têm ficheiro)
 export async function ficheiro(v) {
-  if (tentados.has(v.entry)) return tentados.get(v.entry);
-  const res = { hls: null, mp4: null, iframe: null };
+  const antes = tentados.get(v.entry);
+  if (antes && (antes.hls || antes.mp4 || antes.iframe || Date.now() - antes.ts < 2 * 60e3)) return antes;
+  const res = { hls: null, mp4: null, iframe: null, ts: Date.now() };
   tentados.set(v.entry, res);
   if (tentados.size > 2000) tentados.delete(tentados.keys().next().value);
   const p = PARTNER;
@@ -158,8 +161,8 @@ export function startSportTv(add, log, estado = {}) {
           if (vistos.has(v.post_id)) continue;
           vistos.add(v.post_id);
           if (!v.created_time) { if (primeira) continue; v.created_time = Date.now(); }
-          const f = await ficheiro(v);
-          add({ ...v, ...f });
+          const { hls, mp4, iframe } = await ficheiro(v);
+          add({ ...v, hls, mp4, iframe });
         }
         if (vistos.size > 5000) vistos.clear();
         primeira = false;

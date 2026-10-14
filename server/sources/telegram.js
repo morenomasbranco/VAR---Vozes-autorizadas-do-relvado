@@ -12,8 +12,12 @@ function originalUrl(m, text) {
   return urls.find((u) => X_STATUS.test(u)) || null;
 }
 
+// a ligação ao Telegram (a mesma conta serve as notícias e os vídeos grandes dos canais, que a página pública não
+// dá); null enquanto não estiver ligada, ou sem TG_SESSION
+let ligado = null;
+export const clienteTelegram = () => ligado;
+
 export async function startTelegram(sources, onPost, log) {
-  if (!sources.length) return;
   const { TG_API_ID, TG_API_HASH, TG_SESSION } = process.env;
   if (!TG_API_ID || !TG_API_HASH || !TG_SESSION) {
     log("[Telegram] faltam TG_API_ID, TG_API_HASH ou TG_SESSION no .env; corre npm run telegram-login");
@@ -22,6 +26,8 @@ export async function startTelegram(sources, onPost, log) {
   const client = new TelegramClient(new StringSession(TG_SESSION), Number(TG_API_ID), TG_API_HASH, { connectionRetries: 1000, autoReconnect: true });
   client.setLogLevel("error");
   await client.connect();
+  ligado = client;
+  if (!sources.length) return;
 
   const emit = (s, m) => {
     const text = (m.message || "").trim();
