@@ -395,7 +395,7 @@ export const DIST_CSS = `
 .apito .dsep span{font-family:var(--display);font-weight:600;font-size:13px;line-height:1.15;max-width:96px;white-space:normal}
 .apito .dsep.v{align-self:stretch}
 .apito .dyt .vcat.dao{background:#D7263D}
-.apito .dpalco{margin:0 0 12px;max-width:960px}
+.apito .dpalco{margin:0 auto 12px;max-width:960px}
 .apito .dpalco-video{position:relative;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
 .apito .dpalco-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .apito .dpalco-video:fullscreen{border-radius:0} .apito .dpalco-video:-webkit-full-screen{border-radius:0}

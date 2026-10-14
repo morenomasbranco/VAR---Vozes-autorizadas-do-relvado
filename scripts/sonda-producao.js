@@ -190,3 +190,26 @@ try {
     linha(`   ${it.pt?.org || "?"} | ${it.score.comp} | ${it.score.h} ${it.score.hs}-${it.score.as} ${it.score.a} | último: ${it.id.split(":").slice(2, 3).join("") || "golo"} há ${Math.round((agora - (it.upd || it.ts)) / 60000)} min | estado no servidor: ${e ? e.estado : "fora da lista de hoje"}`);
   }
 } catch (e) { linha("Glossário: erro", e.message); }
+
+// Vídeos do Feed: de onde vêm, como se tocam (iframe, HLS ou MP4) e com que codec, para ver os que o Chrome e o Edge
+// no Windows não conseguem tocar (o HEVC/H.265 dos iPhones, por exemplo, que o Safari toca e eles muitas vezes não)
+try {
+  const lista = await j("/api/videos/latest?limit=80");
+  const tipos = {};
+  for (const v of lista) { const k = `${v.source?.replace(/^t\.me\/.*/, "t.me") || "?"} · ${v.embed?.tipo || "sem leitor"}`; tipos[k] = (tipos[k] || 0) + 1; }
+  linha(`== vídeos do Feed == ${lista.length}`, JSON.stringify(tipos));
+  const codecs = (b) => ["avc1", "hvc1", "hev1", "av01", "vp09", "mp4a", "Opus"].filter((c) => b.includes(c)).join(",") || "?";
+  for (const v of lista.filter((x) => x.embed && x.embed.tipo !== "iframe").slice(0, 40)) {
+    const e = v.embed;
+    try {
+      if (e.tipo === "hls") {
+        const t = await fetch(e.src, { signal: AbortSignal.timeout(15000) }).then((r) => r.text());
+        linha(`   HLS ${v.source} | ${(t.match(/CODECS="([^"]+)"/g) || []).slice(0, 3).join(" ") || "sem CODECS"} | mp4 de reserva: ${e.mp4 ? "sim" : "não"} | ${String(v.title).slice(0, 50)}`);
+      } else {
+        const r = await fetch(e.src, { headers: { Range: "bytes=0-300000" }, signal: AbortSignal.timeout(15000) });
+        const b = Buffer.from(await r.arrayBuffer()).toString("latin1");
+        linha(`   MP4 ${v.source} | ${r.status} ${r.headers.get("content-type")} | codecs ${codecs(b)} | moov no início: ${b.includes("moov") ? "sim" : "não"} | ${new URL(e.src).hostname} | ${String(v.title).slice(0, 50)}`);
+      }
+    } catch (err) { linha(`   ${e.tipo} ${v.source} | erro ${err.message} | ${String(v.title).slice(0, 50)}`); }
+  }
+} catch (e) { linha("vídeos: erro", e.message); }
