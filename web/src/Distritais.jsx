@@ -411,6 +411,9 @@ export const DIST_CSS = `
 .apito .dist .dbase>.livehead,.apito .dist .dyt>.livehead{justify-content:center;flex-wrap:wrap;position:relative;text-align:center;padding:0 72px}
 .apito .dist .dyt>.livehead .varrows{position:absolute;right:0;top:50%;transform:translateY(-50%);margin:0}
 .apito .dist .jvhint{text-align:center}
+/* a faixa do YouTube fica centrada quando não enche a largura (com mais vídeos, desliza como antes) */
+.apito .dist .dyt .vrow>:first-child{margin-left:auto}
+.apito .dist .dyt .vrow>:last-child{margin-right:auto}
 @media (max-width:640px){.apito .dist .dbase>.livehead,.apito .dist .dyt>.livehead{padding:0}}
 .apito .dist .destado{margin:0 auto 14px;text-align:center;font-size:12px}
 .apito .dist .destado summary{cursor:pointer}
