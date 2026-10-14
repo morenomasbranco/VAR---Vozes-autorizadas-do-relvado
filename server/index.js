@@ -20,7 +20,7 @@ import { createVideos } from "./videos.js";
 import { startReddit } from "./sources/reddit.js";
 import { startTgVideos } from "./sources/tgvideos.js";
 import { startVsports } from "./sources/vsports.js";
-import { startSportTv } from "./sources/sporttv.js";
+import { startSportTv, ficheiro as ficheiroSportTv } from "./sources/sporttv.js";
 import { startStreamain } from "./sources/streamain.js";
 import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
@@ -531,6 +531,8 @@ startReddit(VIDEOS_CFG.reddit || [], (p) => videos.add(p), log, ESTADO_VIDEOS.re
 startTgVideos(VIDEOS_CFG.telegram || [], (p) => videos.add(p), log, ESTADO_VIDEOS.telegram);
 startVsports((p) => videos.add(p), log, ESTADO_VIDEOS.vsports);
 startSportTv((p) => videos.add(p), log, ESTADO_VIDEOS.sporttv);
+// os vídeos da Sport TV que chegaram antes de a Kaltura ter o ficheiro pronto voltam a ser procurados
+videos.procurarFicheiro("sporttv", (s) => (s.entry ? ficheiroSportTv(s) : null));
 startStreamain((p) => videos.add(p), log, ESTADO_VIDEOS.streamain);
 // capas.start(); — as capas saíram do site, o servidor já não as vai buscar
 efemerides.start();
