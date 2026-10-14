@@ -653,27 +653,27 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
 
 const GLOS_CSS = `
 .apito .glos{max-width:1200px;margin:0 auto;padding-bottom:40px}
-.apito .gbusca,.apito .gjogo,.apito .gminha{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--raise);padding:12px 14px;margin:0 0 16px}
-.apito .gjogo{border-left-color:var(--accent)}
+.apito .gbusca,.apito .gjogo,.apito .gminha{border:1px solid var(--line);border-left:4px solid var(--hist);border-radius:10px;background:var(--raise);padding:12px 14px;margin:0 0 16px}
+.apito .gjogo{border-left-color:var(--hist)}
 .apito .gminha{border-left-color:var(--ink)}
 .apito .gjogo-cab{text-align:center}
 .apito .gjogo-cab .gh2{justify-content:center;margin:0 0 2px}
 .apito .gjogo-cab p{margin:0 0 10px;font-size:13px}
 .apito .gjogos{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 .apito .gjg{font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--bg);display:inline-flex;align-items:center;gap:4px}
-.apito .gjg[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.apito .gjg[aria-pressed="true"]{border-color:var(--hist);box-shadow:0 0 0 1px var(--hist)}
 .apito .gpulso{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-right:2px}
 .apito .gsem{text-align:center;font-size:13px;margin:0}
 .apito .glos .gfiltro{display:flex;width:fit-content;max-width:100%;margin:0 auto 8px;justify-content:center;flex-wrap:wrap;border:0;background:none;gap:4px}
 .apito .glos .gfiltro button{border:1px solid var(--line);background:var(--bg);display:inline-flex;align-items:center;gap:5px}
 .apito .glos .gfiltro button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.apito .gn{font-size:10px;font-weight:700;background:var(--accent);color:#1B1B1B;border-radius:999px;padding:0 5px;line-height:15px;min-width:15px;text-align:center}
+.apito .gn{font-size:10px;font-weight:700;background:var(--hist);color:#fff;border-radius:999px;padding:0 5px;line-height:15px;min-width:15px;text-align:center}
 .apito .gdesps{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .apito .gdesp{border-top:1px solid var(--line);padding-top:8px}
-.apito .gdesp-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);text-align:center;margin:0 0 6px}
+.apito .gdesp-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--hist);text-align:center;margin:0 0 6px}
 .apito .gcompj{margin:0 0 8px}
 .apito .gcompj-t{font-size:13px;text-align:center;margin:0 0 5px;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
-.apito .gtits{border-color:var(--accent)}
+.apito .gtits{border-color:var(--hist)}
 .apito .gtitulos{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:4px 18px}
 .apito .gtitulos li{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
 .apito .gtit{font-family:var(--display);font-weight:600;font-size:15px;line-height:1.25}
@@ -685,22 +685,22 @@ const GLOS_CSS = `
 .apito .gmao select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 10px}
 .apito .gficha{margin:0 0 16px}
 .apito .gfcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.apito .gfcard{border:1px solid var(--accent);border-radius:8px;padding:10px 12px;background:var(--raise)}
+.apito .gfcard{border:1px solid var(--hist);border-radius:8px;padding:10px 12px;background:var(--raise)}
 .apito .gfcard h3{margin:2px 0;font-size:15px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .apito .gflarga{grid-column:1/-1}
 .apito .gftermos{list-style:none;margin:4px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px;font-size:13px}
 .apito .gchip{cursor:pointer;font-weight:500;color:var(--ink);background:var(--bg)}
 .apito .gchip:hover{border-color:var(--ink)}
-.apito .gchip.on{background:var(--accent);border-color:var(--accent);color:#1B1B1B}
+.apito .gchip.on{background:var(--hist);border-color:var(--hist);color:#fff}
 .apito .gtermo dt .gchip{font-size:15px;font-weight:700;border:0;background:none;padding:0;line-height:1.3}
-.apito .gtermo dt .gchip.on{color:var(--accent);background:none}
+.apito .gtermo dt .gchip.on{color:var(--hist);background:none}
 .apito .gsin .gchip,.apito .gant .gchip{margin:0 3px 3px 0;line-height:18px;font-size:12.5px}
-.apito .gdest{border-color:var(--accent) !important;box-shadow:0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--raise))}
+.apito .gdest{border-color:var(--hist) !important;box-shadow:0 0 0 1px var(--hist);background:color-mix(in srgb,var(--hist) 7%,var(--raise))}
 .apito .gcomp li.gdest{padding:8px 10px;border-radius:8px}
 .apito .gsub{margin:8px 0 0}
 .apito .gform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .apito .gform input{flex:1 1 220px;min-width:0;font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:7px 14px}
-.apito .gform input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.apito .gform input:focus{outline:2px solid var(--hist);outline-offset:1px}
 .apito .gir{font-weight:600;font-size:14px;padding:6px 14px;border-radius:999px;background:var(--ink);color:var(--bg)}
 .apito .gres{margin-top:10px}
 .apito .gbloco{margin:8px 0 0}
@@ -734,15 +734,15 @@ const GLOS_CSS = `
 .apito .gcomp ul{list-style:none;margin:0;padding:0}
 .apito .gcomp li{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
 .apito .gnotas{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:8px 32px}
-.apito .gcita{margin:0 0 14px;padding:0 0 0 12px;border-left:3px solid var(--accent)}
+.apito .gcita{margin:0 0 14px;padding:0 0 0 12px;border-left:3px solid var(--hist)}
 .apito .gcita blockquote{margin:0;font-size:15px}
 .apito .gcita figcaption{font-size:13px;color:var(--muted);margin-top:2px}
 .apito .gideias{list-style:none;margin:0;padding:0}
 .apito .gideias li{padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px}
 .apito .gmeus-barra{display:flex;flex-direction:column;align-items:center;gap:4px;margin:-6px 0 16px}
 .apito .gacres,.apito .gmeus{width:100%;text-align:center}
-.apito .gacres-abrir{font-weight:600;color:var(--accent)}
-.apito .gacres-form{justify-content:center;margin:8px auto 0;max-width:900px;padding:12px;border:1px dashed var(--accent);border-radius:10px;background:var(--raise)}
+.apito .gacres-abrir{font-weight:600;color:var(--hist)}
+.apito .gacres-form{justify-content:center;margin:8px auto 0;max-width:900px;padding:12px;border:1px dashed var(--hist);border-radius:10px;background:var(--raise)}
 .apito .gacres-form input{flex:1 1 220px}
 .apito .gacres-form select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 10px;max-width:100%}
 .apito .gfeito{flex-basis:100%;font-size:13px;margin:4px 0 0;text-align:center}
@@ -751,8 +751,8 @@ const GLOS_CSS = `
 .apito .gmeu-campo{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-left:8px}
 .apito .gx{font-size:14px;line-height:1;color:var(--muted);padding:0 4px;border-radius:4px}
 .apito .gx:hover{color:var(--live)}
-.apito .gchip.meu{border-style:dashed;border-color:var(--accent)}
-.apito .gcita.meu{border-left-style:dashed;border-left-color:var(--accent)}
+.apito .gchip.meu{border-style:dashed;border-color:var(--hist)}
+.apito .gcita.meu{border-left-style:dashed;border-left-color:var(--hist)}
 .apito .gideias li.meu{border-bottom-style:dashed}
 @media (max-width:640px){
   .apito .gtermos,.apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos,.apito .gtitulos{grid-template-columns:minmax(0,1fr)}
