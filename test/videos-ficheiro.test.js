@@ -92,3 +92,22 @@ test("vídeos: um procurador que responde logo (sem promessa), ou com null, não
   const tg = videos.latest().find((v) => v.video_url === "https://t.me/canal/7");
   assert.deepEqual(tg.embed, { tipo: "mp4", src: "/api/videos/tg/canal/7", servidor: true });
 });
+
+test("vídeos: a procura dos ficheiros em falta faz quatro vídeos de cada vez", async () => {
+  const videos = createVideos();
+  let aCorrer = 0, max = 0;
+  videos.procurarFicheiro("sporttv", async () => { aCorrer++; max = Math.max(max, aCorrer); await new Promise((r) => setTimeout(r, 30)); aCorrer--; return null; });
+  for (let i = 0; i < 8; i++) {
+    await videos.add({ fonte: "sporttv", post_id: `sporttv:1_bbbbbbb${i}`, video_url: `https://www.sporttv.pt/videos/1/x/video/1_bbbbbbb${i}/golo-${i}`, title: `Golo ${i}' Equipa ${i} 1-0 Outra ${i}`, hls: null, mp4: null, iframe: null, entry: `1_bbbbbbb${i}`, created_time: Date.now() - i * 1000 });
+  }
+  await videos.procurarEmFalta();
+  assert.equal(max, 4);
+});
+
+test("vídeos: os vídeos de ontem que ainda estão no Feed também voltam a ser procurados", async () => {
+  const videos = createVideos();
+  videos.procurarFicheiro("telegram", (s) => ({ mp4: `/api/videos/tg/canal/${s.video_url.split("/").pop()}` }));
+  await videos.add({ fonte: "telegram", post_id: "tg:canal:9", canal: "canal", video_url: "https://t.me/canal/9", title: "Golo de ontem", hls: null, mp4: null, iframe: null, created_time: Date.now() - 30 * 3600e3 });
+  await videos.procurarEmFalta();
+  assert.equal(videos.latest()[0].embed?.src, "/api/videos/tg/canal/9");
+});

@@ -532,26 +532,31 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   }, 20000).unref?.();
 
   // Vídeos ainda sem ficheiro que toque no site: há fontes que só o têm minutos depois (a Kaltura da Sport TV ainda
-  // a preparar o vídeo, alojamentos que demoram a publicar a página…). Tenta-se de novo de 3 em 3 minutos durante as
-  // primeiras 24 horas: com o procurador que a fonte registou (procurarFicheiro) ou, sem ele, pela página do vídeo.
+  // a preparar o vídeo, alojamentos que demoram a publicar a página…). Tenta-se de novo de 3 em 3 minutos
+  // enquanto o vídeo está no Feed (VIDEOS_HORAS): com o procurador que a fonte registou (procurarFicheiro) ou, sem
+  // ele, pela página do vídeo. Os vídeos de ontem (e a Sport TV dá «há 1 dia» como hora) também contam.
   const procuradores = new Map(); // fonte → async (publicação) => { hls, mp4, iframe } | null
   const procurarFicheiro = (fonte, fn) => procuradores.set(fonte, fn);
   let aProcurar = false;
   async function procurarEmFalta() {
     if (aProcurar) return;
     aProcurar = true;
-    try {
-      for (const v of videos.filter((x) => !x.embed && idade(x) < 24 * 3600e3).slice(0, 60)) {
-        for (const s of v.sources) {
-          if (s.hls || s.mp4 || s.iframe) continue;
-          const fn = procuradores.get(s.fonte);
-          // o procurador pode responder logo ou com uma promessa (e falhar de qualquer das maneiras)
-          const f = fn ? await Promise.resolve().then(() => fn(s)).catch(() => null) : { mp4: await ficheiroDaPagina(s.video_url) };
-          if (f?.hls || f?.mp4 || f?.iframe) Object.assign(s, { hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null });
-        }
-        aplicaPrincipal(v);
-        if (v.embed) { v.upd = Date.now(); sujo = true; estado.encontradosDepois = (estado.encontradosDepois || 0) + 1; broadcast("video-update", v); }
+    // quatro vídeos de cada vez: um vídeo do Telegram (que se resolve logo) não fica à espera das respostas lentas
+    // da Sport TV ou de alojamentos que não respondem
+    const um = async (v) => {
+      for (const s of v.sources) {
+        if (s.hls || s.mp4 || s.iframe) continue;
+        const fn = procuradores.get(s.fonte);
+        // o procurador pode responder logo ou com uma promessa (e falhar de qualquer das maneiras)
+        const f = fn ? await Promise.resolve().then(() => fn(s)).catch(() => null) : { mp4: await ficheiroDaPagina(s.video_url) };
+        if (f?.hls || f?.mp4 || f?.iframe) Object.assign(s, { hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null });
       }
+      aplicaPrincipal(v);
+      if (v.embed) { v.upd = Date.now(); sujo = true; estado.encontradosDepois = (estado.encontradosDepois || 0) + 1; broadcast("video-update", v); }
+    };
+    try {
+      const fila = videos.filter((x) => !x.embed && idade(x) < IDADE_MAX).slice(0, 120);
+      await Promise.all(Array.from({ length: 4 }, async () => { while (fila.length) await um(fila.shift()).catch(() => {}); }));
     } finally { aProcurar = false; }
   }
   setInterval(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 3 * 60e3).unref?.();
