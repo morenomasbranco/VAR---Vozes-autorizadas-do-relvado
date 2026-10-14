@@ -106,6 +106,18 @@ async function procurarUiconf(paginaVideo) {
     }
   } catch { /* fica sem leitor */ }
 }
+// o manifesto HLS da Kaltura que vem na página do vídeo (o deste vídeo: a página pode ter outros, em destaque)
+export function manifestoNaPagina(html, entry) {
+  const re = new RegExp(`https://cdnapisec\\.kaltura\\.com/p/${PARTNER}/[^"'\\s<>]*playManifest[^"'\\s<>]*`, "gi");
+  const todos = String(html || "").replace(/\\\//g, "/").replace(/&amp;/g, "&").match(re) || [];
+  return todos.find((u) => u.includes(entry)) || null;
+}
+async function manifestoDaPagina(url, entry) {
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? manifestoNaPagina(await lerTexto(r), entry) : null;
+  } catch { return null; }
+}
 async function responde(url, tipo) {
   try {
     const r = await fetch(url, { headers: { "User-Agent": UA, Range: "bytes=0-2047" }, redirect: "follow", signal: AbortSignal.timeout(6000) });
@@ -128,6 +140,11 @@ export async function ficheiro(v) {
   res.hls = await responde(`${base}/format/applehttp/protocol/https/a.m3u8`, "hls")
     || await responde(`https://cdnapisec.kaltura.com/p/${p}/playManifest/entryId/${v.entry}/format/applehttp/protocol/https/a.m3u8`, "hls");
   if (!res.hls) res.mp4 = await responde(`${base}/format/url/protocol/https/flavorParamId/0/a.mp4`, "mp4");
+  // o endereço que a própria página do vídeo usa (pode trazer o que a Kaltura pede a mais, como o «ks»)
+  if (!res.hls && !res.mp4) {
+    const u = await manifestoDaPagina(v.video_url, v.entry);
+    if (u) res.hls = await responde(u, "hls");
+  }
   if (!res.hls && !res.mp4) {
     await procurarUiconf(v.video_url);
     if (uiconf) {

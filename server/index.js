@@ -448,7 +448,7 @@ app.get("/api/videos/thumb/:id", async (req, res) => {
     res.set({ "Content-Type": "image/svg+xml; charset=utf-8" }).send(cartaoSvg(null));
   }
 });
-app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS }));
+app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS, contaTelegram: !!clienteTelegram() }));
 // Retransmissor: um computador de casa lê o Reddit (os servidores de alojamento são bloqueados pelo Reddit)
 // e envia para aqui as publicações com vídeo. Protegido pela chave VIDEOS_RELAY_TOKEN do .env.
 const CAMPOS_RELAY = ["fonte", "post_id", "crosspost_of", "subreddit", "regiao", "title", "reddit_url", "video_url", "hls", "mp4", "height", "thumbnail", "author", "flair", "created_time"];

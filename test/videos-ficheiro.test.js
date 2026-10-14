@@ -61,3 +61,11 @@ test("vídeos grandes do Telegram: o intervalo pedido pelo leitor e o envio aos 
   assert.equal(b.status, 200);
   assert.ok(b.corpo.equals(ficheiro));
 });
+
+test("Sport TV: o manifesto da Kaltura que vem na página é o do próprio vídeo", async () => {
+  const { manifestoNaPagina } = await import("../server/sources/sporttv.js");
+  const pagina = `<a href="x"><img src="https://cdnapisec.kaltura.com/p/3064643/sp/306464300/playManifest/entryId/1_outro000/a.m3u8"></a>
+    <script>var cfg={"src":"https:\\/\\/cdnapisec.kaltura.com\\/p\\/3064643\\/sp\\/306464300\\/playManifest\\/entryId\\/1_abcdefgh\\/format\\/applehttp\\/protocol\\/https\\/a.m3u8?ks=XYZ&amp;b=1"}</script>`;
+  assert.equal(manifestoNaPagina(pagina, "1_abcdefgh"), "https://cdnapisec.kaltura.com/p/3064643/sp/306464300/playManifest/entryId/1_abcdefgh/format/applehttp/protocol/https/a.m3u8?ks=XYZ&b=1");
+  assert.equal(manifestoNaPagina(pagina, "1_naoexiste"), null);
+});

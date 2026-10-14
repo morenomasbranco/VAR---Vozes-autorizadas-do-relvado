@@ -216,6 +216,18 @@ try {
     const r = await fetch(SITE + v.embed.src, { headers: { Range: "bytes=0-1023" }, signal: AbortSignal.timeout(30000) }).catch((e) => ({ status: e.message, headers: new Headers() }));
     linha(`   TELEGRAM PELO SITE ${v.embed.src} | ${r.status} ${r.headers.get("content-type") || ""} ${r.headers.get("content-range") || ""}`);
   }
+  try { const e = await j("/api/videos/estado"); linha(`== vídeos: conta do Telegram ligada: ${e.contaTelegram} · encontrados depois: ${e.encontradosDepois || 0}`); } catch (e) { linha("estado dos vídeos: erro", e.message); }
+  // Sport TV sem leitor: o manifesto que a página do vídeo usa e o que a Kaltura responde
+  for (const v of lista.filter((x) => !x.embed && /sporttv/.test(x.video_url)).slice(0, 3)) {
+    try {
+      const h = (await (await fetch(v.video_url, { headers: UA, signal: AbortSignal.timeout(12000) })).text()).replace(/\\\//g, "/").replace(/&amp;/g, "&");
+      const entry = v.video_url.match(/\/video\/(\d_[a-z0-9]{8})/i)?.[1];
+      const us = h.match(/https:\/\/cdnapisec\.kaltura\.com\/p\/\d+\/[^"'\s<>]*playManifest[^"'\s<>]*/gi) || [];
+      const u = us.find((x) => x.includes(entry)) || us[0];
+      const r = u ? await fetch(u, { signal: AbortSignal.timeout(12000) }) : null;
+      linha(`   KALTURA ${entry} | ${us.length} manifesto(s) na página | ${u || "-"} | ${r ? `${r.status} ${(await r.text()).slice(0, 60).replace(/\s+/g, " ")}` : ""}`);
+    } catch (err) { linha(`   KALTURA erro ${err.message}`); }
+  }
   const codecs = (b) => ["avc1", "hvc1", "hev1", "av01", "vp09", "mp4a", "Opus"].filter((c) => b.includes(c)).join(",") || "?";
   for (const v of lista.filter((x) => x.embed && x.embed.tipo !== "iframe" && !x.embed.servidor).slice(0, 40)) {
     const e = v.embed;
