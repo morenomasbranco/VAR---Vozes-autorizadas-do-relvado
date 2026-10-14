@@ -92,3 +92,14 @@ test("vídeos: um procurador que responde logo (sem promessa), ou com null, não
   const tg = videos.latest().find((v) => v.video_url === "https://t.me/canal/7");
   assert.deepEqual(tg.embed, { tipo: "mp4", src: "/api/videos/tg/canal/7", servidor: true });
 });
+
+test("vídeos: a procura dos ficheiros em falta faz quatro vídeos de cada vez", async () => {
+  const videos = createVideos();
+  let aCorrer = 0, max = 0;
+  videos.procurarFicheiro("sporttv", async () => { aCorrer++; max = Math.max(max, aCorrer); await new Promise((r) => setTimeout(r, 30)); aCorrer--; return null; });
+  for (let i = 0; i < 8; i++) {
+    await videos.add({ fonte: "sporttv", post_id: `sporttv:1_bbbbbbb${i}`, video_url: `https://www.sporttv.pt/videos/1/x/video/1_bbbbbbb${i}/golo-${i}`, title: `Golo ${i}' Equipa ${i} 1-0 Outra ${i}`, hls: null, mp4: null, iframe: null, entry: `1_bbbbbbb${i}`, created_time: Date.now() - i * 1000 });
+  }
+  await videos.procurarEmFalta();
+  assert.equal(max, 4);
+});
