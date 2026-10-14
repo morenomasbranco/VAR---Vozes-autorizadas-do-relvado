@@ -244,3 +244,17 @@ try {
     } catch (err) { linha(`   ${e.tipo} ${v.source} | erro ${err.message} | ${String(v.title).slice(0, 50)}`); }
   }
 } catch (e) { linha("vídeos: erro", e.message); }
+
+// «Nesta semana»: o estado das fontes (Wikipédia, Wikidata, ESPN, pesquisa na web) e o que o site recebe, por tipo e por dia
+try {
+  const e = await j("/api/efemerides/estado");
+  linha(`== Nesta semana: estado == semana ${e.semana} · revisto ${e.at ? `há ${Math.round((Date.now() - e.at) / 60000)} min` : "nunca"} · contagem ${JSON.stringify(e.contagem)} · erros ${JSON.stringify(e.erros)}`);
+  linha(`   pesquisa na web: ${JSON.stringify(e.claude || null).slice(0, 1500)}`);
+  const d = await j("/api/efemerides?lang=pt");
+  const porTipo = {}, porDia = {};
+  for (const x of d.itens || []) { porTipo[x.tipo] = (porTipo[x.tipo] || 0) + 1; porDia[x.dia] = (porDia[x.dia] || 0) + 1; }
+  linha(`== Nesta semana (pt) == pronto ${d.pronto} · completo ${d.completo} · hoje ${d.hoje} · dias ${JSON.stringify(d.dias)} · ${d.itens?.length || 0} itens · por tipo ${JSON.stringify(porTipo)} · por dia ${JSON.stringify(porDia)}`);
+  for (const t of Object.keys(porTipo)) {
+    for (const x of d.itens.filter((y) => y.tipo === t).slice(0, 3)) linha(`   ${t} | ${x.dia} | há ${x.anos} anos | ${String(x.texto || x.nome || x.titulo || JSON.stringify(x)).slice(0, 120)}`);
+  }
+} catch (e) { linha("Nesta semana: erro", e.message); }
