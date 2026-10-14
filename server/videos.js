@@ -533,7 +533,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
 
   // Vídeos ainda sem ficheiro que toque no site: há fontes que só o têm minutos depois (a Kaltura da Sport TV ainda
   // a preparar o vídeo, alojamentos que demoram a publicar a página…). Tenta-se de novo de 3 em 3 minutos durante as
-  // primeiras 3 horas: com o procurador que a fonte registou (procurarFicheiro) ou, sem ele, pela página do vídeo.
+  // primeiras 24 horas: com o procurador que a fonte registou (procurarFicheiro) ou, sem ele, pela página do vídeo.
   const procuradores = new Map(); // fonte → async (publicação) => { hls, mp4, iframe } | null
   const procurarFicheiro = (fonte, fn) => procuradores.set(fonte, fn);
   let aProcurar = false;
@@ -541,7 +541,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     if (aProcurar) return;
     aProcurar = true;
     try {
-      for (const v of videos.filter((x) => !x.embed && idade(x) < 3 * 3600e3).slice(0, 60)) {
+      for (const v of videos.filter((x) => !x.embed && idade(x) < 24 * 3600e3).slice(0, 60)) {
         for (const s of v.sources) {
           if (s.hls || s.mp4 || s.iframe) continue;
           const fn = procuradores.get(s.fonte);

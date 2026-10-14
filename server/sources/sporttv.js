@@ -106,6 +106,22 @@ async function procurarUiconf(paginaVideo) {
     }
   } catch { /* fica sem leitor */ }
 }
+// o manifesto HLS da Kaltura que vem na página do vídeo (o deste vídeo: a página pode ter outros, em destaque)
+export function manifestoNaPagina(html, entry) {
+  return manifestosNaPagina(html, entry)[0] || null;
+}
+export function manifestosNaPagina(html, entry) {
+  const re = new RegExp(`https://cdnapisec\\.kaltura\\.com/p/${PARTNER}/[^"'\\s<>]*playManifest[^"'\\s<>]*`, "gi");
+  const todos = String(html || "").replace(/\\\//g, "/").replace(/&amp;/g, "&").match(re) || [];
+  const deste = [...new Set(todos.filter((u) => u.includes(entry)))];
+  return [...deste.filter((u) => /m3u8|applehttp/i.test(u)), ...deste.filter((u) => !/m3u8|applehttp/i.test(u))];
+}
+async function manifestoDaPagina(url, entry) {
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? manifestosNaPagina(await lerTexto(r), entry) : [];
+  } catch { return []; }
+}
 async function responde(url, tipo) {
   try {
     const r = await fetch(url, { headers: { "User-Agent": UA, Range: "bytes=0-2047" }, redirect: "follow", signal: AbortSignal.timeout(6000) });
@@ -128,6 +144,16 @@ export async function ficheiro(v) {
   res.hls = await responde(`${base}/format/applehttp/protocol/https/a.m3u8`, "hls")
     || await responde(`https://cdnapisec.kaltura.com/p/${p}/playManifest/entryId/${v.entry}/format/applehttp/protocol/https/a.m3u8`, "hls");
   if (!res.hls) res.mp4 = await responde(`${base}/format/url/protocol/https/flavorParamId/0/a.mp4`, "mp4");
+  // o endereço que a própria página do vídeo usa (pode trazer o que a Kaltura pede a mais, como o «ks»)
+  let daPagina = [];
+  if (!res.hls && !res.mp4) {
+    daPagina = await manifestoDaPagina(v.video_url, v.entry);
+    for (const u of daPagina) {
+      const hls = /m3u8|applehttp/i.test(u);
+      const ok = await responde(u, hls ? "hls" : "mp4");
+      if (ok) { res[hls ? "hls" : "mp4"] = ok; break; }
+    }
+  }
   if (!res.hls && !res.mp4) {
     await procurarUiconf(v.video_url);
     if (uiconf) {
@@ -135,6 +161,17 @@ export async function ficheiro(v) {
       res.iframe = uiconfV7
         ? `https://cdnapisec.kaltura.com/p/${p}/embedPlaykitJs/uiconf_id/${id}?iframeembed=true&entry_id=${v.entry}&config[playback]={"autoplay":true,"muted":true}`
         : `https://cdnapisec.kaltura.com/p/${p}/sp/${p}00/embedIframeJs/uiconf_id/${id}/partner_id/${p}?iframeembed=true&playerId=kplayer&entry_id=${v.entry}&flashvars[autoPlay]=true&flashvars[mute]=true`;
+    }
+  }
+  // a Kaltura recusa alguns vídeos ao servidor (fora de Portugal?) que o browser de quem vê consegue abrir: em vez de
+  // o vídeo sair do site, o leitor tenta o manifesto (e o MP4 da página); se o browser também não conseguir, o site
+  // mostra «Ver na fonte». Só depois de as tentativas do servidor falharem durante meia hora.
+  if (!res.hls && !res.mp4 && !res.iframe) {
+    res.primeira ||= antes?.primeira || Date.now();
+    if (Date.now() - res.primeira > 30 * 60e3) {
+      res.hls = `${base}/format/applehttp/protocol/https/a.m3u8`;
+      res.mp4 = daPagina.find((u) => !/m3u8|applehttp/i.test(u)) || null;
+      res.semConfirmar = true;
     }
   }
   return res;
