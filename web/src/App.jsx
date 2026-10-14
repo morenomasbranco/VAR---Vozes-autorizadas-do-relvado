@@ -1204,6 +1204,9 @@ const CSS = `
 .apito .vautotg.on{color:var(--ink)}
 .apito .jvstrip{list-style:none;margin:0 0 12px}
 .apito .jvstrip>li{flex:0 0 auto;display:flex}
+/* Feed: a faixa dos jogos fica centrada quando não enche a largura (com mais cartões, desliza como antes) */
+.apito .livebar.jv:not(.dbase) .jvstrip>:first-child{margin-left:auto}
+.apito .livebar.jv:not(.dbase) .jvstrip>:last-child{margin-right:auto}
 .apito .jvstrip .lcard{width:210px;text-align:left;display:block;cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .apito .jvstrip .lcard .lrow,.apito .jvstrip .lcard .lfoot,.apito .jvstrip .lcard .ltv,.apito .jvstrip .lcard .lcomp{display:flex}
 .apito .jvstrip .lcard .lrow{font-size:14px}
