@@ -198,6 +198,19 @@ try {
   const tipos = {};
   for (const v of lista) { const k = `${v.source?.replace(/^t\.me\/.*/, "t.me") || "?"} · ${v.embed?.tipo || "sem leitor"}`; tipos[k] = (tipos[k] || 0) + 1; }
   linha(`== vídeos do Feed == ${lista.length}`, JSON.stringify(tipos));
+  // os que não têm leitor no site (abrem no site de origem): o endereço e o que a página de cada um oferece
+  const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" };
+  for (const v of lista.filter((x) => !x.embed).slice(0, 30)) {
+    let extra = "";
+    try {
+      const tg = v.video_url.match(/^https:\/\/t\.me\/([^/]+)\/(\d+)/);
+      const url = tg ? `https://t.me/${tg[1]}/${tg[2]}?embed=1&mode=tme` : v.video_url;
+      const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(12000) });
+      const h = (await r.text()).slice(0, 2e6);
+      extra = `${r.status} ${new URL(r.url).hostname} | video src: ${(h.match(/<video[^>]+src="([^"]+)"/)?.[1] || "-").slice(0, 60)} | og:video: ${(h.match(/og:video(?::secure_url|:url)?["'][^>]+content=["']([^"']+)/i)?.[1] || "-").slice(0, 60)} | grande: ${/too big|VIEW IN TELEGRAM|message_media_not_supported/i.test(h) ? "sim" : "não"} | m3u8/mp4 no html: ${(h.match(/https?:[^"'\s]+\.(?:mp4|m3u8)[^"'\s]*/i)?.[0] || "-").slice(0, 70)}`;
+    } catch (err) { extra = `erro ${err.message}`; }
+    linha(`   SEM LEITOR ${v.source} | ${v.video_url} | ${extra}`);
+  }
   const codecs = (b) => ["avc1", "hvc1", "hev1", "av01", "vp09", "mp4a", "Opus"].filter((c) => b.includes(c)).join(",") || "?";
   for (const v of lista.filter((x) => x.embed && x.embed.tipo !== "iframe").slice(0, 40)) {
     const e = v.embed;
