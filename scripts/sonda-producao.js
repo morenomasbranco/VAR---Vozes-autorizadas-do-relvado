@@ -244,20 +244,3 @@ try {
     } catch (err) { linha(`   ${e.tipo} ${v.source} | erro ${err.message} | ${String(v.title).slice(0, 50)}`); }
   }
 } catch (e) { linha("vídeos: erro", e.message); }
-
-// API do zerozero (api.zerozero.pt): o que responde a quem a visita sem chave — a raiz, a documentação e os
-// caminhos mais comuns — para se saber como se autentica e que dados dá (classificações, jornadas, distritais)
-try {
-  const ZZ = "https://api.zerozero.pt";
-  for (const c of ["/", "/docs", "/documentation", "/swagger", "/swagger.json", "/openapi.json", "/api", "/v1", "/api/v1", "/redoc"]) {
-    try {
-      const r = await fetch(ZZ + c, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json,text/html,*/*" }, redirect: "follow", signal: AbortSignal.timeout(15000) });
-      const t = await r.text();
-      const cab = ["content-type", "www-authenticate", "server", "location"].map((k) => r.headers.get(k) && `${k}: ${r.headers.get(k)}`).filter(Boolean).join(" · ");
-      linha(`== zerozero API ${c} → ${r.status} ${r.url} | ${cab}`);
-      linha(`   ${t.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, c === "/" || /json|docs/.test(c) ? 3000 : 400)}`);
-      const links = [...new Set([...t.matchAll(/(?:href|src)=["']([^"'#]+)["']/gi)].map((m) => m[1]))].slice(0, 40);
-      if (links.length) linha(`   ligações: ${links.join(" ")}`);
-    } catch (err) { linha(`== zerozero API ${c} → erro ${err.cause?.code || ""} ${err.message}`); }
-  }
-} catch (e) { linha("zerozero API: erro", e.message); }
