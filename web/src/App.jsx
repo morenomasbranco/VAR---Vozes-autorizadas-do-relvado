@@ -593,29 +593,40 @@ const carregaHls = () => (hlsJs ||= new Promise((ok, falha) => {
   sc.onerror = falha;
   document.head.appendChild(sc);
 }));
-function VideoHls({ src, mp4, auto = false, ...ev }) {
+function VideoHls({ src, mp4, auto = false, onFalha, ...ev }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
-    let hls = null;
+    let hls = null, parado = false;
     if (!el) return undefined;
     el.muted = true; // começa sempre sem som; o som liga-se nos controlos do vídeo
     const tocar = () => el.play().catch(() => {});
-    if (el.canPlayType("application/vnd.apple.mpegurl")) { el.src = src; tocar(); }
-    else {
-      carregaHls().then((Hls) => {
-        if (Hls?.isSupported()) {
-          hls = new Hls(); hls.loadSource(src); hls.attachMedia(el); tocar();
-          // se o HLS falhar (Chrome/Edge usam o hls.js), passa para o MP4 do mesmo vídeo
-          hls.on(Hls.Events.ERROR, (_, d) => { if (d?.fatal && mp4) { hls.destroy(); hls = null; el.src = mp4; tocar(); } });
-        }
-        else if (mp4) { el.src = mp4; tocar(); }
-      }).catch(() => { if (mp4) { el.src = mp4; tocar(); } });
-    }
-    return () => hls?.destroy();
-  }, [src, mp4]);
-  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay {...ev} /> : <video ref={ref} className="vplayer" muted controls playsInline />;
+    // último recurso: o MP4 do mesmo vídeo; sem ele (ou se também falhar), avisa quem mostra o vídeo
+    const paraMp4 = () => {
+      if (parado) return;
+      hls?.destroy(); hls = null;
+      if (mp4 && el.getAttribute("src") !== mp4) { el.onerror = () => onFalha?.(); el.src = mp4; tocar(); } else onFalha?.();
+    };
+    const comHlsJs = () => carregaHls().then((Hls) => {
+      if (parado) return;
+      if (!Hls?.isSupported()) { paraMp4(); return; }
+      el.onerror = null;
+      hls = new Hls(); hls.loadSource(src); hls.attachMedia(el); tocar();
+      // se o HLS falhar, passa para o MP4 do mesmo vídeo
+      hls.on(Hls.Events.ERROR, (_, d) => { if (d?.fatal) paraMp4(); });
+    }).catch(paraMp4);
+    // o Safari (e os browsers que dizem tocar HLS sozinhos) tenta primeiro sem o hls.js; se o browser falhar
+    // (há Chrome e Edge no Windows que dizem que sim e depois não tocam), passa para o hls.js e depois para o MP4
+    if (el.canPlayType("application/vnd.apple.mpegurl")) { el.onerror = comHlsJs; el.src = src; tocar(); }
+    else comHlsJs();
+    return () => { parado = true; el.onerror = null; hls?.destroy(); };
+  }, [src, mp4]); // eslint-disable-line react-hooks/exhaustive-deps
+  return auto ? <video ref={ref} className="vplayer" muted loop playsInline autoPlay {...ev} />
+    : <video ref={ref} className="vplayer" muted controls playsInline onLoadedMetadata={(e) => semImagem(e) && onFalha?.()} />;
 }
+// o browser abriu o ficheiro mas não consegue mostrar a imagem (codec que não conhece, como o HEVC no Chrome e no
+// Edge do Windows sem a extensão): fica só com o som, ou preto
+const semImagem = (e) => e.currentTarget.videoWidth === 0 && e.currentTarget.videoHeight === 0;
 
 // Reprodução automática em miniatura: o vídeo só é carregado e posto a tocar (sem som) quando o cartão está à vista,
 // e pára quando sai do ecrã — assim a página aguenta muitos vídeos ao mesmo tempo
@@ -705,6 +716,8 @@ function VideoImg({ v, onEscuro }) {
 function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false, onEscuro }) {
   const tx = VTXT[lang] || VTXT.pt;
   const c = VCAT[v.category] || VCAT.other;
+  const [falhou, setFalhou] = useState(false);
+  useEffect(() => { if (!playing) setFalhou(false); }, [playing]);
   const link = v.embed ? null : (v.reddit_url && /t\.me\//.test(v.reddit_url) ? v.reddit_url : v.video_url || v.reddit_url);
   const titulo = v.teams
     ? (
@@ -728,10 +741,19 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
             <span className="vsom" aria-hidden="true">🔇</span>
           </button>
         )}
-        {!playing && auto && v.embed ? null : playing && v.embed ? (
+        {!playing && auto && v.embed ? null : playing && v.embed && falhou ? (
+          // o browser não consegue tocar o vídeo aqui: abre-se o ficheiro (ou a fonte) noutro separador
+          <div className="vfalha">
+            <p>Este browser não consegue tocar este vídeo aqui.</p>
+            <p>
+              {mp4De(v) && <a className="textbtn" href={mp4De(v)} target="_blank" rel="noreferrer">Abrir o vídeo <ExternalLink size={13} /></a>}
+              {(v.reddit_url || v.video_url) && <a className="textbtn" href={v.reddit_url || v.video_url} target="_blank" rel="noreferrer">Ver na fonte <ExternalLink size={13} /></a>}
+            </p>
+          </div>
+        ) : playing && v.embed ? (
           v.embed.tipo === "iframe" ? <iframe src={semSom(v.embed.src)} title={v.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
-            : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={v.embed.mp4} />
-              : <video className="vplayer" src={v.embed.src} muted controls autoPlay playsInline />
+            : v.embed.tipo === "hls" ? <VideoHls src={v.embed.src} mp4={v.embed.mp4} onFalha={() => setFalhou(true)} />
+              : <video className="vplayer" src={v.embed.src} muted controls autoPlay playsInline onError={() => setFalhou(true)} onLoadedMetadata={(e) => semImagem(e) && setFalhou(true)} />
         ) : (
           <button className="vplay" onClick={() => (v.embed ? onPlay(v.video_id) : window.open(link, "_blank", "noopener"))} aria-label={tx.watch}>
             <VideoImg v={v} onEscuro={onEscuro} />
@@ -1314,6 +1336,8 @@ const CSS = `
 .apito .efmais{width:100%;justify-content:center;border:1px dashed var(--line);margin:8px 0}
 .apito .vthumb{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000}
 .apito .vthumb iframe,.apito .vthumb .vplayer{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+.apito .vfalha{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px;text-align:center;color:#fff;font-size:13px}
+.apito .vfalha p{margin:0} .apito .vfalha .textbtn{color:#fff;display:inline-flex;gap:4px;margin:0 6px}
 .apito .vplay{position:absolute;inset:0;width:100%;height:100%;display:block}
 .apito .vplay img{width:100%;height:100%;object-fit:cover;display:block}
 .apito .vph{display:grid;place-items:center;width:100%;height:100%;font-size:42px;background:linear-gradient(135deg,#1c2a23,#0b120e)}
