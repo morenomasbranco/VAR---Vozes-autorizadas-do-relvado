@@ -1,6 +1,6 @@
 // Secção «Glossário»: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol), alcunhas
 // e cidades dos clubes, sinónimos das competições e dos países, citações e ideias, e uma pesquisa de sinónimos e antónimos.
-// «Preparar um jogo»: escolhe-se um jogo (dos resultados, que o App passa em «jogos», arrumados por modalidade, país e
+// «Preparar um jogo»: escolhe-se um jogo (dos que estão em direto, que o App passa em «jogos», arrumados por modalidade, país e
 // competição) ou escrevem-se as equipas, e o glossário destaca as palavras que fazem sentido e sugere títulos para o
 // jogo; cada palavra pode ir para «a minha lista».
 // A pesquisa procura primeiro no próprio glossário (web/src/glossario) e, quando é preciso, na internet
@@ -195,7 +195,7 @@ function PrepararJogo({ jogos, jogo, setJogo, dados }) {
             ))}
           </div>
         </>
-      ) : <p className="muted gsem">Não há jogos nos resultados agora: escolhe à mão.</p>}
+      ) : <p className="muted gsem">Não há jogos em direto agora: escolhe à mão.</p>}
       <div className="gjogo-acoes">
         <button className="textbtn" onClick={() => setAMao((v) => !v)} aria-expanded={aMao}>{aMao ? "Fechar" : "Escolher à mão"}</button>
         {jogo && <button className="textbtn" onClick={() => setJogo(null)}>Limpar o jogo</button>}

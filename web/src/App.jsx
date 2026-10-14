@@ -1957,7 +1957,7 @@ export default function App() {
     return [...map.values()].sort((a, b) => (isLive(b.score, b.upd || b.ts, now) - isLive(a.score, a.upd || a.ts, now)) || (b.upd || b.ts) - (a.upd || a.ts));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, enabled, ligasOn, query, now]);
-  // os jogos para o «Preparar um jogo» do Glossário: todos (sem o filtro da pesquisa), os que estão a decorrer primeiro
+  // os jogos para o «Preparar um jogo» do Glossário: só os que estão a decorrer (sem o filtro da pesquisa)
   const jogosGlos = useMemo(() => {
     if (section !== "glossario") return [];
     const map = new Map();
@@ -1971,7 +1971,7 @@ export default function App() {
       id: k, h: it.score.h, a: it.score.a, hs: it.score.hs, as: it.score.as, comp: leagueName(it.liga) || it.score.comp,
       mod: it.mod || "futebol", modNome: modName(it.mod || "futebol", "pt"), pais: topicOf(it) || null, paisNome: topicOf(it) ? countryName(topicOf(it), "pt") : null,
       vivo: isLive(it.score, it.upd || it.ts, now), ft: !!it.score.ft, ts: it.upd || it.ts,
-    })).sort((a, b) => (b.vivo - a.vivo) || b.ts - a.ts).slice(0, 80);
+    })).filter((j) => j.vivo).sort((a, b) => b.ts - a.ts).slice(0, 80);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, section, now]);
 
