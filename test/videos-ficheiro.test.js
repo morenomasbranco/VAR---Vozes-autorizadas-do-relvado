@@ -103,3 +103,11 @@ test("vídeos: a procura dos ficheiros em falta faz quatro vídeos de cada vez",
   await videos.procurarEmFalta();
   assert.equal(max, 4);
 });
+
+test("vídeos: os vídeos de ontem que ainda estão no Feed também voltam a ser procurados", async () => {
+  const videos = createVideos();
+  videos.procurarFicheiro("telegram", (s) => ({ mp4: `/api/videos/tg/canal/${s.video_url.split("/").pop()}` }));
+  await videos.add({ fonte: "telegram", post_id: "tg:canal:9", canal: "canal", video_url: "https://t.me/canal/9", title: "Golo de ontem", hls: null, mp4: null, iframe: null, created_time: Date.now() - 30 * 3600e3 });
+  await videos.procurarEmFalta();
+  assert.equal(videos.latest()[0].embed?.src, "/api/videos/tg/canal/9");
+});

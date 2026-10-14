@@ -532,8 +532,9 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   }, 20000).unref?.();
 
   // Vídeos ainda sem ficheiro que toque no site: há fontes que só o têm minutos depois (a Kaltura da Sport TV ainda
-  // a preparar o vídeo, alojamentos que demoram a publicar a página…). Tenta-se de novo de 3 em 3 minutos durante as
-  // primeiras 24 horas: com o procurador que a fonte registou (procurarFicheiro) ou, sem ele, pela página do vídeo.
+  // a preparar o vídeo, alojamentos que demoram a publicar a página…). Tenta-se de novo de 3 em 3 minutos
+  // enquanto o vídeo está no Feed (VIDEOS_HORAS): com o procurador que a fonte registou (procurarFicheiro) ou, sem
+  // ele, pela página do vídeo. Os vídeos de ontem (e a Sport TV dá «há 1 dia» como hora) também contam.
   const procuradores = new Map(); // fonte → async (publicação) => { hls, mp4, iframe } | null
   const procurarFicheiro = (fonte, fn) => procuradores.set(fonte, fn);
   let aProcurar = false;
@@ -554,7 +555,7 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
       if (v.embed) { v.upd = Date.now(); sujo = true; estado.encontradosDepois = (estado.encontradosDepois || 0) + 1; broadcast("video-update", v); }
     };
     try {
-      const fila = videos.filter((x) => !x.embed && idade(x) < 24 * 3600e3).slice(0, 60);
+      const fila = videos.filter((x) => !x.embed && idade(x) < IDADE_MAX).slice(0, 120);
       await Promise.all(Array.from({ length: 4 }, async () => { while (fila.length) await um(fila.shift()).catch(() => {}); }));
     } finally { aProcurar = false; }
   }
