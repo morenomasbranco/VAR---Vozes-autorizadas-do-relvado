@@ -170,7 +170,7 @@ export function miniaturaDe(v) {
 const PT_REGIAO = new Set(["pt"]);
 const idade = (v) => Date.now() - v.created_time;
 
-export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () => [], emblemas = null } = {}) {
+export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () => [], emblemas = null, prazoProcura = 60e3 } = {}) {
   let videos = [];
   try { videos = JSON.parse(fs.readFileSync(FILE, "utf8")).filter((v) => idade(v) < IDADE_MAX); } catch { videos = []; }
   // os do Streamain guardados antes do filtro só de futebol: o que não passa no filtro sai
@@ -421,6 +421,9 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     if (!v || (v.embed && v.thumbnail && imagens.has(v.thumbnail))) return;
     const antes = `${v.embed?.src || ""}|${v.thumbnail || ""}`;
     const p = v.sources.find((x) => x.video_url === v.video_url);
+    // o procurador da fonte (Telegram pelo servidor, Sport TV pela Kaltura) logo à chegada, sem esperar pela volta
+    // dos vídeos em falta; sem ele, a página do vídeo
+    if (!v.embed) await procurarUm(v);
     if (!v.embed) {
       const f = await ficheiroDaPagina(v.video_url);
       if (f && p) p.mp4 = f;
@@ -537,6 +540,24 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
   // ele, pela página do vídeo. Os vídeos de ontem (e a Sport TV dá «há 1 dia» como hora) também contam.
   const procuradores = new Map(); // fonte → async (publicação) => { hls, mp4, iframe } | null
   const procurarFicheiro = (fonte, fn) => procuradores.set(fonte, fn);
+  // um procurador que não responde (uma ligação pendurada) não pode prender a volta inteira
+  const comPrazo = (fn, s) => Promise.race([
+    Promise.resolve().then(() => fn(s)),
+    new Promise((ok) => { const t = setTimeout(() => ok(null), prazoProcura); t.unref?.(); }),
+  ]).catch(() => null);
+  // o ficheiro de um vídeo sem leitor, pelas fontes dele; devolve true se passou a ter leitor
+  async function procurarUm(v) {
+    for (const s of v.sources) {
+      if (s.hls || s.mp4 || s.iframe) continue;
+      const fn = procuradores.get(s.fonte);
+      if (!fn) continue;
+      // o procurador pode responder logo ou com uma promessa (e falhar de qualquer das maneiras)
+      const f = await comPrazo(fn, s);
+      if (f?.hls || f?.mp4 || f?.iframe) Object.assign(s, { hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null });
+    }
+    aplicaPrincipal(v);
+    return !!v.embed;
+  }
   let aProcurar = false;
   async function procurarEmFalta() {
     if (aProcurar) return;
@@ -544,20 +565,21 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
     // quatro vídeos de cada vez: um vídeo do Telegram (que se resolve logo) não fica à espera das respostas lentas
     // da Sport TV ou de alojamentos que não respondem
     const um = async (v) => {
-      for (const s of v.sources) {
-        if (s.hls || s.mp4 || s.iframe) continue;
-        const fn = procuradores.get(s.fonte);
-        // o procurador pode responder logo ou com uma promessa (e falhar de qualquer das maneiras)
-        const f = fn ? await Promise.resolve().then(() => fn(s)).catch(() => null) : { mp4: await ficheiroDaPagina(s.video_url) };
-        if (f?.hls || f?.mp4 || f?.iframe) Object.assign(s, { hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null });
+      if (!(await procurarUm(v))) {
+        for (const s of v.sources.filter((x) => !procuradores.has(x.fonte) && !(x.hls || x.mp4 || x.iframe))) {
+          const mp4 = await comPrazo(ficheiroDaPagina, s.video_url);
+          if (mp4) s.mp4 = mp4;
+        }
+        aplicaPrincipal(v);
       }
-      aplicaPrincipal(v);
       if (v.embed) { v.upd = Date.now(); sujo = true; estado.encontradosDepois = (estado.encontradosDepois || 0) + 1; broadcast("video-update", v); }
     };
+    const procura = (estado.procura = { inicio: Date.now(), fim: null, fila: 0 });
     try {
       const fila = videos.filter((x) => !x.embed && idade(x) < IDADE_MAX).slice(0, 120);
+      procura.fila = fila.length;
       await Promise.all(Array.from({ length: 4 }, async () => { while (fila.length) await um(fila.shift()).catch(() => {}); }));
-    } finally { aProcurar = false; }
+    } finally { aProcurar = false; procura.fim = Date.now(); }
   }
   setInterval(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 3 * 60e3).unref?.();
   setTimeout(() => { procurarEmFalta().catch((e) => log(`[Vídeos] ${e.message}`)); }, 45e3).unref?.(); // logo depois do arranque
