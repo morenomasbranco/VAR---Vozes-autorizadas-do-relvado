@@ -545,7 +545,8 @@ export function createVideos({ broadcast = () => {}, log = () => {}, jogos = () 
         for (const s of v.sources) {
           if (s.hls || s.mp4 || s.iframe) continue;
           const fn = procuradores.get(s.fonte);
-          const f = fn ? await fn(s).catch(() => null) : { mp4: await ficheiroDaPagina(s.video_url) };
+          // o procurador pode responder logo ou com uma promessa (e falhar de qualquer das maneiras)
+          const f = fn ? await Promise.resolve().then(() => fn(s)).catch(() => null) : { mp4: await ficheiroDaPagina(s.video_url) };
           if (f?.hls || f?.mp4 || f?.iframe) Object.assign(s, { hls: f.hls || null, mp4: f.mp4 || null, iframe: f.iframe || null });
         }
         aplicaPrincipal(v);

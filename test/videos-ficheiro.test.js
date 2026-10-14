@@ -80,3 +80,15 @@ test("Sport TV: os manifestos deste vídeo na página, o HLS antes do MP4", asyn
     "https://cdnapisec.kaltura.com/p/3064643/sp/306464300/playManifest/entryId/1_abcdefgh/flavorParamIds/487081/protocol/https/format/url/video.mp4",
   ]);
 });
+
+test("vídeos: um procurador que responde logo (sem promessa), ou com null, não interrompe a procura dos outros", async () => {
+  const videos = createVideos();
+  videos.procurarFicheiro("sporttv", () => null);
+  videos.procurarFicheiro("telegram", (s) => ({ mp4: `/api/videos/tg/canal/${s.video_url.split("/").pop()}` }));
+  const base = { title: "Golo", hls: null, mp4: null, iframe: null, created_time: Date.now() };
+  await videos.add({ ...base, fonte: "sporttv", post_id: "sporttv:1_aaaaaaaa", video_url: "https://www.sporttv.pt/videos/1/x/video/1_aaaaaaaa/golo", entry: null });
+  await videos.add({ ...base, fonte: "telegram", post_id: "tg:canal:7", canal: "canal", video_url: "https://t.me/canal/7", title: "Outro golo" });
+  await videos.procurarEmFalta();
+  const tg = videos.latest().find((v) => v.video_url === "https://t.me/canal/7");
+  assert.deepEqual(tg.embed, { tipo: "mp4", src: "/api/videos/tg/canal/7", servidor: true });
+});
