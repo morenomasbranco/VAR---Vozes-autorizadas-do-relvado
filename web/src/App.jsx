@@ -1313,13 +1313,13 @@ const CSS = `
 .apito .tab.hl-glos{color:var(--hist);--tabc:var(--hist);font-weight:600}
 .apito .efem{max-width:900px;margin:0 auto}
 .apito .efem .efdia{text-align:center}
-.apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 12px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
 .apito .eftipos .flag{vertical-align:-2px}
-.apito .efdias{margin-top:-8px}
+.apito .efdias{margin-top:0}
 .apito .efdata{display:inline-block;margin:0 8px 2px 0;padding:1px 7px;border-radius:999px;background:var(--line);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
 .apito .efgrupo{margin:0 0 22px}
-.apito .efh{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:10px;margin:0 0 6px;padding:6px 0 8px;background:var(--bg);border-bottom:2px solid var(--accent);font-family:var(--display);font-size:19px;letter-spacing:-.015em}
+.apito .efh{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;justify-content:center;gap:10px;margin:0 0 6px;padding:6px 0 8px;background:var(--bg);border-bottom:2px solid var(--accent);font-family:var(--display);font-size:19px;letter-spacing:-.015em}
 .apito .efh .muted{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
 .apito .eflist{list-style:none;margin:0;padding:0}
 .apito .efitem{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
