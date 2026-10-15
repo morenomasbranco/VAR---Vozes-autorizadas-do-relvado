@@ -201,17 +201,21 @@ const GROQ_CANDIDATOS = () => [
 let groqEscolhido = null;
 let groqModelos = { ts: 0, ids: null };
 // o que se sabe do Groq, para /api/efemerides/estado: os modelos da conta e as últimas tentativas (modelo, resposta, tempo)
-const estadoGroq = { modelos: null, escolhido: null, tentativas: [] };
+const estadoGroq = { modelos: null, erroModelos: null, escolhido: null, fase: null, tentativas: [] };
+const faseGroq = (t) => { estadoGroq.fase = { t, ts: Date.now() }; };
 const tentativaGroq = (x) => { estadoGroq.tentativas.unshift({ ts: Date.now(), ...x }); estadoGroq.tentativas.length = Math.min(estadoGroq.tentativas.length, 12); };
 const PRAZO_GROQ = (Number(process.env.EFEMERIDES_GROQ_PRAZO_S) || 120) * 1000;
+const PRAZO_MOTOR = (Number(process.env.EFEMERIDES_PRAZO_MOTOR_MIN) || 10) * 60e3;
 const cabGroq = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` });
 async function modelosGroq() {
   if (Date.now() - groqModelos.ts < 3600e3) return groqModelos.ids;
   let ids = null;
+  faseGroq("a pedir a lista de modelos");
   try {
     const r = await fetch(`${GROQ_API}/models`, { headers: cabGroq(), signal: AbortSignal.timeout(20000) });
-    if (r.ok) ids = new Set(((await r.json()).data || []).map((m) => m.id));
-  } catch { /* fica por saber: experimentam-se todos */ }
+    if (r.ok) { ids = new Set(((await r.json()).data || []).map((m) => m.id)); estadoGroq.erroModelos = null; }
+    else estadoGroq.erroModelos = `${r.status}: ${(await r.text()).slice(0, 200)}`;
+  } catch (e) { estadoGroq.erroModelos = `${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`; /* experimentam-se todos */ }
   groqModelos = { ts: Date.now(), ids };
   estadoGroq.modelos = ids ? [...ids].slice(0, 40) : null;
   return ids;
@@ -224,6 +228,7 @@ export async function pesquisarDiaGroq({ ano, mes, dia }, anos) {
   let ultimo = null;
   for (const c of candidatos) {
     const t0 = Date.now();
+    faseGroq(`a pedir ${c.modelo}`);
     let res;
     try {
       res = await fetch(`${GROQ_API}/chat/completions`, {
@@ -242,7 +247,7 @@ export async function pesquisarDiaGroq({ ano, mes, dia }, anos) {
       });
     } catch (e) {
       // sem resposta dentro do prazo (ou ligação falhada): experimenta-se o modelo seguinte
-      tentativaGroq({ modelo: c.modelo, erro: e.message, ms: Date.now() - t0 });
+      tentativaGroq({ modelo: c.modelo, erro: `${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`, ms: Date.now() - t0 });
       ultimo = e;
       groqEscolhido = null;
       continue;
@@ -299,6 +304,7 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
   async function semana(sem, anosDoDia, aoChegar = () => {}) {
     if (!livres().length || aCorrer) return;
     aCorrer = true;
+    const volta = (estado.volta = { inicio: Date.now(), fim: null, motores: livres() });
     try {
       // guarda só a semana atual
       for (const k of Object.keys(dados)) if (!sem.dias.some((d) => d.iso === k)) delete dados[k];
@@ -311,7 +317,12 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
         const validos = new Set(anos);
         const feitos = await Promise.all(faltam.map(async (m) => {
           try {
-            const lista = await PESQUISAR[m](d, anos);
+            // um motor preso não pode prender a semana: no máximo PRAZO_MOTOR por dia
+            let relogio;
+            const lista = await Promise.race([
+              PESQUISAR[m](d, anos),
+              new Promise((_, nao) => { relogio = setTimeout(() => nao(new Error(`sem resposta em ${PRAZO_MOTOR / 60e3} min`)), PRAZO_MOTOR); relogio.unref?.(); }),
+            ]).finally(() => clearTimeout(relogio));
             const r = { ok: true, at: Date.now(), modelo: MODELO_DE[m](), itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
             dados[d.iso] = { porMotor: { ...doDia(d.iso), [m]: r } };
             log(`[Nesta semana] ${m}: ${r.itens.length} acontecimentos para ${d.iso}`);
@@ -335,7 +346,7 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
         if (!livres().length) break;
         if (!feitos.some(Boolean)) await sleep(5e3);
       }
-    } finally { aCorrer = false; }
+    } finally { aCorrer = false; volta.fim = Date.now(); }
   }
 
   // itens no formato do «Nesta semana»: os de todos os motores, com os repetidos (mesmo ano e título parecido) juntos num
