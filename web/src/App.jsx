@@ -1412,6 +1412,8 @@ const EFTXT = {
   it: { note: "Cosa è successo nello sport nei giorni di questa settimana, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa. L'elenco cambia da solo quando cambia la settimana e viene rivisto durante il giorno.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di questa settimana…", none: "Niente di sportivo registrato per questi anniversari.", pt: "Solo Portogallo", src: "Fonti: Wikipedia, Wikidata ed ESPN", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", week: (d) => `Settimana del ${d}`, allDays: "Tutta la settimana" },
   de: { note: "Was an den Tagen dieser Woche im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren. Die Liste wechselt von selbst, wenn die Woche wechselt, und wird im Laufe des Tages überprüft.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die Liste dieser Woche wird vorbereitet…", none: "Für diese Jahrestage ist nichts Sportliches verzeichnet.", pt: "Nur Portugal", src: "Quellen: Wikipedia, Wikidata und ESPN", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", week: (d) => `Woche vom ${d}`, allDays: "Ganze Woche" },
 };
+// quem pesquisou na web cada acontecimento: [nome curto, nome completo]
+const MOTOR_EF = { claude: ["Claude", "Claude"], gemini: ["Gemini", "Gemini (Google)"], groq: ["Groq", "Groq"] };
 const JOGOS_POR_ANO = 6; // os restantes jogos de cada ano ficam atrás de «mais»
 
 function EfemeridesView({ dados, lang, theme, query }) {
@@ -1466,7 +1468,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
-                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title={`Encontrado pela pesquisa do ${it.motor === "gemini" ? "Gemini (Google)" : "Claude"} na web`}>{it.motor === "gemini" ? "pesquisa Gemini" : "pesquisa Claude"}</span></>}</p>
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title={`Encontrado pela pesquisa do ${MOTOR_EF[it.motor]?.[1] || "Claude"} na web`}>pesquisa {MOTOR_EF[it.motor]?.[0] || "Claude"}</span></>}</p>
                     )}
                   </div>
                   {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}

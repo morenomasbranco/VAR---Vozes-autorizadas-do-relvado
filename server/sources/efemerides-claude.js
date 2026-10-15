@@ -20,14 +20,19 @@ import { sleep } from "../util.js";
 const KEY = process.env.ANTHROPIC_API_KEY;
 const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_MODELO = () => process.env.EFEMERIDES_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-// motor em uso: o escolhido no .env, ou o que tiver chave (o Claude primeiro, por ser o que foi pedido de início)
-const motorEscolhido = () => {
+// motores com chave, por ordem: o escolhido no .env primeiro (EFEMERIDES_MOTOR), depois os outros. Quando um esgota a
+// quota (429) ou recusa a chave, o mesmo dia passa ao seguinte. O Claude (pago) só entra se for o escolhido ou se não
+// houver escolha: com EFEMERIDES_MOTOR=gemini ou groq, a reserva é só o outro gratuito
+const CHAVES = { claude: () => KEY, gemini: () => process.env.GEMINI_API_KEY, groq: () => process.env.GROQ_API_KEY };
+export const motoresDisponiveis = () => {
   const m = String(process.env.EFEMERIDES_MOTOR || "").toLowerCase();
-  if (m === "claude") return KEY ? "claude" : null;
-  if (m === "gemini") return process.env.GEMINI_API_KEY ? "gemini" : null;
-  if (m === "0" || m === "nenhum") return null;
-  return KEY ? "claude" : process.env.GEMINI_API_KEY ? "gemini" : null;
+  if (m === "0" || m === "nenhum") return [];
+  const ordem = m === "gemini" || m === "groq" ? [m, "gemini", "groq"] : ["claude", "gemini", "groq"];
+  return [...new Set(ordem)].filter((x) => CHAVES[x]?.());
 };
+const GROQ_API = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").replace(/\/$/, "");
+const GROQ_MODELO = () => process.env.EFEMERIDES_GROQ_MODEL || "groq/compound";
+const NOME = { claude: "Claude", gemini: "Gemini (gratuito)", groq: "Groq (gratuito)" };
 const BASE = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
 const MODELO = process.env.EFEMERIDES_CLAUDE_MODEL || "claude-opus-5-5";
 const ESFORCO = process.env.EFEMERIDES_CLAUDE_ESFORCO || "medium"; // low | medium | high | xhigh | max
@@ -184,47 +189,87 @@ export async function pesquisarDiaGemini({ ano, mes, dia }, anos) {
   return lerJsonGemini(texto);
 }
 
+// O mesmo pedido ao Groq (plano gratuito, com chave GROQ_API_KEY): o «groq/compound» pesquisa na web sozinho antes de
+// responder. API compatível com a da OpenAI; o JSON vem no texto, como no Gemini
+export async function pesquisarDiaGroq({ ano, mes, dia }, anos) {
+  const lista = anos.map((a) => `${a} (há ${ano - a} ${ano - a === 1 ? "ano" : "anos"})`).join(", ");
+  const res = await fetch(`${GROQ_API}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+    body: JSON.stringify({
+      model: GROQ_MODELO(),
+      messages: [
+        { role: "system", content: SISTEMA_GEMINI },
+        { role: "user", content: `Data: ${dia} de ${MESES[mes - 1]}.\nAnos: ${lista}.\n\nQue acontecimentos desportivos, portugueses e internacionais, marcaram o dia ${dia} de ${MESES[mes - 1]} em cada um destes anos? Pesquisa na web para confirmar cada um.` },
+      ],
+      temperature: 0.3,
+    }),
+    signal: AbortSignal.timeout(5 * 60e3),
+  });
+  if (!res.ok) {
+    const e = new Error(`Groq respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    e.status = res.status;
+    throw e;
+  }
+  const j = await res.json();
+  return lerJsonGemini(j.choices?.[0]?.message?.content || "");
+}
+const PESQUISAR = { claude: (d, anos) => pesquisarDia(d, anos), gemini: (d, anos) => pesquisarDiaGemini(d, anos), groq: (d, anos) => pesquisarDiaGroq(d, anos) };
+const MODELO_DE = { claude: () => MODELO, gemini: () => GEMINI_MODELO(), groq: () => GROQ_MODELO() };
+
 export function createEfemeridesClaude({ log = () => {} } = {}) {
   let dados = {};
   try { dados = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { dados = {}; }
-  const motor = motorEscolhido();
-  const modelo = motor === "gemini" ? GEMINI_MODELO() : MODELO;
-  const estado = { ativo: !!motor, motor, modelo, dias: {}, erros: {} };
-  if (!motor) log("[Nesta semana] sem GEMINI_API_KEY nem ANTHROPIC_API_KEY: a pesquisa na web de cada dia está desligada");
-  else log(`[Nesta semana] pesquisa na web de cada dia pelo ${motor === "gemini" ? "Gemini (gratuito)" : "Claude"} (${modelo})`);
+  const motores = motoresDisponiveis();
+  const estado = { ativo: motores.length > 0, motor: motores[0] || null, motores, modelo: motores[0] ? MODELO_DE[motores[0]]() : null, dias: {}, erros: {}, pausas: {} };
+  if (!motores.length) log("[Nesta semana] sem GEMINI_API_KEY, GROQ_API_KEY nem ANTHROPIC_API_KEY: a pesquisa na web de cada dia está desligada");
+  else log(`[Nesta semana] pesquisa na web de cada dia: ${motores.map((m) => `${NOME[m]} (${MODELO_DE[m]()})`).join(", depois ")}`);
   let aCorrer = false;
-  let pausaAte = 0; // quota esgotada (429): não se volta a pedir antes disto
+  const pausas = {}; // motor → até quando fica parado (quota esgotada ou chave recusada)
+  const livres = () => motores.filter((m) => !(Date.now() < (pausas[m] || 0)));
+  const pausar = (m, ms) => {
+    pausas[m] = Date.now() + ms;
+    estado.pausas[m] = pausas[m];
+    estado.pausaAte = Math.max(...Object.values(pausas));
+  };
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* */ } };
 
   // pesquisa os dias da semana que ainda não têm resultado (hoje primeiro); chama aoChegar a cada dia feito
   async function semana(sem, anosDoDia, aoChegar = () => {}) {
-    if (!motor || aCorrer || Date.now() < pausaAte) return;
+    if (!livres().length || aCorrer) return;
     aCorrer = true;
     try {
       // guarda só a semana atual
       for (const k of Object.keys(dados)) if (!sem.dias.some((d) => d.iso === k)) delete dados[k];
       const iHoje = Math.max(0, sem.dias.findIndex((d) => d.iso === sem.hoje));
       for (const d of [...sem.dias.slice(iHoje), ...sem.dias.slice(0, iHoje)]) {
-        if (dados[d.iso]?.ok && (dados[d.iso].motor || "claude") === motor) continue;
+        if (dados[d.iso]?.ok) continue; // já pesquisado (por qualquer dos motores)
         const anos = anosDoDia(d);
         if (!anos.length) continue;
-        try {
-          const lista = motor === "gemini" ? await pesquisarDiaGemini(d, anos) : await pesquisarDia(d, anos);
-          const validos = new Set(anos);
-          dados[d.iso] = { ok: true, at: Date.now(), motor, modelo, itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
-          estado.dias[d.iso] = dados[d.iso].itens.length;
-          delete estado.erros[d.iso];
-          gravar();
-          log(`[Nesta semana] ${motor}: ${dados[d.iso].itens.length} acontecimentos para ${d.iso}`);
-          aoChegar();
-        } catch (e) {
-          estado.erros[d.iso] = e.message;
-          log(`[Nesta semana] ${motor} (${d.iso}): ${e.message}`);
-          if (e.status === 401 || e.status === 403) break; // chave errada: não vale a pena insistir
-          // quota esgotada: os outros dias também levavam 429 e gastavam o que a quota ainda deixasse; pára uma hora
-          if (e.status === 429) { pausaAte = Date.now() + PAUSA_429; estado.pausaAte = pausaAte; break; }
-          await sleep(5e3);
+        let feito = false;
+        for (const m of livres()) {
+          try {
+            const lista = await PESQUISAR[m](d, anos);
+            const validos = new Set(anos);
+            dados[d.iso] = { ok: true, at: Date.now(), motor: m, modelo: MODELO_DE[m](), itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
+            estado.dias[d.iso] = dados[d.iso].itens.length;
+            delete estado.erros[d.iso];
+            gravar();
+            log(`[Nesta semana] ${m}: ${dados[d.iso].itens.length} acontecimentos para ${d.iso}`);
+            aoChegar();
+            feito = true;
+            break;
+          } catch (e) {
+            estado.erros[d.iso] = `${m}: ${e.message}`;
+            log(`[Nesta semana] ${m} (${d.iso}): ${e.message}`);
+            // chave errada: o motor fica parado um dia; quota esgotada: uma hora (os outros dias também levavam 429
+            // e gastavam o que a quota ainda deixasse); em ambos os casos, o dia passa ao motor seguinte
+            if (e.status === 401 || e.status === 403) pausar(m, 24 * 3600e3);
+            else if (e.status === 429) pausar(m, PAUSA_429);
+          }
         }
+        if (!livres().length) break;
+        if (!feito) await sleep(5e3);
       }
     } finally { aCorrer = false; }
   }

@@ -13,14 +13,16 @@ test("Nesta semana: a Wikipédia lida pelo GitHub entra quando a do servidor vem
   fs.writeFileSync(ficheiro, JSON.stringify({ semana: sem.id, versao: 2, dias: sem.dias.map((d) => d.iso), anos: [1, 10], completo: true, wiki: {}, pessoas: [], eventos: [], jogos: [] }));
   try {
     const ef = createEfemerides();
-    assert.equal(ef.para("pt").itens.length, 0);
+    // só os da Wikipédia (os da pesquisa na web vêm de outro ficheiro, que outro teste pode estar a escrever)
+    const daWiki = (e) => e.para("pt").itens.filter((x) => !x.claude);
+    assert.equal(daWiki(ef).length, 0);
     const d = sem.dias[3];
     const item = { tipo: "acontecimento", ano: d.ano - 10, dia: d.iso, texto: "O FC Porto vence a Taça", qids: ["Q1", "x"], link: "https://pt.wikipedia.org/wiki/FC_Porto", img: "javascript:alert(1)", lixo: "não passa" };
     assert.equal(ef.receberWiki({ semana: "1999-01-04", wiki: { pt: [item] } }).ok, false); // semana errada
     const r = ef.receberWiki({ semana: sem.id, wiki: { pt: [item, { tipo: "outro", ano: 2000, dia: d.iso, texto: "x" }, { ...item, dia: "1999-01-01" }] } });
     assert.equal(r.ok, true);
     assert.equal(r.contagem.pt, 1);
-    const lista = ef.para("pt").itens;
+    const lista = daWiki(ef);
     assert.equal(lista.length, 1);
     assert.equal(lista[0].tipo, "acontecimento");
     assert.equal(lista[0].texto, "O FC Porto vence a Taça");
@@ -29,7 +31,7 @@ test("Nesta semana: a Wikipédia lida pelo GitHub entra quando a do servidor vem
     assert.equal(lista[0].lixo, undefined);
     assert.ok(ef.estado().wikiGitHub.at);
     // fica gravada: depois de reiniciar, continua lá
-    assert.equal(createEfemerides().para("pt").itens.length, 1);
+    assert.equal(daWiki(createEfemerides()).length, 1);
   } finally {
     if (existia) fs.writeFileSync(ficheiro, antes); else fs.rmSync(ficheiro, { force: true });
   }
