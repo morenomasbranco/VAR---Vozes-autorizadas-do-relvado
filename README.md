@@ -152,6 +152,8 @@ O que aconteceu no desporto nos sete dias da semana atual (de segunda a domingo)
 
 **Pesquisa do Claude (opcional, paga).** Com `ANTHROPIC_API_KEY` no `.env`, o servidor passa a usar o Claude em vez do Gemini (`EFEMERIDES_MOTOR=gemini` mantém o Gemini mesmo com a chave da Anthropic): faz, para cada dia da semana, um pedido ao Claude (Claude Opus 5.5, com a ferramenta de pesquisa na web da Anthropic): que acontecimentos desportivos, portugueses e internacionais, marcaram esse dia em cada um daqueles anos. O Claude confirma cada facto na web, dá até três por ano (pelo menos um português quando houver), com título, descrição e a fonte, e devolve tudo numa lista estruturada. São sete pedidos por semana, feitos quando a semana muda, hoje primeiro; um dia que falhe é repetido na revisão seguinte. Estes acontecimentos aparecem primeiro em cada ano, com a etiqueta «pesquisa Claude» e a ligação para a fonte. Ficam em `data/efemerides-claude.json`; o estado está em `/api/efemerides/estado`, no campo `claude`.
 
+**Wikipédia pelo GitHub.** O servidor (no Northflank) fica sem resposta da Wikipédia; o workflow `.github/workflows/wikipedia-semana.yml` lê o «Neste dia» da semana nas seis línguas de hora a hora e envia-o ao site (`/api/efemerides/wiki`, com um token OIDC do GitHub, sem chaves a configurar). O estado aparece em `/api/efemerides/estado`, no campo `wikiGitHub`.
+
 Ao contrário do resto do site, isto tem custo: cada dia é um pedido ao Claude Opus 5.5 mais as pesquisas na web que ele fizer (no máximo `EFEMERIDES_CLAUDE_PESQUISAS`, 15 por dia), aos preços da Anthropic. O modelo, o esforço (`EFEMERIDES_CLAUDE_ESFORCO`, `medium` por omissão) e o número de pesquisas acertam-se no `.env`. Sem a chave da Anthropic, fica a pesquisa gratuita do Gemini; sem nenhuma das duas, a secção continua a funcionar com a Wikipédia, o Wikidata e a ESPN.
 
 ## Ligas e Federações (notícias e comunicados oficiais)
@@ -319,6 +321,8 @@ As tabelas são calculadas a partir dos resultados, com os jogos a decorrer incl
 | `FPF_INTERVALO_MS`, `FPF_DIRETO_SEGUNDOS`, `FPF_ESTRUTURA_HORAS` | ritmo das leituras da FPF (1200 ms, 240 s, 20 h) |
 | `PT_RESULTADOS=0` | desliga tudo isto |
 | `EFEMERIDES_MOTOR`, `EFEMERIDES_GEMINI_MODEL` | pesquisa na web de cada dia do «Nesta semana»: `gemini` (gratuito, com a `GEMINI_API_KEY`) ou `claude`; por omissão, o Claude se houver `ANTHROPIC_API_KEY`, senão o Gemini |
+| `EFEMERIDES_PAUSA_429_MIN` | quando a pesquisa na web responde 429 (quota esgotada), quantos minutos fica parada antes de voltar a tentar (60) |
+| `TG_CACHE_MB` | memória para os pedaços dos vídeos grandes do Telegram já descarregados (64 MB); o início e o fim de cada vídeo novo são descarregados antes do play |
 | `ANTHROPIC_API_KEY`, `EFEMERIDES_CLAUDE_MODEL`, `EFEMERIDES_CLAUDE_ESFORCO`, `EFEMERIDES_CLAUDE_PESQUISAS` | pesquisa do Claude para o «Nesta semana», opcional e paga (modelo `claude-opus-5-5`, esforço `medium`, 15 pesquisas por dia) |
 
 Os dados ficam em `data/pt.json` (competições e jogos), `data/pt-eventos.json` (acontecimentos) e `data/pt-clubes.json` (o que se aprendeu de cada clube). Os testes correm com `npm test`.

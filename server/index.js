@@ -6,7 +6,7 @@ import * as store from "./store.js";
 import { createEnricher, fallback, RULES, NAO_FUTEBOL, MODALIDADES, modalidadeDe } from "./enrich.js";
 import { startRss, eDesporto } from "./sources/rss.js";
 import { startTelegram, clienteTelegram } from "./sources/telegram.js";
-import { enviarVideoTelegram } from "./tgvideo.js";
+import { enviarVideoTelegram, aquecerVideoTelegram } from "./tgvideo.js";
 import { startBluesky } from "./sources/bluesky.js";
 import { startResults } from "./sources/results.js";
 import { startEspn } from "./sources/espn.js";
@@ -29,6 +29,7 @@ import { createOficiais } from "./sources/oficiais.js";
 import { createGlossario } from "./glossario.js";
 import { createPortugal } from "./pt/index.js";
 import { restaurar, rotasCopia } from "./copia.js";
+import { verificarOidc } from "./oidc-github.js";
 import { ligarRetransmissor, resumoRetransmissor } from "./retransmissor.js";
 import { estadoEncaminhamento, testarCaminhos } from "./ponte.js";
 
@@ -438,7 +439,8 @@ app.get("/api/videos/tg/:canal/:id", async (req, res) => {
   if (!/^\d{1,9}$/.test(id) || !(VIDEOS_CFG.telegram || []).some((c) => c.canal.toLowerCase() === canal.toLowerCase())) return res.status(404).json({ erro: "vídeo desconhecido" });
   try { await enviarVideoTelegram(client, canal, id, req, res); } catch (e) {
     log(`[Vídeos] Telegram ${canal}/${id}: ${e.message}`);
-    if (!res.headersSent) res.status(502).json({ erro: e.message }); else res.end();
+    // a meio do envio: corta-se a ligação (um «end» deixava o leitor com menos bytes do que os prometidos, sem saber)
+    if (!res.headersSent) res.status(502).json({ erro: e.message }); else res.destroy();
   }
 });
 app.get("/api/videos/thumb/:id", async (req, res) => {
@@ -486,6 +488,18 @@ app.get("/api/capas/img/:id", async (req, res) => {
 });
 app.get("/api/efemerides", (req, res) => res.json(efemerides.para(String(req.query.lang || "pt"))));
 app.get("/api/efemerides/estado", (req, res) => res.json(efemerides.estado()));
+// a Wikipédia «Neste dia» da semana, lida pelo workflow do GitHub (.github/workflows/wikipedia-semana.yml), que chega
+// à Wikipédia quando este servidor não chega; o pedido traz um token OIDC do GitHub, verificado aqui
+app.post("/api/efemerides/wiki", express.json({ limit: "4mb" }), async (req, res) => {
+  try {
+    await verificarOidc(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""), {
+      audiencia: "var-wikipedia",
+      repositorio: process.env.YOUTUBE_RELAY_REPO || "morenomasbranco/VAR---Vozes-autorizadas-do-relvado",
+      workflow: ".github/workflows/wikipedia-semana.yml",
+    });
+  } catch (e) { return res.status(401).json({ erro: e.message }); }
+  res.json(efemerides.receberWiki(req.body));
+});
 // Glossário: sinónimos e antónimos de uma palavra que o glossário do site não tem (?p=palavra&tipo=sinonimos|antonimos)
 const glossario = createGlossario();
 app.get("/api/glossario/palavra", async (req, res) => {
@@ -550,7 +564,10 @@ videos.procurarFicheiro("sporttv", (s) => (s.entry ? ficheiroSportTv(s) : null))
 // os vídeos grandes do Telegram (sem ficheiro na página pública) tocam pelo servidor, com a conta do Telegram
 videos.procurarFicheiro("telegram", (s) => {
   const m = String(s.video_url || "").match(/^https:\/\/t\.me\/([A-Za-z0-9_]+)\/(\d+)$/);
-  return m && clienteTelegram() ? { mp4: `/api/videos/tg/${m[1]}/${m[2]}` } : null;
+  const client = clienteTelegram();
+  if (!m || !client) return null;
+  aquecerVideoTelegram(client, m[1], m[2], { log }); // o início e o fim do ficheiro, para o play arrancar logo
+  return { mp4: `/api/videos/tg/${m[1]}/${m[2]}` };
 });
 startStreamain((p) => videos.add(p), log, ESTADO_VIDEOS.streamain);
 // capas.start(); — as capas saíram do site, o servidor já não as vai buscar

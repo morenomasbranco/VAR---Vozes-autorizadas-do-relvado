@@ -132,6 +132,7 @@ async function json(url, { tentativas = 2, timeout = 20000, headers = {} } = {})
 
 /* ───────── Wikipédia «Neste dia» ───────── */
 const TIPOS_WIKI = { selected: "acontecimento", events: "acontecimento", births: "nascimento", deaths: "morte" };
+const TIPOS = new Set(Object.values(TIPOS_WIKI));
 async function wikipedia(lang, mes, dia) {
   const caminho = `feed/onthisday/all/${dd(mes)}/${dd(dia)}`;
   // a REST de cada Wikipédia; se falhar, o agregador da Wikimedia
@@ -160,6 +161,23 @@ async function wikipedia(lang, mes, dia) {
     }
   }
   return out;
+}
+
+// a Wikipédia «Neste dia» da semana inteira, nas seis línguas, só com os anos que fazem aniversário redondo: é o que o
+// workflow do GitHub (.github/workflows/wikipedia-semana.yml) lê e envia ao site, porque o servidor (no Northflank)
+// não chega à Wikipédia (os pedidos ficam sem resposta) e o GitHub chega
+export async function wikipediaDaSemana(sem = semanaLisboa(), { esperar = 200 } = {}) {
+  const wiki = Object.fromEntries(LINGUAS.map((l) => [l, []]));
+  const erros = {};
+  for (const d of sem.dias) {
+    const anos = new Set(ANOS.map((n) => d.ano - n).filter((a) => existe(a, d.mes, d.dia)));
+    for (const l of LINGUAS) {
+      try { wiki[l].push(...(await wikipedia(l, d.mes, d.dia)).filter((x) => anos.has(x.ano)).map((x) => ({ ...x, dia: d.iso }))); }
+      catch (e) { erros[`${l}:${d.iso}`] = e.message; }
+      await sleep(esperar);
+    }
+  }
+  return { semana: sem.id, wiki, erros };
 }
 
 /* ───────── Wikipédia: página do dia (recurso quando a API «Neste dia» falha) ───────── */
@@ -409,12 +427,14 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
   try { dados = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { dados = null; }
   if (dados && !dados.semana) dados = null; // ficheiro antigo, do «Neste dia»
   if (dados && dados.versao !== VERSAO) dados = { ...dados, completo: false, jogos: [], semana: `${dados.semana}:v${dados.versao || 1}` }; // fontes novas: refaz-se tudo
-  const estado = { at: null, semana: dados?.semana || null, erros: {}, contagem: {} };
+  const estado = { at: null, semana: dados?.semana || null, erros: {}, contagem: {}, wikiGitHub: null };
+  // a Wikipédia lida pelo workflow do GitHub (receberWiki): conta quando a do próprio servidor vem vazia ou mais curta
+  let relay = dados?.wikiRelay || null;
   const cacheJogos = { semana: dados?.semana || null, lista: dados?.jogos || [] };
   let aCorrer = false;
   const claude = createEfemeridesClaude({ log });
 
-  const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* só em memória */ } };
+  const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify({ ...dados, wikiRelay: relay })); } catch { /* só em memória */ } };
 
   async function montar() {
     if (aCorrer) return;
@@ -536,8 +556,13 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     const anoDe = new Map(sem.dias.map((d) => [d.iso, d.ano]));
     if (!dados || dados.semana !== sem.id) return { semana: sem.id, dias: sem.dias.map((d) => d.iso), hoje: sem.hoje, anos: ANOS, pronto: false, itens: [] };
     const itens = [];
-    const langWiki = [L, "en", "pt", ...LINGUAS].find((l) => dados.wiki?.[l]?.length) || L;
-    const wiki = dados.wiki?.[langWiki] || [];
+    const wikiDe = (l) => {
+      const proprio = dados.wiki?.[l] || [];
+      const gh = relay?.semana === sem.id ? relay.wiki?.[l] || [] : [];
+      return gh.length > proprio.length ? gh : proprio;
+    };
+    const langWiki = [L, "en", "pt", ...LINGUAS].find((l) => wikiDe(l).length) || L;
+    const wiki = wikiDe(langWiki);
     const anosDe = (x) => (anoDe.get(x.dia) || sem.dias[0].ano) - x.ano;
     const qidsPessoas = new Set();
     // desportistas do Wikidata, com o nome e a descrição na língua escolhida
@@ -598,5 +623,30 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     }
   }
 
-  return { start, para, estado: () => ({ ...estado, claude: claude.estado() }) };
+  // a Wikipédia da semana enviada pelo workflow do GitHub; só a da semana atual, e só itens com o formato certo
+  function receberWiki(corpo, via = "GitHub Actions") {
+    const sem = semanaLisboa();
+    if (corpo?.semana !== sem.id) return { ok: false, motivo: `semana ${corpo?.semana} não é a atual (${sem.id})` };
+    const dias = new Set(sem.dias.map((d) => d.iso));
+    const texto = (x, n) => (typeof x === "string" ? x.slice(0, n) : null);
+    const wiki = {};
+    for (const l of LINGUAS) {
+      wiki[l] = (Array.isArray(corpo.wiki?.[l]) ? corpo.wiki[l] : []).slice(0, 3000).filter((x) => x && TIPOS.has(x.tipo) && Number.isInteger(x.ano) && dias.has(x.dia) && texto(x.texto, 2000))
+        .map((x) => ({
+          tipo: x.tipo, ano: x.ano, dia: x.dia, lang: l, texto: texto(x.texto, 2000),
+          qids: (Array.isArray(x.qids) ? x.qids : []).filter((q) => /^Q\d+$/.test(q)).slice(0, 20),
+          link: /^https:\/\/[a-z-]+\.wikipedia\.org\//.test(x.link || "") ? texto(x.link, 500) : null,
+          img: /^https:\/\/upload\.wikimedia\.org\//.test(x.img || "") ? texto(x.img, 500) : null,
+          titulo: texto(x.titulo, 300),
+        }));
+    }
+    relay = { semana: sem.id, wiki, at: Date.now(), via };
+    estado.wikiGitHub = { at: relay.at, via, contagem: Object.fromEntries(LINGUAS.map((l) => [l, wiki[l].length])) };
+    if (dados) gravar();
+    broadcast("efemerides", { semana: sem.id, at: Date.now() });
+    return { ok: true, contagem: estado.wikiGitHub.contagem };
+  }
+
+  if (relay) estado.wikiGitHub = { at: relay.at, via: relay.via, contagem: Object.fromEntries(LINGUAS.map((l) => [l, (relay.wiki?.[l] || []).length])) };
+  return { start, para, receberWiki, estado: () => ({ ...estado, claude: claude.estado() }) };
 }
