@@ -275,3 +275,41 @@ try {
   const r = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent("SELECT ?e WHERE { ?e wdt:P31 wd:Q16466010 } LIMIT 3")}`, { headers: { ...UA, Accept: "application/sparql-results+json" }, signal: AbortSignal.timeout(60000) });
   linha(`== Wikidata daqui == ${r.status} em ${Date.now() - t0} ms`);
 } catch (e) { linha("fontes do Nesta semana: erro", e.message); }
+// vídeos do Telegram servidos pelo site, pedidos como o Chrome os pede: «bytes=0-» (até 8 MB por resposta) e o fim do
+// ficheiro (onde costuma estar o «moov» quando não está no início); quanto tempo até ao primeiro byte, se chega tudo
+// o que o servidor promete (Content-Length) e com que codec (o HEVC/H.265 não toca no Chrome de muitos Windows)
+try {
+  const lista = await j("/api/videos/latest?limit=120");
+  const tg = lista.filter((v) => v.embed?.servidor);
+  const alvo = ["/api/videos/tg/twclipshdeuropa/6616", ...tg.map((v) => v.embed.src)].filter((x, i, a) => a.indexOf(x) === i).slice(0, 4);
+  linha(`== Telegram no leitor == ${tg.length} vídeos do Telegram servidos pelo site`);
+  const codecs = (b) => ["avc1", "hvc1", "hev1", "av01", "vp09", "mp4a", "Opus"].filter((c) => b.includes(c)).join(",") || "?";
+  for (const src of alvo) {
+    for (const range of ["bytes=0-", "fim"]) {
+      const t0 = Date.now();
+      try {
+        let pedido = range;
+        if (range === "fim") {
+          const h = await fetch(SITE + src, { headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(60000) });
+          const total = Number((h.headers.get("content-range") || "").split("/")[1]);
+          await h.arrayBuffer().catch(() => {});
+          if (!total) { linha(`   ${src} | fim: sem tamanho (${h.status})`); continue; }
+          pedido = `bytes=${Math.max(0, total - 2 * 1024 * 1024)}-${total - 1}`;
+        }
+        const r = await fetch(SITE + src, { headers: { Range: pedido }, signal: AbortSignal.timeout(120000) });
+        const leitor = r.body.getReader();
+        let recebidos = 0, primeiro = null;
+        const pedacos = [];
+        for (;;) {
+          const { done, value } = await leitor.read();
+          if (done) break;
+          if (primeiro === null) primeiro = Date.now() - t0;
+          recebidos += value.length;
+          if (pedacos.length < 40) pedacos.push(Buffer.from(value));
+        }
+        const b = Buffer.concat(pedacos).toString("latin1");
+        linha(`   ${src} | ${pedido} → ${r.status} ${r.headers.get("content-type")} ${r.headers.get("content-range") || ""} | 1.º byte ${primeiro} ms · total ${Date.now() - t0} ms | recebidos ${recebidos} de ${r.headers.get("content-length")} | codecs ${codecs(b)} | moov: ${b.includes("moov") ? "sim" : "não"}`);
+      } catch (err) { linha(`   ${src} | ${range} | erro ao fim de ${Date.now() - t0} ms: ${err.message}`); }
+    }
+  }
+} catch (e) { linha("Telegram no leitor: erro", e.message); }

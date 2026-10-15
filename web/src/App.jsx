@@ -23,7 +23,6 @@ const CATS = [
   { id: "mercado", pt: "Mercado", en: "Transfers", es: "Mercado", fr: "Transferts", it: "Mercato", de: "Transfers" },
   { id: "modalidades", pt: "Modalidades", en: "Other sports", es: "Otros deportes", fr: "Autres sports", it: "Altri sport", de: "Andere Sportarten" },
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
-  { id: "premios", pt: "Prémios", en: "Awards", es: "Premios", fr: "Trophées", it: "Premi", de: "Auszeichnungen" },
   // não aparece na barra de secções (as notícias continuam na coluna «Portugueses pelo mundo» do Feed)
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland", semBarra: true },
   { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
@@ -69,9 +68,9 @@ const foraDoMercado = (t) => PREMIO.test(t) && !MERCADO_FORTE.test(t);
 const semAcentos = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 // secções onde não aparece, à direita de cada notícia, a etiqueta com o nome da secção
-const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
+const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas"]);
 // secções em que a lista de notícias fica numa coluna centrada
-const LISTA_CENTRADA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas", "premios"]);
+const LISTA_CENTRADA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas"]);
 
 const inSection = (it, s) => {
   if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais" || s === "glossario") return false;
