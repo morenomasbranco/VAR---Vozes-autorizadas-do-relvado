@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url";
 import { verificarOidc } from "./oidc-github.js";
 
 export const REPO = () => process.env.COPIA_REPO || process.env.YOUTUBE_RELAY_REPO || "morenomasbranco/VAR---Vozes-autorizadas-do-relvado";
-export const FICHEIROS = ["pt.json", "pt-eventos.json", "pt-clubes.json", "youtube-canais.json"];
+// (com o «Nesta semana» e a pesquisa na web de cada dia: refazê-los a cada atualização levava horas e gastava a quota
+// gratuita do Gemini, e entretanto a secção ficava sem acontecimentos)
+export const FICHEIROS = ["pt.json", "pt-eventos.json", "pt-clubes.json", "youtube-canais.json", "efemerides.json", "efemerides-claude.json"];
 const PASTA = fileURLToPath(new URL("../data/", import.meta.url));
 export const ENDERECO = () => process.env.COPIA_URL || `https://github.com/${REPO()}/releases/download/dados/dados.json.gz`;
 

@@ -248,7 +248,7 @@ try {
 // «Nesta semana»: o estado das fontes (Wikipédia, Wikidata, ESPN, pesquisa na web) e o que o site recebe, por tipo e por dia
 try {
   const e = await j("/api/efemerides/estado");
-  linha(`== Nesta semana: estado == semana ${e.semana} · revisto ${e.at ? `há ${Math.round((Date.now() - e.at) / 60000)} min` : "nunca"} · contagem ${JSON.stringify(e.contagem)} · erros ${JSON.stringify(e.erros)}`);
+  linha(`== Nesta semana: estado == semana ${e.semana} · revisto ${e.at ? `há ${Math.round((Date.now() - e.at) / 60000)} min` : "nunca"}${e.emCurso ? ` · a construir há ${Math.round((Date.now() - e.emCurso) / 60000)} min` : ""} · contagem ${JSON.stringify(e.contagem)} · erros ${JSON.stringify(e.erros).slice(0, 1500)}`);
   linha(`   pesquisa na web: ${JSON.stringify(e.claude || null).slice(0, 1500)}`);
   const d = await j("/api/efemerides?lang=pt");
   const porTipo = {}, porDia = {};
@@ -258,3 +258,20 @@ try {
     for (const x of d.itens.filter((y) => y.tipo === t).slice(0, 3)) linha(`   ${t} | ${x.dia} | há ${x.anos} anos | ${String(x.texto || x.nome || x.titulo || JSON.stringify(x)).slice(0, 120)}`);
   }
 } catch (e) { linha("Nesta semana: erro", e.message); }
+// as fontes do «Nesta semana» vistas daqui (GitHub), para separar uma fonte em baixo de um bloqueio ao servidor do site
+try {
+  const UA = { "User-Agent": "VAR-feed/1.0 (https://github.com/morenomasbranco/VAR---Vozes-autorizadas-do-relvado; agregador de notícias de desporto)", Accept: "application/json" };
+  const hoje = new Date();
+  const mm = String(hoje.getUTCMonth() + 1).padStart(2, "0"), dd = String(hoje.getUTCDate()).padStart(2, "0");
+  for (const u of [`https://pt.wikipedia.org/api/rest_v1/feed/onthisday/all/${mm}/${dd}`, `https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/${mm}/${dd}`, `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${mm}/${dd}`]) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(20000) });
+      const d = r.ok ? await r.json() : null;
+      linha(`== Wikipédia daqui == ${r.status} em ${Date.now() - t0} ms | ${u} | ${d ? Object.entries(d).map(([k, v]) => `${k} ${Array.isArray(v) ? v.length : "?"}`).join(" · ") : (await r.text().catch(() => "")).slice(0, 200)}`);
+    } catch (err) { linha(`== Wikipédia daqui == erro ${err.message} | ${u}`); }
+  }
+  const t0 = Date.now();
+  const r = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent("SELECT ?e WHERE { ?e wdt:P31 wd:Q16466010 } LIMIT 3")}`, { headers: { ...UA, Accept: "application/sparql-results+json" }, signal: AbortSignal.timeout(60000) });
+  linha(`== Wikidata daqui == ${r.status} em ${Date.now() - t0} ms`);
+} catch (e) { linha("fontes do Nesta semana: erro", e.message); }

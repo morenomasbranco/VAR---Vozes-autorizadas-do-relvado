@@ -27,12 +27,16 @@ test("cópia: repõe os ficheiros só quando o servidor arranca sem dados", asyn
   const origem = pastaNova();
   fs.writeFileSync(`${origem}pt.json`, JSON.stringify({ comps: { a: {} }, jogos: { j: {} } }));
   fs.writeFileSync(`${origem}youtube-canais.json`, JSON.stringify({ c: 1 }));
+  // o «Nesta semana» e a pesquisa na web de cada dia também voltam (refazê-los levava horas e gastava a quota)
+  fs.writeFileSync(`${origem}efemerides.json`, JSON.stringify({ semana: "2026-10-12", versao: 2, eventos: [{ qid: "Q1" }] }));
+  fs.writeFileSync(`${origem}efemerides-claude.json`, JSON.stringify({ "2026-10-15": { ok: true, itens: [] } }));
   const gz = zlib.gzipSync(JSON.stringify(fazerCopia({ pasta: origem })));
   const pedir = async () => new Response(gz);
   const destino = pastaNova();
   const r = await restaurar({ pasta: destino, pedir, log: () => {} });
   assert.equal(r.feito, true);
-  assert.deepEqual(r.escritos.sort(), ["pt.json", "youtube-canais.json"]);
+  assert.deepEqual(r.escritos.sort(), ["efemerides-claude.json", "efemerides.json", "pt.json", "youtube-canais.json"]);
+  assert.equal(JSON.parse(fs.readFileSync(`${destino}efemerides.json`, "utf8")).eventos[0].qid, "Q1");
   assert.deepEqual(JSON.parse(fs.readFileSync(`${destino}pt.json`, "utf8")).jogos, { j: {} });
   const outra = await restaurar({ pasta: destino, pedir, log: () => {} });
   assert.equal(outra.feito, false); // já há dados: não se mexe

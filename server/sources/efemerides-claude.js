@@ -33,6 +33,7 @@ const MODELO = process.env.EFEMERIDES_CLAUDE_MODEL || "claude-opus-5-5";
 const ESFORCO = process.env.EFEMERIDES_CLAUDE_ESFORCO || "medium"; // low | medium | high | xhigh | max
 const PESQUISAS = Math.max(1, Number(process.env.EFEMERIDES_CLAUDE_PESQUISAS) || 15); // pesquisas na web por dia
 const FICHEIRO = new URL("../../data/efemerides-claude.json", import.meta.url);
+const PAUSA_429 = (Number(process.env.EFEMERIDES_PAUSA_429_MIN) || 60) * 60e3;
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 // instruções fixas (iguais em todos os pedidos, para a cache de prompts)
@@ -192,11 +193,12 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
   if (!motor) log("[Nesta semana] sem GEMINI_API_KEY nem ANTHROPIC_API_KEY: a pesquisa na web de cada dia está desligada");
   else log(`[Nesta semana] pesquisa na web de cada dia pelo ${motor === "gemini" ? "Gemini (gratuito)" : "Claude"} (${modelo})`);
   let aCorrer = false;
+  let pausaAte = 0; // quota esgotada (429): não se volta a pedir antes disto
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* */ } };
 
   // pesquisa os dias da semana que ainda não têm resultado (hoje primeiro); chama aoChegar a cada dia feito
   async function semana(sem, anosDoDia, aoChegar = () => {}) {
-    if (!motor || aCorrer) return;
+    if (!motor || aCorrer || Date.now() < pausaAte) return;
     aCorrer = true;
     try {
       // guarda só a semana atual
@@ -219,7 +221,9 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
           estado.erros[d.iso] = e.message;
           log(`[Nesta semana] ${motor} (${d.iso}): ${e.message}`);
           if (e.status === 401 || e.status === 403) break; // chave errada: não vale a pena insistir
-          await sleep(e.status === 429 ? 60e3 : 5e3);
+          // quota esgotada: os outros dias também levavam 429 e gastavam o que a quota ainda deixasse; pára uma hora
+          if (e.status === 429) { pausaAte = Date.now() + PAUSA_429; estado.pausaAte = pausaAte; break; }
+          await sleep(5e3);
         }
       }
     } finally { aCorrer = false; }
