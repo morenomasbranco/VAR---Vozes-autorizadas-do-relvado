@@ -641,12 +641,12 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
         }));
     }
     relay = { semana: sem.id, wiki, at: Date.now(), via };
-    estado.wikiGitHub = { at: relay.at, via, contagem: Object.fromEntries(LINGUAS.map((l) => [l, wiki[l].length])) };
+    estado.wikiGitHub = { semana: sem.id, at: relay.at, via, contagem: Object.fromEntries(LINGUAS.map((l) => [l, wiki[l].length])) };
     if (dados) gravar();
     broadcast("efemerides", { semana: sem.id, at: Date.now() });
     return { ok: true, contagem: estado.wikiGitHub.contagem };
   }
 
-  if (relay) estado.wikiGitHub = { at: relay.at, via: relay.via, contagem: Object.fromEntries(LINGUAS.map((l) => [l, (relay.wiki?.[l] || []).length])) };
+  if (relay) estado.wikiGitHub = { semana: relay.semana, at: relay.at, via: relay.via, contagem: Object.fromEntries(LINGUAS.map((l) => [l, (relay.wiki?.[l] || []).length])) };
   return { start, para, receberWiki, estado: () => ({ ...estado, claude: claude.estado() }) };
 }
