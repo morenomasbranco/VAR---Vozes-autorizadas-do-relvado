@@ -234,7 +234,17 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
   };
   const gravar = () => { try { fs.mkdirSync(new URL("../../data", import.meta.url), { recursive: true }); fs.writeFileSync(FICHEIRO, JSON.stringify(dados)); } catch { /* */ } };
 
-  // pesquisa os dias da semana que ainda não têm resultado (hoje primeiro); chama aoChegar a cada dia feito
+  // o resultado de cada motor para um dia: { gemini: { ok, at, modelo, itens }, groq: … } (os dias gravados antes,
+  // com um só motor, ficam no mesmo formato)
+  const doDia = (iso) => {
+    const x = dados[iso];
+    if (!x) return {};
+    if (x.porMotor) return x.porMotor;
+    return x.ok ? { [x.motor || "claude"]: x } : {};
+  };
+
+  // pesquisa os dias da semana (hoje primeiro) com todos os motores livres ao mesmo tempo: cada um faz os dias que ainda
+  // não tem; os acontecimentos dos vários motores juntam-se em itens(). Chama aoChegar a cada resultado novo
   async function semana(sem, anosDoDia, aoChegar = () => {}) {
     if (!livres().length || aCorrer) return;
     aCorrer = true;
@@ -243,49 +253,71 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
       for (const k of Object.keys(dados)) if (!sem.dias.some((d) => d.iso === k)) delete dados[k];
       const iHoje = Math.max(0, sem.dias.findIndex((d) => d.iso === sem.hoje));
       for (const d of [...sem.dias.slice(iHoje), ...sem.dias.slice(0, iHoje)]) {
-        if (dados[d.iso]?.ok) continue; // já pesquisado (por qualquer dos motores)
+        const faltam = livres().filter((m) => !doDia(d.iso)[m]?.ok);
+        if (!faltam.length) continue;
         const anos = anosDoDia(d);
         if (!anos.length) continue;
-        let feito = false;
-        for (const m of livres()) {
+        const validos = new Set(anos);
+        const feitos = await Promise.all(faltam.map(async (m) => {
           try {
             const lista = await PESQUISAR[m](d, anos);
-            const validos = new Set(anos);
-            dados[d.iso] = { ok: true, at: Date.now(), motor: m, modelo: MODELO_DE[m](), itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
-            estado.dias[d.iso] = dados[d.iso].itens.length;
-            delete estado.erros[d.iso];
-            gravar();
-            log(`[Nesta semana] ${m}: ${dados[d.iso].itens.length} acontecimentos para ${d.iso}`);
-            aoChegar();
-            feito = true;
-            break;
+            const r = { ok: true, at: Date.now(), modelo: MODELO_DE[m](), itens: lista.filter((x) => validos.has(x.ano) && x.titulo) };
+            dados[d.iso] = { porMotor: { ...doDia(d.iso), [m]: r } };
+            log(`[Nesta semana] ${m}: ${r.itens.length} acontecimentos para ${d.iso}`);
+            return true;
           } catch (e) {
             estado.erros[d.iso] = `${m}: ${e.message}`;
             log(`[Nesta semana] ${m} (${d.iso}): ${e.message}`);
-            // chave errada: o motor fica parado um dia; quota esgotada: uma hora (os outros dias também levavam 429
-            // e gastavam o que a quota ainda deixasse); em ambos os casos, o dia passa ao motor seguinte
+            // chave errada: o motor fica parado um dia; quota esgotada: uma hora (os outros dias também levavam 429 e
+            // gastavam o que a quota ainda deixasse); os outros motores continuam
             if (e.status === 401 || e.status === 403) pausar(m, 24 * 3600e3);
             else if (e.status === 429) pausar(m, PAUSA_429);
+            return false;
           }
+        }));
+        if (feitos.some(Boolean)) {
+          estado.dias[d.iso] = Object.fromEntries(Object.entries(doDia(d.iso)).map(([m, r]) => [m, r.itens.length]));
+          if (Object.keys(doDia(d.iso)).length >= motores.length) delete estado.erros[d.iso];
+          gravar();
+          aoChegar();
         }
         if (!livres().length) break;
-        if (!feito) await sleep(5e3);
+        if (!feitos.some(Boolean)) await sleep(5e3);
       }
     } finally { aCorrer = false; }
   }
 
-  // itens no formato do «Nesta semana»
+  // itens no formato do «Nesta semana»: os de todos os motores, com os repetidos (mesmo ano e título parecido) juntos num
+  // só, que diz quem o encontrou (motores)
+  const palavras = (t) => new Set(String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w.length > 3));
+  const parecidos = (a, b) => {
+    const A = palavras(a), B = palavras(b);
+    if (!A.size || !B.size) return false;
+    let comuns = 0;
+    for (const w of A) if (B.has(w)) comuns++;
+    return comuns / Math.min(A.size, B.size) >= 0.6;
+  };
   function itens(sem) {
     const anoDe = new Map(sem.dias.map((d) => [d.iso, d.ano]));
+    const ordem = (m) => { const i = motores.indexOf(m); return i < 0 ? 99 : i; };
     const out = [];
     for (const d of sem.dias) {
-      for (const [i, x] of (dados[d.iso]?.itens || []).entries()) {
+      const juntos = [];
+      for (const [m, r] of Object.entries(doDia(d.iso)).sort(([a], [b]) => ordem(a) - ordem(b))) {
+        for (const x of r.itens || []) {
+          const igual = juntos.find((y) => y.x.ano === x.ano && parecidos(y.x.titulo, x.titulo));
+          if (igual) { if (!igual.motores.includes(m)) igual.motores.push(m); if (x.importancia === "alta") igual.alta = true; }
+          else juntos.push({ x, motores: [m], alta: x.importancia === "alta" });
+        }
+      }
+      for (const [i, { x, motores: quem, alta }] of juntos.entries()) {
         const pt = x.ambito === "portugal";
         out.push({
           id: `cl:${d.iso}:${x.ano}:${i}`, tipo: "acontecimento", ano: x.ano, dia: d.iso, anos: anoDe.get(d.iso) - x.ano,
           texto: `${x.titulo}${x.descricao ? ` — ${x.descricao}` : ""}`, mod: modDe(x.modalidade) || undefined,
-          portugues: pt, link: /^https?:\/\//.test(x.fonte || "") ? x.fonte : null, claude: true, motor: dados[d.iso].motor || "claude",
-          peso: 120 + (pt ? 40 : 0) + (x.importancia === "alta" ? 20 : 0),
+          portugues: pt, link: /^https?:\/\//.test(x.fonte || "") ? x.fonte : null, claude: true, motor: quem[0], motores: quem,
+          // confirmado por mais de um motor: sobe na lista
+          peso: 120 + (pt ? 40 : 0) + (alta ? 20 : 0) + (quem.length > 1 ? 15 : 0),
         });
       }
     }

@@ -117,3 +117,49 @@ test("Nesta semana: com o Gemini sem quota (429), o mesmo dia passa ao Groq, que
     if (existia) fs.writeFileSync(ficheiro, antes); else fs.rmSync(ficheiro, { force: true });
   }
 });
+
+test("Nesta semana: o Gemini e o Groq pesquisam o mesmo dia ao mesmo tempo, e o que ambos encontram aparece uma vez", async () => {
+  process.env.GEMINI_API_KEY = "gratis";
+  process.env.GROQ_API_KEY = "groq-gratis";
+  process.env.EFEMERIDES_MOTOR = "gemini";
+  const { createEfemeridesClaude } = await import("../server/sources/efemerides-claude.js");
+  const { default: fs } = await import("node:fs");
+  const ficheiro = new URL("../data/efemerides-claude.json", import.meta.url);
+  const existia = fs.existsSync(ficheiro);
+  const antes = existia ? fs.readFileSync(ficheiro) : null;
+  const original = globalThis.fetch;
+  let aCorrer = 0, max = 0;
+  const lista = (extra) => JSON.stringify({ acontecimentos: [
+    { ano: 2016, ambito: "portugal", modalidade: "futebol", titulo: "Portugal vence a Finlândia em Lisboa", descricao: "…", fonte: "https://a.pt", importancia: "media" },
+    extra,
+  ] });
+  globalThis.fetch = async (url) => {
+    aCorrer++; max = Math.max(max, aCorrer);
+    await new Promise((r) => setTimeout(r, 20));
+    aCorrer--;
+    if (/generativelanguage/.test(url)) return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: lista({ ano: 2016, ambito: "internacional", modalidade: "ténis", titulo: "Final do torneio de Xangai", descricao: "…", fonte: "https://b.com", importancia: "media" }) }] } }] }) };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: lista({ ano: 2016, ambito: "portugal", modalidade: "futsal", titulo: "Benfica conquista a Supertaça de futsal", descricao: "…", fonte: "https://c.pt", importancia: "alta" }).replace("Portugal vence a Finlândia em Lisboa", "Portugal vence Finlândia, em Lisboa") } }] }) };
+  };
+  try {
+    const cl = createEfemeridesClaude();
+    const dias = [{ iso: "2026-10-12", ano: 2026, mes: 10, dia: 12 }];
+    await cl.semana({ dias, hoje: "2026-10-12" }, () => [2016]);
+    assert.equal(max, 2, "os dois motores ao mesmo tempo");
+    const itens = cl.itens({ dias, hoje: "2026-10-12" });
+    assert.equal(itens.length, 3); // o jogo de Portugal, encontrado pelos dois, aparece uma só vez
+    const pt = itens.find((x) => /Finlândia/.test(x.texto));
+    assert.deepEqual(pt.motores, ["gemini", "groq"]);
+    assert.deepEqual(itens.find((x) => /Xangai/.test(x.texto)).motores, ["gemini"]);
+    assert.deepEqual(itens.find((x) => /Supertaça/.test(x.texto)).motores, ["groq"]);
+    assert.deepEqual(cl.estado().dias["2026-10-12"], { gemini: 2, groq: 2 });
+    // uma segunda volta não volta a pedir o que já está feito
+    max = 0;
+    await cl.semana({ dias, hoje: "2026-10-12" }, () => [2016]);
+    assert.equal(max, 0);
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.EFEMERIDES_MOTOR;
+    delete process.env.GROQ_API_KEY;
+    if (existia) fs.writeFileSync(ficheiro, antes); else fs.rmSync(ficheiro, { force: true });
+  }
+});
