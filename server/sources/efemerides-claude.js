@@ -189,33 +189,64 @@ export async function pesquisarDiaGemini({ ano, mes, dia }, anos) {
   return lerJsonGemini(texto);
 }
 
-// O mesmo pedido ao Groq (plano gratuito, com chave GROQ_API_KEY): o «groq/compound» pesquisa na web sozinho antes de
-// responder. API compatível com a da OpenAI; o JSON vem no texto, como no Gemini
+// O mesmo pedido ao Groq (plano gratuito, com chave GROQ_API_KEY). Os modelos que cada conta tem variam (a do site
+// respondeu «groq/compound does not exist or you do not have access to it»), por isso pergunta-se ao Groq que modelos
+// há e usa-se o primeiro com pesquisa na web: os «compound» (pesquisam sozinhos) e os gpt-oss com a ferramenta
+// browser_search. O que funcionar fica escolhido. API compatível com a da OpenAI; o JSON vem no texto, como no Gemini
+const GROQ_CANDIDATOS = () => [
+  ...[process.env.EFEMERIDES_GROQ_MODEL, "groq/compound", "groq/compound-mini", "compound-beta", "compound-beta-mini"].filter(Boolean).map((modelo) => ({ modelo })),
+  { modelo: "openai/gpt-oss-120b", pesquisa: true },
+  { modelo: "openai/gpt-oss-20b", pesquisa: true },
+].filter((c, i, a) => a.findIndex((x) => x.modelo === c.modelo) === i);
+let groqEscolhido = null;
+let groqModelos = { ts: 0, ids: null };
+const cabGroq = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` });
+async function modelosGroq() {
+  if (Date.now() - groqModelos.ts < 3600e3) return groqModelos.ids;
+  let ids = null;
+  try {
+    const r = await fetch(`${GROQ_API}/models`, { headers: cabGroq(), signal: AbortSignal.timeout(20000) });
+    if (r.ok) ids = new Set(((await r.json()).data || []).map((m) => m.id));
+  } catch { /* fica por saber: experimentam-se todos */ }
+  groqModelos = { ts: Date.now(), ids };
+  return ids;
+}
 export async function pesquisarDiaGroq({ ano, mes, dia }, anos) {
   const lista = anos.map((a) => `${a} (há ${ano - a} ${ano - a === 1 ? "ano" : "anos"})`).join(", ");
-  const res = await fetch(`${GROQ_API}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
-    body: JSON.stringify({
-      model: GROQ_MODELO(),
-      messages: [
-        { role: "system", content: SISTEMA_GEMINI },
-        { role: "user", content: `Data: ${dia} de ${MESES[mes - 1]}.\nAnos: ${lista}.\n\nQue acontecimentos desportivos, portugueses e internacionais, marcaram o dia ${dia} de ${MESES[mes - 1]} em cada um destes anos? Pesquisa na web para confirmar cada um.` },
-      ],
-      temperature: 0.3,
-    }),
-    signal: AbortSignal.timeout(5 * 60e3),
-  });
-  if (!res.ok) {
-    const e = new Error(`Groq respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const ids = await modelosGroq();
+  const candidatos = groqEscolhido ? [groqEscolhido] : GROQ_CANDIDATOS().filter((c) => !ids || ids.has(c.modelo));
+  if (!candidatos.length) throw new Error(`nenhum modelo do Groq com pesquisa na web nesta conta (há: ${[...(ids || [])].slice(0, 12).join(", ")})`);
+  let ultimo = null;
+  for (const c of candidatos) {
+    const res = await fetch(`${GROQ_API}/chat/completions`, {
+      method: "POST",
+      headers: cabGroq(),
+      body: JSON.stringify({
+        model: c.modelo,
+        messages: [
+          { role: "system", content: SISTEMA_GEMINI },
+          { role: "user", content: `Data: ${dia} de ${MESES[mes - 1]}.\nAnos: ${lista}.\n\nQue acontecimentos desportivos, portugueses e internacionais, marcaram o dia ${dia} de ${MESES[mes - 1]} em cada um destes anos? Pesquisa na web para confirmar cada um.` },
+        ],
+        temperature: 0.3,
+        ...(c.pesquisa ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
+      }),
+      signal: AbortSignal.timeout(5 * 60e3),
+    });
+    if (res.ok) {
+      groqEscolhido = c;
+      const j = await res.json();
+      return lerJsonGemini(j.choices?.[0]?.message?.content || "");
+    }
+    const e = new Error(`Groq (${c.modelo}) respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
     e.status = res.status;
+    // modelo que esta conta não tem, ou que não aceita a ferramenta de pesquisa: experimenta-se o seguinte
+    if (res.status === 404 || (res.status === 400 && /model|tool|browser_search/i.test(e.message))) { ultimo = e; groqEscolhido = null; continue; }
     throw e;
   }
-  const j = await res.json();
-  return lerJsonGemini(j.choices?.[0]?.message?.content || "");
+  throw ultimo || new Error("nenhum modelo do Groq respondeu");
 }
 const PESQUISAR = { claude: (d, anos) => pesquisarDia(d, anos), gemini: (d, anos) => pesquisarDiaGemini(d, anos), groq: (d, anos) => pesquisarDiaGroq(d, anos) };
-const MODELO_DE = { claude: () => MODELO, gemini: () => GEMINI_MODELO(), groq: () => GROQ_MODELO() };
+const MODELO_DE = { claude: () => MODELO, gemini: () => GEMINI_MODELO(), groq: () => groqEscolhido?.modelo || GROQ_MODELO() };
 
 export function createEfemeridesClaude({ log = () => {} } = {}) {
   let dados = {};
@@ -326,3 +357,5 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
 
   return { semana, itens, estado: () => estado };
 }
+
+export const _groqTeste = { limpar: () => { groqEscolhido = null; groqModelos = { ts: 0, ids: null }; } };

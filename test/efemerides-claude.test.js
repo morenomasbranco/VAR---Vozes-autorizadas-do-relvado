@@ -163,3 +163,46 @@ test("Nesta semana: o Gemini e o Groq pesquisam o mesmo dia ao mesmo tempo, e o 
     if (existia) fs.writeFileSync(ficheiro, antes); else fs.rmSync(ficheiro, { force: true });
   }
 });
+
+test("Nesta semana pelo Groq: usa o modelo com pesquisa na web que a conta tiver (a do site não tem o groq/compound)", async () => {
+  process.env.GROQ_API_KEY = "groq-gratis";
+  const { pesquisarDiaGroq, _groqTeste } = await import("../server/sources/efemerides-claude.js");
+  const original = globalThis.fetch;
+  const resposta = { ok: true, json: async () => ({ choices: [{ message: { content: '{"acontecimentos":[{"ano":2016,"ambito":"portugal","modalidade":"futebol","titulo":"Golo histórico","descricao":"…","fonte":"https://a.pt","importancia":"alta"}]}' } }] }) };
+  try {
+    // 1) a lista de modelos da conta só tem o gpt-oss-120b: vai com a ferramenta browser_search
+    _groqTeste.limpar();
+    let pedidos = [];
+    globalThis.fetch = async (url, op = {}) => {
+      if (/\/models$/.test(url)) return { ok: true, json: async () => ({ data: [{ id: "openai/gpt-oss-120b" }, { id: "llama-3.3-70b-versatile" }] }) };
+      pedidos.push(JSON.parse(op.body));
+      return resposta;
+    };
+    const a = await pesquisarDiaGroq({ ano: 2026, mes: 10, dia: 15 }, [2016]);
+    assert.equal(a.length, 1);
+    assert.equal(pedidos.length, 1);
+    assert.equal(pedidos[0].model, "openai/gpt-oss-120b");
+    assert.deepEqual(pedidos[0].tools, [{ type: "browser_search" }]);
+    assert.equal(pedidos[0].tool_choice, "required");
+
+    // 2) sem lista de modelos: os que respondem 404 (a conta não os tem) passam ao seguinte, e o que funciona fica escolhido
+    _groqTeste.limpar();
+    pedidos = [];
+    globalThis.fetch = async (url, op = {}) => {
+      if (/\/models$/.test(url)) return { ok: false, status: 500, json: async () => ({}) };
+      const corpo = JSON.parse(op.body);
+      pedidos.push(corpo.model);
+      if (corpo.model !== "openai/gpt-oss-120b") return { ok: false, status: 404, text: async () => `{"error":{"message":"The model \`${corpo.model}\` does not exist or you do not have access to it.","code":"model_not_found"}}` };
+      return resposta;
+    };
+    await pesquisarDiaGroq({ ano: 2026, mes: 10, dia: 15 }, [2016]);
+    assert.deepEqual(pedidos, ["groq/compound", "groq/compound-mini", "compound-beta", "compound-beta-mini", "openai/gpt-oss-120b"]);
+    pedidos = [];
+    await pesquisarDiaGroq({ ano: 2026, mes: 10, dia: 16 }, [2016]);
+    assert.deepEqual(pedidos, ["openai/gpt-oss-120b"]); // o dia seguinte vai logo ao modelo que funcionou
+  } finally {
+    globalThis.fetch = original;
+    _groqTeste.limpar();
+    delete process.env.GROQ_API_KEY;
+  }
+});
