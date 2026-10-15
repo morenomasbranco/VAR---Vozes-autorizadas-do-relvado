@@ -423,6 +423,8 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
     // para cada dia da semana, os anos que fazem aniversário redondo (há 1, 2… 100 anos)
     const alvoDia = new Map(sem.dias.map((d) => [d.iso, ANOS.map((n) => d.ano - n).filter((a) => existe(a, d.mes, d.dia))]));
     const erros = {};
+    // os erros de cada fonte ficam à vista logo que acontecem (a primeira volta depois de arrancar pode levar muito tempo)
+    Object.assign(estado, { emCurso: Date.now(), erros });
     // hoje primeiro, depois os dias que faltam da semana e por fim os que já passaram
     const iHoje = Math.max(0, sem.dias.findIndex((d) => d.iso === sem.hoje));
     const ordem = [...sem.dias.slice(iHoje), ...sem.dias.slice(0, iHoje)];
@@ -518,7 +520,7 @@ export function createEfemerides({ log = () => {}, broadcast = () => {}, ligas =
       novo.completo = true;
       publicar();
       Object.assign(estado, {
-        at: Date.now(), semana: sem.id, erros,
+        at: Date.now(), semana: sem.id, erros, emCurso: null,
         contagem: { ...Object.fromEntries(LINGUAS.map((l) => [`wikipedia-${l}`, (novo.wiki[l] || []).length])), pessoas: novo.pessoas.length, acontecimentos: novo.eventos.length, jogos: novo.jogos.length },
       });
       gravar();

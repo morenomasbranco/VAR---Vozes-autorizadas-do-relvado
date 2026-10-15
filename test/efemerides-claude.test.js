@@ -56,3 +56,23 @@ test("Nesta semana pelo Gemini (gratuito): pesquisa Google e JSON lido do texto"
   assert.throws(() => lerJsonGemini("não encontrei nada"), /JSON/);
   assert.deepEqual(lerJsonGemini('{"acontecimentos": []}'), []);
 });
+
+test("Nesta semana pelo Gemini: a quota esgotada (429) pára a pesquisa em vez de gastar os outros dias", async () => {
+  process.env.GEMINI_API_KEY = "gratis";
+  process.env.EFEMERIDES_MOTOR = "gemini";
+  const { createEfemeridesClaude } = await import("../server/sources/efemerides-claude.js");
+  const original = globalThis.fetch;
+  let pedidos = 0;
+  globalThis.fetch = async () => { pedidos++; return { ok: false, status: 429, text: async () => "You exceeded your current quota" }; };
+  try {
+    const cl = createEfemeridesClaude();
+    const dias = [12, 13, 14, 15, 16, 17, 18].map((d) => ({ iso: `2026-10-${d}`, ano: 2026, mes: 10, dia: d }));
+    const sem = { dias, hoje: "2026-10-15" };
+    await cl.semana(sem, () => [2025, 2016]);
+    assert.equal(pedidos, 1, "um só pedido: os outros dias ficam para depois da pausa");
+    assert.match(cl.estado().erros["2026-10-15"], /429/);
+    assert.ok(cl.estado().pausaAte > Date.now());
+    await cl.semana(sem, () => [2025, 2016]); // ainda em pausa
+    assert.equal(pedidos, 1);
+  } finally { globalThis.fetch = original; delete process.env.EFEMERIDES_MOTOR; }
+});

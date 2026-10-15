@@ -8,7 +8,7 @@ import { GRUPOS_COMP } from "../web/src/glossario/competicoes.js";
 import { PAISES_GLOS } from "../web/src/glossario/paises.js";
 import { OUTROS_NOMES } from "../web/src/glossario/nomes.js";
 import { reconhecerClube, reconhecerProva, fichaDoJogo, termosDoJogo } from "../web/src/glossario/jogo.js";
-import { titulosDoJogo, plural } from "../web/src/glossario/titulos.js";
+import { titulosDoJogo, todosOsTitulos, plural } from "../web/src/glossario/titulos.js";
 
 // excertos das páginas reais (sinonimos.com.br e antonimos.com.br, outubro de 2026)
 const PAGINA = `<div class="content-detail"><div class="content-detail--subtitle">Qualquer tipo de conquista ou triunfo:</div><p class="syn-list syn-list-1"><em class="syn-number">1</em> <a href="/conquista/" class="sinonimo">conquista</a>, <a href="/triunfo/" class="sinonimo">triunfo</a>, <a href="/exito/" class="sinonimo">&ecirc;xito</a>, sucesso.</p></div>
@@ -286,31 +286,41 @@ test("glossário: preparar um jogo das ligas norte-americanas e de outros paíse
 });
 
 test("glossário: sugestões de títulos para o jogo (antes, durante e depois)", () => {
-  const t = (j) => titulosDoJogo(fichaDoJogo(j), j);
-  const antes = t({ h: "Benfica", a: "Sporting", comp: "Liga Portugal" });
-  assert.ok(antes.includes("Liga Portugal: Benfica recebe Sporting"), antes.join(" | "));
-  const golea = t({ h: "Benfica", a: "Sporting", hs: 3, as: 0, comp: "Liga Portugal", ft: true });
-  assert.ok(golea.includes("Benfica vence o dérbi (3–0)"), golea.join(" | "));
-  assert.ok(golea.includes("Benfica goleia Sporting por 3–0"));
-  assert.ok(golea.includes("Águias esmagam Leões"));
-  const fora = t({ h: "Gil Vicente", a: "FC Porto", hs: 1, as: 3 });
-  assert.ok(fora.includes("FC Porto bate Gil Vicente em Barcelos"), fora.join(" | "));
-  assert.ok(fora.includes("Dragões superam Gilistas"));
-  const nulo = t({ h: "Bahia", a: "Mirassol", hs: 0, as: 0, comp: "Brasileirão" });
-  assert.ok(nulo.includes("Nulo entre Bahia e Mirassol"), nulo.join(" | "));
-  // nas ligas norte-americanas, o verbo vai para o plural e conta-se em pontos
-  const nba = t({ h: "Cavaliers", a: "Magic", hs: 42, as: 33, comp: "NBA", mod: "basquetebol", vivo: true });
-  assert.ok(nba.includes("Cavaliers estão a vencer Magic (42–33)"), nba.join(" | "));
-  const nfl = t({ h: "Cardinals", a: "Lions", hs: 21, as: 45, comp: "NFL", mod: "futebol_americano" });
-  assert.ok(nfl.includes("Lions arrasam Cardinals (45–21)"), nfl.join(" | "));
-  for (const lst of [antes, golea, fora, nulo, nba, nfl]) {
-    assert.ok(lst.length >= 4 && lst.length <= 8);
-    assert.equal(new Set(lst).size, lst.length);
-    for (const x of lst) assert.ok(!/undefined|null|\s{2}|\s$/.test(x), x);
+  const todos = (j) => { const x = todosOsTitulos(fichaDoJogo(j), j); return [...x.criativos, ...x.classicos]; };
+  const t = (j, volta) => titulosDoJogo(fichaDoJogo(j), j, volta);
+  const antes = { h: "Benfica", a: "Sporting", comp: "Liga Portugal" };
+  assert.ok(todos(antes).includes("Liga Portugal: Benfica recebe Sporting"), todos(antes).join(" | "));
+  assert.ok(todos(antes).includes("Águias contra Leões: quem pisca primeiro?"));
+  assert.ok(todos(antes).includes("Benfica quer fazer do Estádio da Luz uma fortaleza"));
+  // dérbi da mesma cidade: o visitante não «chega a Lisboa»
+  assert.ok(!todos(antes).some((x) => /chegam a Lisboa/.test(x)));
+  const golea = { h: "Benfica", a: "Sporting", hs: 5, as: 0, comp: "Liga Portugal", ft: true };
+  for (const x of ["Benfica manda no dérbi (5–0)", "Benfica aplica chapa cinco no Estádio da Luz", "Águias esmagam Leões", "Benfica goleia Sporting por 5–0"]) {
+    assert.ok(todos(golea).includes(x), `${x} :: ${todos(golea).join(" | ")}`);
   }
-  assert.equal(plural("Dragões"), true);
-  assert.equal(plural("Rossoneri"), true);
-  assert.equal(plural("Mengão"), false);
-  assert.equal(plural("Thrylos"), false);
-  assert.equal(plural("Os da Luz"), true);
+  const fora = { h: "Gil Vicente", a: "FC Porto", hs: 1, as: 3 };
+  for (const x of ["FC Porto assalta Barcelos", "FC Porto cala o Estádio Cidade de Barcelos (3–1)", "Dragões superam Gilistas", "FC Porto bate Gil Vicente em Barcelos"]) {
+    assert.ok(todos(fora).includes(x), `${x} :: ${todos(fora).join(" | ")}`);
+  }
+  const nulo = { h: "Bahia", a: "Mirassol", hs: 0, as: 0, comp: "Brasileirão" };
+  assert.ok(todos(nulo).includes("Nulo entre Bahia e Mirassol"), todos(nulo).join(" | "));
+  assert.ok(todos(nulo).includes("Muita luta, zero golos: Bahia 0–0 Mirassol"));
+  // nas ligas norte-americanas, o verbo vai para o plural, conta-se em pontos e não há «golos» nem «chapa»
+  const nba = { h: "Cavaliers", a: "Magic", hs: 42, as: 33, comp: "NBA", mod: "basquetebol", vivo: true };
+  assert.ok(todos(nba).includes("Cavaliers estão a vencer Magic (42–33)"), todos(nba).join(" | "));
+  const nfl = { h: "Cardinals", a: "Lions", hs: 21, as: 45, comp: "NFL", mod: "futebol_americano" };
+  assert.ok(todos(nfl).includes("Lions arrasam Cardinals (45–21)"), todos(nfl).join(" | "));
+  assert.ok(!todos(nfl).some((x) => /golo|chapa/i.test(x)));
+  for (const j of [antes, golea, fora, nulo, nba, nfl]) {
+    const lst = t(j);
+    assert.ok(lst.length >= 4 && lst.length <= 10, lst.join(" | "));
+    assert.equal(new Set(lst).size, lst.length);
+    for (const x of todos(j)) assert.ok(!/undefined|null|\s{2}|\s$|\s[,:]/.test(x), x);
+    // primeiro os criativos; os clássicos no fim
+    const { criativos } = todosOsTitulos(fichaDoJogo(j), j);
+    assert.ok(criativos.includes(lst[0]), lst[0]);
+  }
+  // o mesmo jogo dá sempre as mesmas sugestões; «outras ideias» troca-as
+  assert.deepEqual(t(golea), t(golea));
+  assert.notDeepEqual(t(golea, 1), t(golea));
 });

@@ -220,14 +220,15 @@ function PrepararJogo({ jogos, jogo, setJogo, dados }) {
 
 // as sugestões de títulos para o jogo escolhido (cada uma copia-se com um toque)
 function Titulos({ ficha, jogo }) {
-  const titulos = useMemo(() => titulosDoJogo(ficha, jogo), [ficha, jogo]);
+  const [volta, setVolta] = useState(0);
+  const titulos = useMemo(() => titulosDoJogo(ficha, jogo, volta), [ficha, jogo, volta]);
   const [copiado, setCopiado] = useState(null);
   if (!titulos.length) return null;
   const copiar = (t) => navigator.clipboard?.writeText(t).then(() => { setCopiado(t); setTimeout(() => setCopiado(null), 1500); }).catch(() => {});
   const estado = jogo.hs == null ? "antes do jogo" : jogo.vivo ? "durante o jogo" : "depois do jogo";
   return (
     <div className="gfcard gflarga gtits">
-      <p className="gmod">Sugestões de títulos ({estado})</p>
+      <p className="gmod gtitcab">Sugestões de títulos ({estado}) <button className="textbtn" onClick={() => setVolta((x) => x + 1)}>Outras ideias</button></p>
       <ul className="gtitulos">
         {titulos.map((t) => (
           <li key={t}>
@@ -678,6 +679,8 @@ const GLOS_CSS = `
 .apito .gtitulos li{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
 .apito .gtit{font-family:var(--display);font-weight:600;font-size:15px;line-height:1.25}
 .apito .gtitulos .textbtn{flex:none;font-size:12.5px}
+.apito .gtitcab{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.apito .gtitcab .textbtn{font-size:12.5px;text-transform:none;letter-spacing:0}
 .apito .gmao .gres-in{flex:0 1 150px}
 .apito .gjogo-acoes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
 .apito .gmao{margin-top:8px;justify-content:center}

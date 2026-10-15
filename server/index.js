@@ -307,6 +307,10 @@ const videos = createVideos({
   emblemas: teams,
 });
 
+// depois de uma atualização do site a pasta data/ vem vazia: os resultados e o «Nesta semana» voltam da última
+// cópia (server/copia.js), antes de os módulos que os leem arrancarem
+const copiaReposta = await restaurar({ log });
+
 // Capas dos jornais desportivos do dia e da última semana (página de jornais de desporto do SAPO)
 const capas = createCapas({ log, broadcast: (e, d) => broadcast(e, d) });
 
@@ -319,8 +323,6 @@ const oficiais = createOficiais({ log, broadcast: (e, d) => broadcast(e, d), con
 
 // Resultados de Portugal: todos os campeonatos seniores (nacionais e distritais), jornadas, tabelas ao vivo e
 // tempo real pelos stories dos clubes (server/pt/)
-// depois de uma atualização do site a pasta data/ vem vazia: os resultados voltam da última cópia (server/copia.js)
-const copiaReposta = await restaurar({ log });
 const portugal = createPortugal({ log, broadcast: (e, d) => broadcast(e, d), ligas: LIGAS, noticiasDistritais: (org) => oficiais.daAssociacao(org) });
 
 const app = express();
