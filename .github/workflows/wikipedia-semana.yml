@@ -1,10 +1,11 @@
 # «Nesta semana»: a Wikipédia «Neste dia» da semana (seis línguas) lida aqui — as GitHub Actions chegam à Wikipédia e o
-# servidor do site, no Northflank, não chega — e enviada ao site de hora a hora, com um token OIDC do GitHub que o
-# servidor confirma (não há chaves a configurar). O repositório é público: os minutos são grátis.
+# servidor do site, no Northflank, não chega — e enviada ao site com um token OIDC do GitHub que o servidor confirma (não
+# há chaves a configurar). Corre de 10 em 10 minutos, para repor depressa o que se perde quando o site reinicia, mas só lê
+# a Wikipédia quando o site ainda não tem a semana com menos de 6 horas. O repositório é público: os minutos são grátis.
 name: wikipedia-semana
 on:
   schedule:
-    - cron: "23 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch:
   push:
     branches: [main]

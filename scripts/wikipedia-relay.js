@@ -13,6 +13,16 @@ async function token() {
 }
 
 const sem = semanaLisboa();
+// o site já tem a Wikipédia desta semana, recente: não há nada a fazer (o workflow corre de 10 em 10 minutos para
+// repor depressa o que se perde quando o site reinicia, e assim quase todas as execuções acabam aqui)
+try {
+  const e = await (await fetch(`${SITE}/api/efemerides/estado`, { signal: AbortSignal.timeout(30000) })).json();
+  const w = e.wikiGitHub;
+  if (w?.semana === sem.id && Date.now() - w.at < 6 * 3600e3 && Object.values(w.contagem || {}).some((n) => n > 0)) {
+    console.log(`o site já tem a semana ${sem.id} (enviada há ${Math.round((Date.now() - w.at) / 60000)} min): nada a fazer`);
+    process.exit(0);
+  }
+} catch (err) { console.log(`estado do site: ${err.message} (envio na mesma)`); }
 const t0 = Date.now();
 const { semana, wiki, erros } = await wikipediaDaSemana(sem);
 console.log(`semana ${semana}: ${LINGUAS.map((l) => `${l} ${wiki[l].length}`).join(" · ")} em ${Math.round((Date.now() - t0) / 1000)} s`);
