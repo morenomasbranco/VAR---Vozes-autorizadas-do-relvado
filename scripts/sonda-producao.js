@@ -249,7 +249,8 @@ try {
 try {
   const e = await j("/api/efemerides/estado");
   linha(`== Nesta semana: estado == semana ${e.semana} · revisto ${e.at ? `há ${Math.round((Date.now() - e.at) / 60000)} min` : "nunca"}${e.emCurso ? ` · a construir há ${Math.round((Date.now() - e.emCurso) / 60000)} min` : ""} · contagem ${JSON.stringify(e.contagem)} · erros ${JSON.stringify(e.erros).slice(0, 1500)}`);
-  linha(`   pesquisa na web: ${JSON.stringify(e.claude || null).slice(0, 1500)}`);
+  linha(`   pesquisa na web: ${JSON.stringify(e.claude || null).slice(0, 3000)}`);
+  linha(`   Wikipédia pelo GitHub: ${JSON.stringify(e.wikiGitHub || null)}`);
   const d = await j("/api/efemerides?lang=pt");
   const porTipo = {}, porDia = {};
   for (const x of d.itens || []) { porTipo[x.tipo] = (porTipo[x.tipo] || 0) + 1; porDia[x.dia] = (porDia[x.dia] || 0) + 1; }

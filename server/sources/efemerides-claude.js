@@ -200,6 +200,10 @@ const GROQ_CANDIDATOS = () => [
 ].filter((c, i, a) => a.findIndex((x) => x.modelo === c.modelo) === i);
 let groqEscolhido = null;
 let groqModelos = { ts: 0, ids: null };
+// o que se sabe do Groq, para /api/efemerides/estado: os modelos da conta e as últimas tentativas (modelo, resposta, tempo)
+const estadoGroq = { modelos: null, escolhido: null, tentativas: [] };
+const tentativaGroq = (x) => { estadoGroq.tentativas.unshift({ ts: Date.now(), ...x }); estadoGroq.tentativas.length = Math.min(estadoGroq.tentativas.length, 12); };
+const PRAZO_GROQ = (Number(process.env.EFEMERIDES_GROQ_PRAZO_S) || 120) * 1000;
 const cabGroq = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` });
 async function modelosGroq() {
   if (Date.now() - groqModelos.ts < 3600e3) return groqModelos.ids;
@@ -209,6 +213,7 @@ async function modelosGroq() {
     if (r.ok) ids = new Set(((await r.json()).data || []).map((m) => m.id));
   } catch { /* fica por saber: experimentam-se todos */ }
   groqModelos = { ts: Date.now(), ids };
+  estadoGroq.modelos = ids ? [...ids].slice(0, 40) : null;
   return ids;
 }
 export async function pesquisarDiaGroq({ ano, mes, dia }, anos) {
@@ -218,26 +223,40 @@ export async function pesquisarDiaGroq({ ano, mes, dia }, anos) {
   if (!candidatos.length) throw new Error(`nenhum modelo do Groq com pesquisa na web nesta conta (há: ${[...(ids || [])].slice(0, 12).join(", ")})`);
   let ultimo = null;
   for (const c of candidatos) {
-    const res = await fetch(`${GROQ_API}/chat/completions`, {
-      method: "POST",
-      headers: cabGroq(),
-      body: JSON.stringify({
-        model: c.modelo,
-        messages: [
-          { role: "system", content: SISTEMA_GEMINI },
-          { role: "user", content: `Data: ${dia} de ${MESES[mes - 1]}.\nAnos: ${lista}.\n\nQue acontecimentos desportivos, portugueses e internacionais, marcaram o dia ${dia} de ${MESES[mes - 1]} em cada um destes anos? Pesquisa na web para confirmar cada um.` },
-        ],
-        temperature: 0.3,
-        ...(c.pesquisa ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
-      }),
-      signal: AbortSignal.timeout(5 * 60e3),
-    });
+    const t0 = Date.now();
+    let res;
+    try {
+      res = await fetch(`${GROQ_API}/chat/completions`, {
+        method: "POST",
+        headers: cabGroq(),
+        body: JSON.stringify({
+          model: c.modelo,
+          messages: [
+            { role: "system", content: SISTEMA_GEMINI },
+            { role: "user", content: `Data: ${dia} de ${MESES[mes - 1]}.\nAnos: ${lista}.\n\nQue acontecimentos desportivos, portugueses e internacionais, marcaram o dia ${dia} de ${MESES[mes - 1]} em cada um destes anos? Pesquisa na web para confirmar cada um.` },
+          ],
+          temperature: 0.3,
+          ...(c.pesquisa ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
+        }),
+        signal: AbortSignal.timeout(PRAZO_GROQ),
+      });
+    } catch (e) {
+      // sem resposta dentro do prazo (ou ligação falhada): experimenta-se o modelo seguinte
+      tentativaGroq({ modelo: c.modelo, erro: e.message, ms: Date.now() - t0 });
+      ultimo = e;
+      groqEscolhido = null;
+      continue;
+    }
     if (res.ok) {
+      tentativaGroq({ modelo: c.modelo, status: res.status, ms: Date.now() - t0 });
       groqEscolhido = c;
+      estadoGroq.escolhido = c.modelo;
       const j = await res.json();
       return lerJsonGemini(j.choices?.[0]?.message?.content || "");
     }
-    const e = new Error(`Groq (${c.modelo}) respondeu ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const texto = (await res.text()).slice(0, 300);
+    tentativaGroq({ modelo: c.modelo, status: res.status, ms: Date.now() - t0, erro: texto.slice(0, 200) });
+    const e = new Error(`Groq (${c.modelo}) respondeu ${res.status}: ${texto}`);
     e.status = res.status;
     // modelo que esta conta não tem, ou que não aceita a ferramenta de pesquisa: experimenta-se o seguinte
     if (res.status === 404 || (res.status === 400 && /model|tool|browser_search/i.test(e.message))) { ultimo = e; groqEscolhido = null; continue; }
@@ -253,6 +272,7 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
   try { dados = JSON.parse(fs.readFileSync(FICHEIRO, "utf8")); } catch { dados = {}; }
   const motores = motoresDisponiveis();
   const estado = { ativo: motores.length > 0, motor: motores[0] || null, motores, modelo: motores[0] ? MODELO_DE[motores[0]]() : null, dias: {}, erros: {}, pausas: {} };
+  if (motores.includes("groq")) estado.groq = estadoGroq;
   if (!motores.length) log("[Nesta semana] sem GEMINI_API_KEY, GROQ_API_KEY nem ANTHROPIC_API_KEY: a pesquisa na web de cada dia está desligada");
   else log(`[Nesta semana] pesquisa na web de cada dia: ${motores.map((m) => `${NOME[m]} (${MODELO_DE[m]()})`).join(", depois ")}`);
   let aCorrer = false;
@@ -358,4 +378,4 @@ export function createEfemeridesClaude({ log = () => {} } = {}) {
   return { semana, itens, estado: () => estado };
 }
 
-export const _groqTeste = { limpar: () => { groqEscolhido = null; groqModelos = { ts: 0, ids: null }; } };
+export const _groqTeste = { limpar: () => { groqEscolhido = null; groqModelos = { ts: 0, ids: null }; estadoGroq.tentativas.length = 0; }, estado: () => estadoGroq };
