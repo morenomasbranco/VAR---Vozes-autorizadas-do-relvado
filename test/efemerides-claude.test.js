@@ -168,7 +168,7 @@ test("Nesta semana pelo Groq: usa o modelo com pesquisa na web que a conta tiver
   process.env.GROQ_API_KEY = "groq-gratis";
   const { pesquisarDiaGroq, _groqTeste } = await import("../server/sources/efemerides-claude.js");
   const original = globalThis.fetch;
-  const resposta = { ok: true, json: async () => ({ choices: [{ message: { content: '{"acontecimentos":[{"ano":2016,"ambito":"portugal","modalidade":"futebol","titulo":"Golo histórico","descricao":"…","fonte":"https://a.pt","importancia":"alta"}]}' } }] }) };
+  const resposta = { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"acontecimentos":[{"ano":2016,"ambito":"portugal","modalidade":"futebol","titulo":"Golo histórico","descricao":"…","fonte":"https://a.pt","importancia":"alta"}]}' } }] }) };
   try {
     // 1) a lista de modelos da conta só tem o gpt-oss-120b: vai com a ferramenta browser_search
     _groqTeste.limpar();
