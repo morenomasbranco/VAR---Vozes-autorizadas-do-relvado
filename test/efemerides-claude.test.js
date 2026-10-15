@@ -76,3 +76,44 @@ test("Nesta semana pelo Gemini: a quota esgotada (429) pára a pesquisa em vez d
     assert.equal(pedidos, 1);
   } finally { globalThis.fetch = original; delete process.env.EFEMERIDES_MOTOR; }
 });
+
+test("Nesta semana: com o Gemini sem quota (429), o mesmo dia passa ao Groq, que pesquisa na web", async () => {
+  process.env.GEMINI_API_KEY = "gratis";
+  process.env.GROQ_API_KEY = "groq-gratis";
+  process.env.EFEMERIDES_MOTOR = "gemini";
+  const { createEfemeridesClaude, motoresDisponiveis } = await import("../server/sources/efemerides-claude.js");
+  const { default: fs } = await import("node:fs");
+  const ficheiro = new URL("../data/efemerides-claude.json", import.meta.url);
+  const existia = fs.existsSync(ficheiro);
+  const antes = existia ? fs.readFileSync(ficheiro) : null;
+  const original = globalThis.fetch;
+  const pedidos = [];
+  globalThis.fetch = async (url, op) => {
+    pedidos.push({ url, corpo: JSON.parse(op.body), headers: op.headers });
+    if (/generativelanguage/.test(url)) return { ok: false, status: 429, text: async () => "You exceeded your current quota" };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '{"acontecimentos":[{"ano":2016,"ambito":"portugal","modalidade":"futebol","titulo":"Portugal campeão","descricao":"…","fonte":"https://exemplo.pt","importancia":"alta"}]}' } }] }) };
+  };
+  try {
+    assert.deepEqual(motoresDisponiveis(), ["gemini", "groq"]);
+    const cl = createEfemeridesClaude();
+    const dias = [12, 13].map((d) => ({ iso: `2026-10-${d}`, ano: 2026, mes: 10, dia: d }));
+    await cl.semana({ dias, hoje: "2026-10-12" }, () => [2016]);
+    // o Gemini só levou um pedido (fica em pausa); os dois dias foram pelo Groq
+    assert.equal(pedidos.filter((p) => /generativelanguage/.test(p.url)).length, 1);
+    const groq = pedidos.filter((p) => /api\.groq\.com\/openai\/v1\/chat\/completions$/.test(p.url));
+    assert.equal(groq.length, 2);
+    assert.equal(groq[0].corpo.model, "groq/compound");
+    assert.equal(groq[0].headers.Authorization, "Bearer groq-gratis");
+    assert.match(groq[0].corpo.messages[0].content, /APENAS com um objeto JSON/);
+    const itens = cl.itens({ dias, hoje: "2026-10-12" });
+    assert.equal(itens.length, 2);
+    assert.equal(itens[0].motor, "groq");
+    assert.equal(itens[0].texto, "Portugal campeão — …");
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.EFEMERIDES_MOTOR;
+    delete process.env.GROQ_API_KEY;
+    // o que este teste gravou não fica para os outros (os testes correm ao mesmo tempo e leem a mesma pasta data/)
+    if (existia) fs.writeFileSync(ficheiro, antes); else fs.rmSync(ficheiro, { force: true });
+  }
+});

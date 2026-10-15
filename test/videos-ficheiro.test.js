@@ -62,6 +62,55 @@ test("vídeos grandes do Telegram: o intervalo pedido pelo leitor e o envio aos 
   assert.ok(b.corpo.equals(ficheiro));
 });
 
+test("vídeos grandes do Telegram: os pedaços ficam guardados, o início e o fim vêm antes do play, e o leitor que desiste pára o download", async () => {
+  const { enviarVideoTelegram, aquecerVideoTelegram, _tgTeste } = await import("../server/tgvideo.js");
+  _tgTeste.limpar();
+  const PEDACO = 512 * 1024;
+  const tamanho = 5 * PEDACO + 1000;
+  const ficheiro = Buffer.alloc(tamanho, 0).map((_, i) => (i * 7) % 253);
+  const pedidos = [];
+  const cliente = {
+    getMessages: async () => [{ media: { document: { size: tamanho, mimeType: "video/mp4", dcId: 2 } } }],
+    async *iterDownload({ offset, requestSize, limit }) {
+      pedidos.push({ offset: Number(offset), limit });
+      for (let i = 0, p = Number(offset); i < limit && p < tamanho; i++, p += requestSize) yield ficheiro.subarray(p, p + requestSize);
+    },
+  };
+  const pedir = async (range, { fecharDepois = Infinity } = {}) => {
+    const partes = [];
+    const ouvintes = {};
+    const res = {
+      statusCode: 0, headersSent: false, status(c) { this.statusCode = c; return this; }, setHeader() {}, json() {}, end() {},
+      on: (e, f) => { ouvintes[e] = f; }, once() {},
+      write: (b) => { partes.push(Buffer.from(b)); if (partes.length >= fecharDepois) ouvintes.close?.(); return true; },
+    };
+    await enviarVideoTelegram(cliente, "c", "9", { headers: { range }, on() {} }, res);
+    return Buffer.concat(partes);
+  };
+
+  // aquecer: o início (1 MB) e o fim do ficheiro ficam guardados antes de alguém carregar no play
+  aquecerVideoTelegram(cliente, "c", "9");
+  for (let i = 0; i < 50 && _tgTeste.emCache("c/9").length < 4; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(_tgTeste.emCache("c/9").map((k) => Number(k.split(":")[1])).sort((a, b) => a - b), [0, PEDACO, 4 * PEDACO, 5 * PEDACO]);
+  const feitos = pedidos.length;
+  // o início e o fim já não vão ao Telegram
+  assert.ok((await pedir("bytes=0-1000")).equals(ficheiro.subarray(0, 1001)));
+  assert.ok((await pedir(`bytes=${tamanho - 2000}-`)).equals(ficheiro.subarray(tamanho - 2000)));
+  assert.equal(pedidos.length, feitos);
+  // o meio vem do Telegram (só os pedaços que faltam) e fica guardado para a vez seguinte
+  assert.ok((await pedir(`bytes=${PEDACO}-${4 * PEDACO + 10}`)).equals(ficheiro.subarray(PEDACO, 4 * PEDACO + 11)));
+  assert.deepEqual(pedidos.slice(feitos), [{ offset: 2 * PEDACO, limit: 2 }]);
+  assert.ok((await pedir("bytes=0-")).equals(ficheiro));
+  assert.equal(pedidos.length, feitos + 1);
+
+  // o leitor fecha a ligação a meio: o servidor não continua a descarregar o resto
+  _tgTeste.limpar();
+  pedidos.length = 0;
+  const parcial = await pedir("bytes=0-", { fecharDepois: 1 });
+  assert.equal(parcial.length, PEDACO);
+  assert.equal(_tgTeste.emCache("c/9").length, 1);
+});
+
 test("Sport TV: o manifesto da Kaltura que vem na página é o do próprio vídeo", async () => {
   const { manifestoNaPagina } = await import("../server/sources/sporttv.js");
   const pagina = `<a href="x"><img src="https://cdnapisec.kaltura.com/p/3064643/sp/306464300/playManifest/entryId/1_outro000/a.m3u8"></a>

@@ -1,0 +1,30 @@
+# «Nesta semana»: a Wikipédia «Neste dia» da semana (seis línguas) lida aqui — as GitHub Actions chegam à Wikipédia e o
+# servidor do site, no Northflank, não chega — e enviada ao site de hora a hora, com um token OIDC do GitHub que o
+# servidor confirma (não há chaves a configurar). O repositório é público: os minutos são grátis.
+name: wikipedia-semana
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/wikipedia-semana.yml", "scripts/wikipedia-relay.js", "server/sources/efemerides.js"]
+concurrency:
+  group: wikipedia-semana
+  cancel-in-progress: false
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  ler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: ler a Wikipédia da semana e enviar ao site
+        env:
+          SITE: https://p01--var--tdhb8zl9kmy6.code.run
+        run: node scripts/wikipedia-relay.js
