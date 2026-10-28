@@ -2168,15 +2168,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colunas, minuto, lang]);
   const dataHoje = (([p, ...r]) => p.toUpperCase() + r.join(""))(new Date(now).toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Lisbon" }));
-  // a manchete escolhida no «Hoje no VAR» (por omissão, a mais recente) e as imagens que não carregaram (fica o título
-  // sobre a cor); as imagens das cinco manchetes começam logo a carregar, para a troca ser imediata
+  // a manchete escolhida no «Hoje no VAR» (por omissão, a mais recente) e as imagens que não carregaram; as imagens
+  // das cinco manchetes começam logo a carregar, para a troca ser imediata. O servidor manda o browser buscar cada
+  // imagem ao site dela (sem «Referer», como as ligações para fora); se não abrir, pede-se ao servidor que a sirva ele
+  // (?servidor=1), e só depois fica o título sobre a cor
   const [mSel, setMSel] = useState(null);
-  const [imgFalhou, setImgFalhou] = useState(() => new Set());
-  const imagemDe = (id) => `${API}/api/noticias/imagem/${encodeURIComponent(id)}`;
+  const [imgFalhou, setImgFalhou] = useState(() => new Map()); // id → tentativas falhadas
+  const imagemDe = (id, servidor) => `${API}/api/noticias/imagem/${encodeURIComponent(id)}${servidor ? "?servidor=1" : ""}`;
   const idsManchetes = manchetes.map((m) => m.it.id).join("|");
   useEffect(() => {
     if (section !== "destaque") return;
-    for (const m of manchetes) { const im = new Image(); im.src = imagemDe(m.it.id); }
+    for (const m of manchetes) { const im = new Image(); im.referrerPolicy = "no-referrer"; im.src = imagemDe(m.it.id); }
   }, [idsManchetes, section]); // eslint-disable-line react-hooks/exhaustive-deps
   // o vídeo é de um jogo que está a decorrer?
   const doJogoAoVivo = (v) => !!v.teams && aoVivo.some(({ score: sc }) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)));
@@ -2722,7 +2724,8 @@ export default function App() {
                   // a imagem grande é a da manchete escolhida; sem escolha, a da mais recente
                   const recente = manchetes.reduce((x, y) => (y.it.ts > x.it.ts ? y : x));
                   const sel = manchetes.find((m) => m.it.id === mSel) || recente;
-                  const semImg = imgFalhou.has(sel.it.id);
+                  const falhas = imgFalhou.get(sel.it.id) || 0;
+                  const semImg = falhas >= 2;
                   return (
                     <section className="hoje" aria-label="Hoje no VAR">
                       <div className="hojecab">
@@ -2731,7 +2734,7 @@ export default function App() {
                       </div>
                       <div className="hojegrid">
                         <div className={`hojefoto ${semImg ? "sem" : ""}`}>
-                          {!semImg && <img key={sel.it.id} className="hojefoto-img" src={imagemDe(sel.it.id)} alt="" onError={() => setImgFalhou((x) => new Set(x).add(sel.it.id))} />}
+                          {!semImg && <img key={`${sel.it.id}:${falhas}`} className="hojefoto-img" src={imagemDe(sel.it.id, falhas === 1)} alt="" referrerPolicy="no-referrer" onError={() => setImgFalhou((x) => new Map(x).set(sel.it.id, falhas + 1))} />}
                           <span className="hojefoto-txt">
                             <span className="vheroeti">{sel === recente ? "A manchete mais recente" : `Manchete ${manchetes.indexOf(sel) + 1}`}</span>
                             <span className="hojefoto-tit"><Rich text={T(sel.it)} /></span>

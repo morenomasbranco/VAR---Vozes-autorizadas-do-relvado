@@ -3,6 +3,7 @@ import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
 import { BACKFILL_MS } from "../util.js";
+import { temFoto } from "../imagens.js";
 
 const X_STATUS = /^https?:\/\/(www\.)?(x|twitter)\.com\/\w+\/status\/\d+/i;
 
@@ -43,6 +44,8 @@ export async function startTelegram(sources, onPost, log) {
       text: text.slice(0, 1500),
       lang: s.lang,
       ts,
+      // com fotografia (a do post ou a da pré-visualização da ligação), fica a referência para o «Hoje no VAR»
+      img: temFoto(m) ? `tg:${s.canal}/${m.id}` : undefined,
     });
   };
 
