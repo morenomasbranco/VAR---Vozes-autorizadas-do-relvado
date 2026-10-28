@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createPortugal, naJanela } from "../server/pt/index.js";
+import { createPortugal, naJanela, eEquipa } from "../server/pt/index.js";
 
 // express mínimo (como no pt-api.test.js): guarda as rotas e chama-as com pedidos e respostas falsos
 function falsoApp() {
@@ -83,4 +83,19 @@ test("curiosidades: a posição, a forma e os jogos desta época entre as duas e
   assert.equal(info.linhas.fora.pts, 3);
   assert.deepEqual(info.entre, [{ casa: "UD Polvoreira", fora: "SC Ucha", hs: 2, as: 0, inicio: info.entre[0].inicio }]);
   assert.equal(pt.infoJogo("Equipa Inexistente", "Outra"), null);
+});
+
+test("distritais: datas e cabeçalhos lidos como equipas não são equipas, e um adiamento sem data não vira acontecimento", () => {
+  for (const n of ["25 out", "9 set", "Jogos", "(Interrompido)", "12:30", "x"]) assert.equal(eEquipa(n), false, n);
+  for (const n of ["Técnico FC", "SC Beira-Mar \"B\"", "1º Dezembro", "A.C. Cucujães \"Sub/23\""]) assert.equal(eEquipa(n), true, n);
+  const pt = createPortugal({ log: () => {} });
+  const { app, chamar } = falsoApp();
+  pt.rotas(app, { json: () => null });
+  const comp = pt._upsertComp("fpf-adiado", { org: "af-aveiro", nome: "Taça Pecol", mod: "futebol", fem: false, sub23: false, tipo: "taca", nivel: "distrital", fonte: "fpf", lidoEm: Date.now() });
+  const serie = pt._serieDe(comp, "unica", "");
+  // o jogo mal lido (sem data, com uma data no lugar da equipa) e um jogo bom mas sem data, os dois «adiados»
+  const mau = pt._registarJogo(comp, serie, 1, { fpfId: "a1", casa: "Romariz FC", fora: "4 out", estado: "adiado" }, "fpf");
+  const semData = pt._registarJogo(comp, serie, 1, { fpfId: "a2", casa: "Canedo FC", fora: "AA Avanca", estado: "adiado" }, "fpf");
+  const ev = chamar("/api/pt/eventos").json;
+  assert.ok(!ev.some((e) => e.pt?.jogo === mau.id || e.pt?.jogo === semData.id));
 });

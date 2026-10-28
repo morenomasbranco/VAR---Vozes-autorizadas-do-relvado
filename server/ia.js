@@ -1,6 +1,7 @@
 // Os modelos de linguagem que o site usa fora do «Neste dia» (Glossário › Declarações e as curiosidades dos jogos): o
 // Groq e o Gemini (gratuitos) e o Claude, os que tiverem chave. Experimenta-se um de cada vez, pela ordem de
-// IA_MOTORES (por omissão groq, gemini, claude); um que responda 429 (sem quota) fica de parte uma hora.
+// IA_MOTORES (por omissão groq, gemini, claude). O Gemini ou o Claude sem quota (429) ficam de parte uma hora; no Groq,
+// cada modelo fica de parte o tempo que o próprio Groq indicar.
 // O JSON vem no texto da resposta (nem todos os modelos gratuitos o dão de outra maneira), e lê-se com tolerância.
 const GROQ_API = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").replace(/\/$/, "");
 const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
@@ -50,22 +51,38 @@ const erro = async (quem, res) => {
   return e;
 };
 
+// O raciocínio antes da resposta conta para a quota e demora: numa tarefa simples (a tradução), o mínimo. Nos
+// gpt-oss, reasoning_effort «low»; no qwen, «none» desliga-o (o qwen pensava 20 a 50 segundos em cada lote de títulos)
+const semRaciocinio = new Set(); // modelos que recusaram a opção
+function raciocinio(modelo, esforco) {
+  if (!esforco || semRaciocinio.has(modelo)) return {};
+  if (/gpt-oss/.test(modelo)) return { reasoning_effort: esforco === "none" ? "low" : esforco };
+  if (/qwen/.test(modelo) && (esforco === "low" || esforco === "none")) return { reasoning_effort: "none" };
+  return {};
+}
+
 async function groq({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco }) {
   const cab = { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` };
   const candidatos = pesquisa ? GROQ_PESQUISA() : (modelosGroq || GROQ_TEXTO()).map((modelo) => ({ modelo }));
   let ultimo = null;
-  for (const c of candidatos) {
+  for (let i = 0; i < candidatos.length; i++) {
+    const c = candidatos[i];
     if (pausaModelo[c.modelo] > Date.now()) { ultimo ||= Object.assign(new Error(`Groq (${c.modelo}) sem quota até ${new Date(pausaModelo[c.modelo]).toISOString()}`), { status: 429 }); continue; }
+    const pensar = raciocinio(c.modelo, esforco);
     const res = await fetch(`${GROQ_API}/chat/completions`, {
       method: "POST", headers: cab, signal: AbortSignal.timeout(PRAZO),
       body: JSON.stringify({
         model: c.modelo, temperature: temperatura,
         messages: [{ role: "system", content: sistema }, { role: "user", content: pedido }],
         ...(c.ferramenta ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
-        // os gpt-oss pensam antes de responder, e o raciocínio conta para a quota: numa tarefa simples, pouco
-        ...(esforco && /gpt-oss/.test(c.modelo) ? { reasoning_effort: esforco } : {}),
+        ...pensar,
       }),
     });
+    // um modelo que não aceita a opção do raciocínio: fica a saber-se e repete-se o pedido sem ela
+    if (res.status === 400 && Object.keys(pensar).length) {
+      const t = await res.clone().text().catch(() => "");
+      if (/reasoning/i.test(t)) { semRaciocinio.add(c.modelo); i--; continue; }
+    }
     if (res.ok) {
       const j = await res.json();
       return { texto: j.choices?.[0]?.message?.content || "", modelo: c.modelo, tokens: j.usage?.total_tokens ?? null };
@@ -134,7 +151,8 @@ export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura =
       registar({ uso, motor: m, modelo: r.modelo, ms: Date.now() - t0, tokens: r.tokens ?? undefined });
       return { json, motor: NOME[m], modelo: r.modelo, tokens: r.tokens ?? null };
     } catch (e) {
-      if (e.status === 429) pausa[chavePausa(m)] = Date.now() + PAUSA_429;
+      // (no Groq, cada modelo fica de parte o tempo que o Groq diz — às vezes são segundos, um limite por minuto)
+      if (e.status === 429 && m !== "groq") pausa[chavePausa(m)] = Date.now() + PAUSA_429;
       const msg = `${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`;
       registar({ uso, motor: m, erro: msg.slice(0, 200), ms: Date.now() - t0 });
       erros.push({ quota: e.status === 429, texto: `${NOME[m]}: ${msg.slice(0, 160)}` });
@@ -176,4 +194,4 @@ export const estadoIA = () => ({
   ultimos,
 });
 
-export const _iaTeste = { limpar: () => { for (const k of Object.keys(pausa)) delete pausa[k]; for (const k of Object.keys(pausaModelo)) delete pausaModelo[k]; } };
+export const _iaTeste = { limpar: () => { for (const k of Object.keys(pausa)) delete pausa[k]; for (const k of Object.keys(pausaModelo)) delete pausaModelo[k]; semRaciocinio.clear(); } };

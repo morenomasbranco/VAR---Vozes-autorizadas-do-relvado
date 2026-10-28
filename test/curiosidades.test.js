@@ -32,6 +32,37 @@ test("curiosidades (ESPN): historial, último encontro, maior diferença, forma,
   assert.deepEqual(curiosidadesEspn({}, { casa: "A", fora: "B" }), []);
 });
 
+// o formato que a ESPN dá hoje (visto pela sonda): lastFiveGames, seasonseries e a classificação com a equipa em texto
+const d = (dia) => `2026-10-${String(dia).padStart(2, "0")}T18:00Z`;
+const RESUMO_ATUAL = {
+  header: { id: "777", competitions: [{ competitors: [{ homeAway: "home", team: { id: "21581" } }, { homeAway: "away", team: { id: "2250" } }] }] },
+  lastFiveGames: [
+    { team: { id: "21581" }, events: [{ gameResult: "L", gameDate: d(20) }, { gameResult: "W", gameDate: d(25) }, { gameResult: "L", gameDate: d(13) }] },
+    // fora de ordem de propósito: a forma ordena-se pela data
+    { team: { id: "2250" }, events: [{ gameResult: "D", gameDate: d(5) }, { gameResult: "W", gameDate: d(26) }, { gameResult: "W", gameDate: d(19) }, { gameResult: "W", gameDate: d(12) }, { gameResult: "W", gameDate: d(1) }] },
+  ],
+  seasonseries: [{ events: [
+    { id: "555", date: "2026-08-10T18:00Z", statusType: { completed: true }, competitors: [{ homeAway: "home", team: { id: "2250" }, score: "3" }, { homeAway: "away", team: { id: "21581" }, score: "0" }] },
+    { id: "777", date: "2026-10-28T20:00Z", statusType: { completed: false }, competitors: [{ homeAway: "home", team: { id: "21581" } }, { homeAway: "away", team: { id: "2250" } }] },
+  ] }],
+  standings: { groups: [{ standings: { entries: [
+    { team: "Sporting CP", id: "2250", stats: [{ name: "rank", value: 2 }, { name: "points", value: 21 }] },
+    { team: "Casa Pia", id: "21581", stats: [{ name: "rank", value: 12 }, { name: "points", value: 8 }] },
+  ] } }] },
+  gameInfo: { venue: { fullName: "Estádio Municipal de Rio Maior", address: { city: "Rio Maior" } } },
+};
+
+test("curiosidades (ESPN, formato atual): jogos desta época, forma por data, séries e classificação", () => {
+  const c = curiosidadesEspn(RESUMO_ATUAL, { casa: "Casa Pia", fora: "Sporting CP" }).map((x) => x.texto);
+  assert.deepEqual(c, [
+    "Último encontro: Sporting CP 3–0 Casa Pia, a 10 de agosto de 2026.",
+    "Forma nos últimos jogos (do mais recente para o mais antigo): Casa Pia V D D; Sporting CP V V V E V.",
+    "Sporting CP vem de três vitórias seguidas.",
+    "Na classificação: Casa Pia é 12.º, com oito pontos; Sporting CP é segundo, com 21 pontos.",
+    "Palco do jogo: Estádio Municipal de Rio Maior.",
+  ]);
+});
+
 test("curiosidades (Portugal): classificação, forma, golos e jogos desta época", () => {
   const c = curiosidadesPt({
     comp: "Pró-Nacional", serie: null, jornada: 3, equipas: 16, casa: "SC Ucha", fora: "UD Polvoreira", local: "Campo de Ucha",

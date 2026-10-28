@@ -350,6 +350,8 @@ try {
     linha(`   form: ${JSON.stringify((r.boxscore?.form || r.lastFiveGames || []).map((f) => ({ team: f.team?.id, r: (f.events || []).map((e) => e.gameResult).join("") })))}`);
     linha(`   standings: ${(r.standings?.groups || []).flatMap((g) => g.standings?.entries || []).length} linhas · exemplo ${JSON.stringify((r.standings?.groups || [])[0]?.standings?.entries?.[0] || null).slice(0, 300)}`);
     linha(`   gameInfo: ${JSON.stringify(r.gameInfo || null).slice(0, 400)}`);
+    linha(`   seasonseries: ${(r.seasonseries || []).length} · exemplo ${JSON.stringify((r.seasonseries || [])[0]?.events?.[0] || null).slice(0, 500)}`);
+    linha(`   lastFiveGames (um jogo): ${JSON.stringify((r.lastFiveGames || [])[0]?.events?.[0] || null).slice(0, 400)}`);
     const comps = r.header?.competitions?.[0]?.competitors || [];
     linha(`   equipas: ${comps.map((c) => `${c.homeAway}:${c.team?.id}:${c.team?.displayName}`).join(" | ")}`);
   }

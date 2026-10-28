@@ -1,6 +1,7 @@
 // Curiosidades de um jogo a partir de dados, sem modelo de linguagem (não gastam quota e não inventam):
-// - jogos das ligas que a ESPN acompanha: o resumo do jogo na ESPN (site.api.espn.com/…/summary) traz os últimos
-//   confrontos entre as equipas, a forma recente, a classificação, o estádio e o árbitro;
+// - jogos das ligas que a ESPN acompanha: o resumo do jogo na ESPN (site.api.espn.com/…/summary) traz a forma recente
+//   (lastFiveGames), os jogos desta época entre as equipas (seasonseries), a classificação, o estádio e, perto do
+//   jogo, o árbitro; os últimos confrontos (headToHeadGames) só em alguns jogos;
 // - jogos de Portugal (das distritais à Liga 3, Liga BPI, futsal…): a classificação, a forma e os jogos desta época
 //   entre as equipas, tal como o site os tem (server/pt).
 // Os textos seguem as regras do zerozero: de zero a dez por extenso, ordinais por extenso até ao nono, datas com o mês
@@ -40,18 +41,26 @@ export function curiosidadesEspn(r, { casa, fora }) {
   const idFora = String(comps.find((c) => c.homeAway === "away")?.team?.id ?? comps.find((c) => c.homeAway === "away")?.id ?? "");
   const nomeDe = (id) => (String(id) === idCasa ? casa : String(id) === idFora ? fora : null);
 
-  // os últimos confrontos (do mais recente para o mais antigo)
-  const h2h = (r?.headToHeadGames || []).flatMap((g) => g.events || []);
+  // os últimos confrontos (do mais recente para o mais antigo): os de headToHeadGames e os desta época (seasonseries)
   const jogos = [];
   const vistos = new Set();
-  for (const e of h2h) {
-    const id = String(e.id ?? `${e.gameDate}|${e.homeTeamId}`);
-    if (vistos.has(id)) continue;
-    vistos.add(id);
-    const hs = n(e.homeTeamScore), as = n(e.awayTeamScore);
-    const h = nomeDe(e.homeTeamId), a = nomeDe(e.awayTeamId);
-    if (hs == null || as == null || !h || !a || h === a) continue;
-    jogos.push({ h, a, hs, as, ts: Date.parse(e.gameDate || e.date || "") || null, liga: e.leagueName || e.competition || null });
+  const juntar = (id, h, a, hs, as, ts, liga) => {
+    if (id && vistos.has(id)) return;
+    if (id) vistos.add(id);
+    if (hs == null || as == null || !h || !a || h === a) return;
+    jogos.push({ h, a, hs, as, ts, liga });
+  };
+  for (const e of (r?.headToHeadGames || []).flatMap((g) => g.events || [])) {
+    juntar(String(e.id ?? `${e.gameDate}|${e.homeTeamId}`), nomeDe(e.homeTeamId), nomeDe(e.awayTeamId), n(e.homeTeamScore), n(e.awayTeamScore), Date.parse(e.gameDate || e.date || "") || null, e.leagueName || e.competition || null);
+  }
+  const idEvento = String(r?.header?.id ?? "");
+  for (const e of (r?.seasonseries || []).flatMap((x) => x.events || [])) {
+    if (idEvento && String(e.id) === idEvento) continue; // o próprio jogo
+    const cs = e.competitors || [];
+    const ch = cs.find((c) => c.homeAway === "home"), ca = cs.find((c) => c.homeAway === "away");
+    const acabou = e.statusType?.completed ?? e.status?.type?.completed ?? (ch?.score != null && ca?.score != null);
+    if (!ch || !ca || !acabou) continue;
+    juntar(String(e.id ?? ""), nomeDe(ch.team?.id ?? ch.id), nomeDe(ca.team?.id ?? ca.id), n(ch.score?.value ?? ch.score), n(ca.score?.value ?? ca.score), Date.parse(e.date || e.gameDate || "") || null, null);
   }
   jogos.sort((x, y) => (y.ts || 0) - (x.ts || 0));
   if (jogos.length >= 2) {
@@ -69,12 +78,27 @@ export function curiosidadesEspn(r, { casa, fora }) {
   const goleada = jogos.filter((j) => Math.abs(j.hs - j.as) >= 3).sort((x, y) => Math.abs(y.hs - y.as) - Math.abs(x.hs - x.as))[0];
   if (goleada && goleada !== jogos[0]) out.push({ texto: `A maior diferença nos jogos recentes: ${goleada.h} ${goleada.hs}–${goleada.as} ${goleada.a}${goleada.ts ? `, a ${data(goleada.ts)}` : ""}.`, fonte: "ESPN" });
 
-  // a forma recente (V, E, D) de cada equipa
-  const formas = r?.boxscore?.form || r?.lastFiveGames || [];
-  const fx = (id) => formas.find((f) => String(f.team?.id) === id);
-  const fc = fx(idCasa), ff = fx(idFora);
-  const fCasa = fc ? forma((fc.events || []).map((e) => e.gameResult)) : "", fFora = ff ? forma((ff.events || []).map((e) => e.gameResult)) : "";
+  // a forma recente (V, E, D) de cada equipa, do jogo mais recente para o mais antigo, e as séries que dão notícia
+  const formas = r?.lastFiveGames || r?.boxscore?.form || [];
+  const resultados = (id) => {
+    const f = formas.find((x) => String(x.team?.id) === id);
+    const ev = [...(f?.events || [])];
+    if (ev.every((e) => Date.parse(e.gameDate || e.date || ""))) ev.sort((x, y) => Date.parse(y.gameDate || y.date) - Date.parse(x.gameDate || x.date));
+    return ev.map((e) => String(e.gameResult || "").toUpperCase()).filter((x) => ["W", "D", "L"].includes(x));
+  };
+  const rc = resultados(idCasa), rf = resultados(idFora);
+  const fCasa = forma(rc), fFora = forma(rf);
   if (fCasa || fFora) out.push({ texto: `Forma nos últimos jogos (do mais recente para o mais antigo): ${[fCasa && `${casa} ${fCasa}`, fFora && `${fora} ${fFora}`].filter(Boolean).join("; ")}.`, fonte: "ESPN" });
+  for (const [nome, rs] of [[casa, rc], [fora, rf]]) {
+    const seguidos = (ok) => { let k = 0; for (const x of rs) { if (!ok(x)) break; k++; } return k; };
+    const v = seguidos((x) => x === "W"), semPerder = seguidos((x) => x !== "L"), d = seguidos((x) => x === "L"), semGanhar = seguidos((x) => x !== "W");
+    const todos = rs.length;
+    const nos = (k) => (k === todos ? `nos últimos ${contagem(k)} jogos` : `há ${contagem(k)} jogos`);
+    if (v >= 3) out.push({ texto: v === todos ? `${nome} venceu os últimos ${contagem(v)} jogos.` : `${nome} vem de ${contagem(v)} vitórias seguidas.`, fonte: "ESPN" });
+    else if (semPerder >= 4) out.push({ texto: `${nome} não perde ${nos(semPerder)}.`, fonte: "ESPN" });
+    else if (d >= 3) out.push({ texto: d === todos ? `${nome} perdeu os últimos ${contagem(d)} jogos.` : `${nome} vem de ${contagem(d)} derrotas seguidas.`, fonte: "ESPN" });
+    else if (semGanhar >= 4) out.push({ texto: `${nome} não vence ${nos(semGanhar)}.`, fonte: "ESPN" });
+  }
 
   // a classificação (a posição e os pontos das duas equipas)
   const entradas = (r?.standings?.groups || []).flatMap((g) => g.standings?.entries || []);
