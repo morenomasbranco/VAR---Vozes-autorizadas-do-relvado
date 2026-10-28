@@ -21,10 +21,11 @@ test("tradutor: os títulos em português passam primeiro pelo modelo de linguag
   await comAmbiente({ GROQ_API_KEY: "teste", IA_MOTORES: null, GEMINI_API_KEY: null, ANTHROPIC_API_KEY: null }, async (url, op) => {
     pedidos.push(String(url));
     const corpo = JSON.parse(op.body);
-    assert.equal(corpo.model, "openai/gpt-oss-20b");
-    assert.equal(corpo.reasoning_effort, "low");
+    // só o qwen: os gpt-oss ficam para a pesquisa na web (Neste dia e curiosidades)
+    assert.equal(corpo.model, "qwen/qwen3.8-27b");
+    assert.equal(corpo.reasoning_effort, "none"); // o qwen sem raciocínio: mais rápido e gasta menos quota
     assert.match(corpo.messages[1].content, /Real Madrid make move for ==Mac Allister==/);
-    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"traducoes":[{"i":0,"titulo":"Real Madrid avança por ==Mac Allister=="}]}' } }] }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"traducoes":[{"i":0,"titulo":"Real Madrid avança por ==Mac Allister=="}]}' } }], usage: { total_tokens: 420 } }) };
   }, async () => {
     const t = createTradutor({ log: () => {} });
     const [r] = await t.pedir("pt", [{ id: "x1", titulo: "Real Madrid make move for ==Mac Allister==" }]);
@@ -32,6 +33,7 @@ test("tradutor: os títulos em português passam primeiro pelo modelo de linguag
     assert.equal(pedidos.length, 1);
     assert.ok(pedidos[0].includes("api.groq.com"));
     assert.equal(t.estado().viaIA, 1);
+    assert.equal(t.estado().ia.tokens, 420); // o gasto do dia conta para o orçamento da tradução
   });
 });
 
@@ -47,4 +49,26 @@ test("tradutor: sem a IA (sem quota ou um nome perdido), segue para o Google Tra
     assert.equal(r.t, "O Real Madrid avança por ==Mac Allister==");
     assert.ok(pedidos.some((u) => u.includes("translate")));
   });
+});
+
+test("tradutor: um modelo que não aceita desligar o raciocínio recebe o pedido outra vez, sem a opção", async () => {
+  const { _iaTeste } = await import("../server/ia.js");
+  _iaTeste.limpar();
+  const corpos = [];
+  await comAmbiente({ GROQ_API_KEY: "teste", IA_MOTORES: null, GEMINI_API_KEY: null, ANTHROPIC_API_KEY: null }, async (url, op) => {
+    const corpo = JSON.parse(op.body);
+    corpos.push(corpo);
+    if (corpo.reasoning_effort) {
+      const r = { ok: false, status: 400, text: async () => '{"error":{"message":"`reasoning_effort` is not supported with this model"}}' };
+      return { ...r, clone: () => r };
+    }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"traducoes":[{"i":0,"titulo":"O Benfica vence em Braga"}]}' } }] }) };
+  }, async () => {
+    const t = createTradutor({ log: () => {} });
+    const [r] = await t.pedir("pt", [{ id: "x3", titulo: "Benfica win at Braga" }]);
+    assert.equal(r.t, "O Benfica vence em Braga");
+    assert.equal(corpos.length, 2);
+    assert.equal(corpos[1].reasoning_effort, undefined);
+  });
+  _iaTeste.limpar();
 });

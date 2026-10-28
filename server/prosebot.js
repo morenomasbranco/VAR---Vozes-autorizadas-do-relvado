@@ -79,8 +79,8 @@ export function createProsebot({ log = () => {} } = {}) {
       return { ...c, motor: r.motor, modelo: r.modelo };
     } catch (e) {
       estado.erros++;
-      estado.ultimoErro = { msg: String(e.message).slice(0, 300), ts: Date.now() };
-      log(`[Prosebot] ${e.message}`);
+      estado.ultimoErro = { msg: String(e.detalhe || e.message).slice(0, 300), ts: Date.now() };
+      log(`[Prosebot] ${e.detalhe || e.message}`);
       throw e;
     }
   }

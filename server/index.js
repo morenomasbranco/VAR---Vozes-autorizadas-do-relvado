@@ -524,9 +524,22 @@ app.post("/api/declaracoes/escrever", limiteIA, express.json({ limit: "128kb" })
 app.post("/api/declaracoes/traduzir", limiteIA, express.json({ limit: "128kb" }), (req, res) => responder(res, declaracoes.traduzir(req.body || {})));
 // ?url=… (o endereço do vídeo) ou o próprio ficheiro no corpo do pedido (?nome=… com a extensão)
 app.post("/api/declaracoes/transcrever", limiteIA, (req, res) => responder(res, declaracoes.transcrever({ url: req.query.url ? String(req.query.url) : null, req, nome: String(req.query.nome || "") })));
-// Glossário › Preparar jogo: curiosidades do jogo escolhido (pesquisadas na web, guardadas um dia)
-const curiosidades = createCuriosidades({ log });
-app.get("/api/glossario/curiosidades", limiteIA, (req, res) => responder(res, curiosidades({ h: req.query.h, a: req.query.a, comp: req.query.comp, mod: req.query.mod })));
+// Glossário › Preparar jogo: curiosidades do jogo escolhido. Primeiro as dos dados: do resumo da ESPN (o jogo é de
+// uma liga que a ESPN acompanha: procura-se o cartão dele para saber o número do jogo na ESPN) ou do que o site tem
+// de Portugal; a pesquisa na web (IA) só com ?web=1, e só essa conta para o limite de pedidos por hora
+const ligaEspn = new Map(LIGAS.filter((l) => l.espn).map((l) => [slug(l.nome), l.espn]));
+function dadosDoJogo({ h, a }) {
+  let espn = null;
+  for (const it of store.all(4000)) {
+    if (!it.score || !String(it.id).startsWith("r:espn:") || it.score.h !== h || it.score.a !== a) continue;
+    const s = ligaEspn.get(it.liga);
+    if (s) { espn = { slug: s, id: String(it.id).split(":")[2] }; break; }
+  }
+  return { espn, pt: espn ? null : portugal.infoJogo(h, a) };
+}
+const curiosidades = createCuriosidades({ log, dadosDoJogo });
+app.get("/api/glossario/curiosidades", (req, res, next) => (req.query.web ? limiteIA(req, res, next) : next()),
+  (req, res) => responder(res, curiosidades({ h: req.query.h, a: req.query.a, comp: req.query.comp, mod: req.query.mod, naWeb: !!req.query.web })));
 // Glossário › Prosebot 2.0: a crónica de um jogo a partir das notas, com as regras do zerozero
 const prosebot = createProsebot({ log });
 app.post("/api/prosebot/cronica", limiteIA, express.json({ limit: "96kb" }), (req, res) => responder(res, prosebot.cronica(req.body || {})));

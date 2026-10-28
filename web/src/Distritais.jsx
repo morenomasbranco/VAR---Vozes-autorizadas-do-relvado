@@ -9,10 +9,17 @@ const logoSrc = (u) => (u && u.startsWith("/") ? (import.meta.env.VITE_API_URL |
 const escondeImg = (e) => { e.currentTarget.style.display = "none"; };
 import { useEffect, useMemo, useRef, useState } from "react";
 
-// das distritais à Liga 3: as provas das associações e, da FPF, a Liga 3, o Campeonato de Portugal e o dos Açores
+// das distritais à Liga 3: as provas das associações (de qualquer modalidade) e, da FPF, a Liga 3, o Campeonato de
+// Portugal e o dos Açores. As provas regionais que chegaram como da FPF (pelo Sofascore) contam pelo nível ou pelo nome
 const NACIONAIS_BAIXO = /liga 3|campeonato de portugal|campeonato (de futebol )?dos a[cç]ores/i;
-export const daBase = (j) => (j.mod || "futebol") === "futebol" && (String(j.org || "").startsWith("af-") || (j.org === "fpf" && NACIONAIS_BAIXO.test(j.compNome || "")));
-const AO_VIVO = (j) => ["direto", "intervalo"].includes(j.estado) || j.semInfo;
+const REGIONAL = /\bAF\b|associa[cç][aã]o de futebol|distrital|divis[aã]o de (elite|honra)|pr[oó][ -]?nacional|\bsabseg\b/i;
+export const daBase = (j) => String(j.org || "").startsWith("af-") || j.nivel === "distrital"
+  || (j.org === "fpf" && (((j.mod || "futebol") === "futebol" && NACIONAIS_BAIXO.test(j.compNome || "")) || REGIONAL.test(j.compNome || "")));
+// em direto só quando alguém disse que está a decorrer e dentro da hora do jogo (até meia hora depois do fim provável);
+// os que deviam ter começado e de que ninguém disse nada («sem informação») não contam como em direto
+const DURACAO_MIN = { futebol: 115, futsal: 95 };
+const passouDaHora = (j, agora = Date.now()) => !!j.inicio && !j.semHora && agora > j.inicio + ((DURACAO_MIN[j.mod] || 115) + 30) * 60000;
+const AO_VIVO = (j) => ["direto", "intervalo"].includes(j.estado) && !passouDaHora(j);
 const hhmm = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
 const diaDe = (t) => new Date(t).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
 
@@ -109,9 +116,9 @@ function JogosDaBase({ itens, total, vivos, titulo, nomeDe }) {
                   <span className="lrow"><span className="lteam">{j.logoCasa && <img className="dlogo" src={logoSrc(j.logoCasa)} alt="" loading="lazy" onError={escondeImg} />}{j.casa}</span>{placar && <b translate="no">{j.hs}</b>}</span>
                   <span className="lrow"><span className="lteam">{j.logoFora && <img className="dlogo" src={logoSrc(j.logoFora)} alt="" loading="lazy" onError={escondeImg} />}{j.fora}</span>{placar && <b translate="no">{j.as}</b>}</span>
                   <span className="lfoot">
-                    {f === 0 ? <span className={`lmin ${j.estado === "intervalo" ? "pausa" : ""}`} translate="no">{j.estado === "intervalo" ? "Intervalo" : j.min?.texto || (j.semInfo ? "A decorrer (sem info)" : "Em direto")}</span>
-                      : f === 1 ? <span className="muted small" translate="no">{j.inicio && !j.semHora ? hhmm(j.inicio) : "Hoje"}</span>
-                        : <span className="muted small">{j.porConfirmar ? "Resultado por confirmar" : j.oficial ? "Final (oficial)" : "Final"}</span>}
+                    {f === 0 ? <span className={`lmin ${j.estado === "intervalo" ? "pausa" : ""}`} translate="no">{j.estado === "intervalo" ? "Intervalo" : j.min?.texto || "Em direto"}</span>
+                      : f === 1 ? <span className="muted small" translate="no">{j.inicio && !j.semHora ? hhmm(j.inicio) : "Hoje (hora por confirmar)"}{j.semInfo ? " · sem informação" : ""}</span>
+                        : <span className="muted small">{j.porConfirmar || ["direto", "intervalo"].includes(j.estado) ? "Resultado por confirmar" : j.oficial ? "Final (oficial)" : "Final"}</span>}
                     {f === 0 && j.golos?.length > 0 && <span className="lult" title={j.golos.at(-1).marcador || ""}>{j.golos.at(-1).marcador ? `⚽ ${j.golos.at(-1).marcador}` : ""}</span>}
                   </span>
                 </div>

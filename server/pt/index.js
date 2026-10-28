@@ -19,7 +19,7 @@ import { norm, slug, sleep, hash } from "../util.js";
 import * as fpf from "./fpf.js";
 import * as sofa from "./sofa.js";
 import * as web from "./web.js";
-import { ASSOCIACOES, FPF, ORG, ORGS, EPOCA_FPF, classificar, bonito, ordem as ordemComp } from "./catalogo.js";
+import { ASSOCIACOES, FPF, ORG, ORGS, EPOCA_FPF, classificar, bonito, ordem as ordemComp, associacaoDoTexto } from "./catalogo.js";
 import { tabelaAoVivo } from "./tabela.js";
 import { createClubes, semEquipa } from "./clubes.js";
 import { createLogos } from "./logos.js";
@@ -47,6 +47,18 @@ const ESTRUTURA_MS = (Number(process.env.FPF_ESTRUTURA_HORAS) || 20) * 3600e3; /
 const SOFA_VIVO_MS = Math.max(10, Number(process.env.PT_SOFA_SEGUNDOS) || 20) * 1000;
 const MAX_EVENTOS = Number(process.env.PT_EVENTOS_MAX) || 2500;
 const DURACAO = { futebol: 115 * 60000, futsal: 95 * 60000 }; // do apito inicial ao fim provável, com intervalo
+// nomes que não são equipas: datas («25 out», «9 set»), cabeçalhos («Jogos») e notas («(Interrompido)») que a leitura
+// das páginas da FPF apanhava no lugar das equipas; e os vencedores por apurar das taças («Vencedor X / Y»), que não
+// dão acontecimentos
+const NAO_EQUIPA = /^(\d{1,2}\s*(de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\w*\.?|jogos?|data|hora|resultado|vs?\.?|x|\(.*)$/i;
+export const eEquipa = (n) => { const t = String(n || "").trim(); return t.length >= 2 && !NAO_EQUIPA.test(t) && !/^[\d\s:/-]+$/.test(t); };
+const A_APURAR = /^(vencedor|vencido|perdedor)\b/i;
+// provas regionais que o Sofascore tenha sem dizer de que associação são: ficam de fora (não são da FPF)
+const REGIONAL = /divisao de (elite|honra)|pro[ -]?nacional|distrital|regional|\bsabseg\b/;
+// o jogo pode estar a decorrer agora? Só com a hora conhecida (sem hora, a FPF e a pesquisa põem 15:00 ou 12:00 por
+// defeito, e o jogo aparecia «a decorrer» à hora errada): de um pouco antes do apito até um pouco depois do fim provável
+export const naJanela = (j, agora = Date.now(), mod = "futebol", { antes = 15 * 60e3, depois = 30 * 60e3 } = {}) =>
+  !!j.inicio && !j.semHora && agora >= j.inicio - antes && agora <= j.inicio + (DURACAO[mod] || DURACAO.futebol) + depois;
 const POSTS_MS = Math.max(120, Number(process.env.IG_POSTS_SEGUNDOS) || 300) * 1000; // posts de cada clube durante o jogo
 const POSTS_VIVO_MS = Math.max(60, Number(process.env.IG_POSTS_VIVO_SEGUNDOS) || 120) * 1000; // clubes que atualizam por post
 const ATIVO = process.env.PT_RESULTADOS !== "0";
@@ -67,7 +79,8 @@ const diaLisboa = (ts) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/L
 export function createPortugal({ log = console.log, broadcast = () => {}, ligas = [], noticiasDistritais = () => ({}) } = {}) {
   const st = ler(DADOS, null) || { comps: {}, jogos: {} };
   st.comps ||= {}; st.jogos ||= {}; st.pesquisa ||= {};
-  let eventos = ler(EVENTOS, []);
+  // (sem os acontecimentos de jogos mal lidos que ficaram guardados de antes: «Adiado: Técnico Fc–25 out»)
+  let eventos = ler(EVENTOS, []).filter((e) => !e.score || (eEquipa(e.score.h) && eEquipa(e.score.a)));
   const clubes = createClubes({ log });
   // logótipos dos clubes (a fotografia da página de Facebook de cada um), para os resultados
   const logos = createLogos({ clubes });
@@ -163,7 +176,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
   function compacto(j, agora = Date.now()) {
     const comp = st.comps[j.comp];
     const serie = comp?.series?.[j.serie];
-    const vivo = j.estado === "direto" || (j.estado === "agendado" && j.inicio && agora > j.inicio && agora < j.inicio + DURACAO[comp?.mod || "futebol"] && !j.oficial);
+    const vivo = j.estado === "direto" || (j.estado === "agendado" && j.inicio && !j.semHora && agora > j.inicio && agora < j.inicio + DURACAO[comp?.mod || "futebol"] && !j.oficial);
     const m = j.estado === "direto" ? (j.relogioExterno && agora - j.relogioExterno.ts < 5 * 60e3 ? { ...j.relogioExterno.m, fonte: "explicito" } : minutoEm(j, agora, comp?.mod)) : null;
     return {
       id: j.id, comp: j.comp, compNome: comp?.nome, org: comp?.org, mod: comp?.mod, nivel: comp?.nivel, serie: j.serie, serieNome: serie?.nome || null, jornada: j.jornada,
@@ -171,7 +184,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       estado: j.estado, hs: j.hs, as: j.as, oficial: !!j.oficial, origem: j.origem, via: j.via || null, viaUrl: j.viaUrl || null,
       min: m ? { texto: textoMinuto(m), fonte: m.fonte, confianca: m.confianca } : null,
       semInfo: !!(vivo && j.estado === "agendado"), // devia estar a decorrer e ninguém disse nada
-      porConfirmar: !!(j.estado === "agendado" && j.inicio && agora >= j.inicio + DURACAO[comp?.mod || "futebol"]), // já acabou, falta o resultado
+      porConfirmar: !!(j.estado === "agendado" && j.inicio && !j.semHora && agora >= j.inicio + DURACAO[comp?.mod || "futebol"]), // já acabou, falta o resultado
       golos: (j.golos || []).map((g) => ({ lado: g.lado, marcador: g.marcador, min: g.min, extra: g.extra, minFonte: g.minFonte, fontes: g.fontes?.length || 0, penalti: g.penalti, autogolo: g.autogolo })),
       confirmado: j.confirmado, conflito: j.conflito ? j.conflito.placar : null, golosIncompletos: !!j.golosIncompletos,
       ig: { h: j.igCasa || null, a: j.igFora || null },
@@ -198,6 +211,14 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     // notícia do momento: no Feed aparecia como resultado de hoje
     // (um jogo das 23h que acaba depois da meia-noite conta: até seis horas depois do início)
     if (j.inicio && diaLisboa(j.inicio) !== diaLisboa(Date.now()) && Math.abs(Date.now() - j.inicio) > 6 * 3600e3 && !["direto", "intervalo"].includes(j.estado)) return;
+    // jogos mal lidos (uma data no lugar de uma equipa) e eliminatórias por apurar não dão acontecimentos; um adiamento ou
+    // uma suspensão só com a data do jogo conhecida (saíam «Adiado: Técnico Fc–25 out» de jogos de setembro, com a
+    // hora de agora, e o Feed punha-os como jogos a decorrer)
+    if (!eEquipa(j.casa) || !eEquipa(j.fora) || A_APURAR.test(j.casa) || A_APURAR.test(j.fora)) return;
+    if (["adiado", "suspenso"].includes(f.tipo) && !j.inicio) return;
+    // um golo ou um início fora da hora do jogo (um story antigo, a pesquisa na web enganada) aparecia como jogo a
+    // decorrer quando não estava; com a hora conhecida, os acontecimentos do momento só contam dentro da janela
+    if (["inicio", "golo", "intervalo", "anulado"].includes(f.tipo) && j.inicio && !j.semHora && !naJanela(j, Date.now(), comp.mod, { antes: 30 * 60e3, depois: 60 * 60e3 })) return;
     const serie = comp.series?.[j.serie];
     const contexto = [comp.nome, serie?.nome, j.jornada ? `${j.jornada}.ª jornada` : null].filter(Boolean).join(" · ");
     const via = prova.conta ? `${FONTE_TXT[prova.tipo] || prova.tipo} de @${prova.conta}` : FONTE_TXT[prova.tipo] || null;
@@ -226,7 +247,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       url: prova.url || null,
       score: { comp: comp.nome, h: j.casa, a: j.fora, hs: j.hs ?? 0, as: j.as ?? 0, min: f.tipo === "final" ? null : m ? textoMinuto(m) : null, ft: f.tipo === "final", ht: j.estado === "intervalo" },
       equipas: [{ nome: j.casa, papel: "envolvido", logo: j.logoCasa || undefined }, { nome: j.fora, papel: "envolvido", logo: j.logoFora || undefined }],
-      pt: { jogo: j.id, comp: comp.id, org: comp.org, fonte: prova.tipo || null, conta: prova.conta || null, oficial: !!j.oficial, confirmado: !!confirmado, estimado: f.golo?.minFonte === "estimado" },
+      pt: { jogo: j.id, comp: comp.id, org: comp.org, nivel: comp.nivel || null, fonte: prova.tipo || null, conta: prova.conta || null, oficial: !!j.oficial, confirmado: !!confirmado, estimado: f.golo?.minFonte === "estimado" },
     };
     eventos.unshift(ev);
     if (eventos.length > MAX_EVENTOS) eventos.length = MAX_EVENTOS;
@@ -279,7 +300,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const id = chaveFpf || chaveSofa || chaveEspn || `${comp.id}:${serie.id}:${n ?? "x"}:${slug(dados.casa)}~${slug(dados.fora)}`;
     let novo = false;
     if (!j) {
-      j = st.jogos[id] = novoJogoEstado({ id, comp: comp.id, serie: serie.id, jornada: n ?? null, casa: dados.casa, fora: dados.fora, inicio: dados.inicio || null, mod: comp.mod, origem });
+      j = st.jogos[id] = novoJogoEstado({ id, comp: comp.id, serie: serie.id, jornada: n ?? null, casa: dados.casa, fora: dados.fora, inicio: dados.inicio || null, semHora: !!(dados.inicio && dados.semHora), mod: comp.mod, origem });
       novo = true;
       indiceDia = null;
     }
@@ -294,8 +315,12 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     if (dados.local) j.local = dados.local;
     if (dados.logoCasa) j.logoCasa = dados.logoCasa;
     if (dados.logoFora) j.logoFora = dados.logoFora;
-    // jogo remarcado: a hora muda enquanto não começou
-    if (dados.inicio && dados.inicio !== j.inicio && (j.estado === "agendado" || j.estado === "adiado")) {
+    // a hora por defeito de uma fonte sem hora (15:00 na FPF, 12:00 na pesquisa) é a mesma que a do jogo: fica a saber-se
+    // se a hora é conhecida (os jogos guardados antes disto não o diziam e apareciam «a decorrer» à hora errada)
+    if (dados.inicio && dados.inicio === j.inicio && typeof dados.semHora === "boolean" && j.semHora !== dados.semHora && !(dados.semHora && j.semHora === false)) j.semHora = dados.semHora;
+    // jogo remarcado: a hora muda enquanto não começou (mas uma data sem hora não apaga a hora conhecida desse dia)
+    const soData = dados.semHora && j.inicio && !j.semHora && diaLisboa(dados.inicio || 0) === diaLisboa(j.inicio);
+    if (dados.inicio && dados.inicio !== j.inicio && (j.estado === "agendado" || j.estado === "adiado") && !soData) {
       j.inicio = dados.inicio; j.semHora = !!dados.semHora; indiceDia = null;
       if (j.estado === "adiado" && dados.inicio > Date.now() && dados.estado !== "adiado") j.estado = "agendado";
       novo = true;
@@ -309,7 +334,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     let alterou = novo;
     if (["adiado", "suspenso", "cancelado", "falta"].includes(dados.estado)) {
       if (aplicarOficial(j, { hs: dados.hs, as: dados.as, estado: dados.estado, fonte: origem })) { alterou = true; emitir(j, { tipo: dados.estado === "suspenso" ? "suspenso" : "adiado" }, { tipo: origem }); }
-    } else if ((origem === "web" || origem === "espn") && (dados.estado === "direto" || dados.estado === "intervalo") && dados.hs != null && !j.oficial) {
+    } else if ((origem === "web" || origem === "espn") && (dados.estado === "direto" || dados.estado === "intervalo") && dados.hs != null && !j.oficial
+      && (origem === "espn" || naJanela(j, Date.now(), comp.mod))) {
       if (j.hs !== dados.hs || j.as !== dados.as || j.estado !== dados.estado) {
         if (j.estado === "agendado") emitir(j, { tipo: "inicio" }, { tipo: origem });
         j.hs = dados.hs; j.as = dados.as; j.estado = dados.estado; j.origem = origem;
@@ -353,7 +379,7 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       if (jr.selecionado) serie.selecionada = jr.n;
     }
     const sel = nPadrao ?? (pagina.jornadas || []).find((x) => x.selecionado)?.n ?? null;
-    for (const jg of pagina.jogos || []) registarJogo(comp, serie, jg.jornada ?? sel, jg, "fpf");
+    for (const jg of pagina.jogos || []) if (eEquipa(jg.casa) && eEquipa(jg.fora)) registarJogo(comp, serie, jg.jornada ?? sel, jg, "fpf");
     const tab = (pagina.tabelas || [])[0];
     if (tab?.linhas?.length) {
       // a tabela oficial mais recente: a da página principal ou a da jornada mais avançada já lida
@@ -440,6 +466,8 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
       : (a.lidoEm || 0) !== (b.lidoEm || 0) ? (a.lidoEm || 0) > (b.lidoEm || 0) : a.id < b.id);
   let ocultas = null, ocultasEm = 0;
   function visivel(c) {
+    // as provas regionais que já tinham entrado como da FPF (pelo Sofascore, antes de se saber a associação)
+    if (c.org === "fpf" && c.fonte === "sofa" && REGIONAL.test(norm(c.nome))) return false;
     if (!ocultas || Date.now() - ocultasEm > 60e3) {
       ocultas = new Set();
       const lista = Object.values(st.comps).filter(temJogos);
@@ -547,12 +575,16 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
 
   // ───────── Sofascore ─────────
   const ORG_LIGA = /liga portugal|betclic|liga 2\b|segunda liga|ta[cç]a da liga|allianz/;
+  // o organizador de um torneio do Sofascore: a Liga, uma associação (pelo nome: «AF Porto Divisão de Elite») ou a
+  // FPF. As provas das associações ficavam com a FPF e apareciam no Feed como se fossem nacionais
+  const orgSofa = (nome) => (ORG_LIGA.test(norm(nome)) ? "liga" : associacaoDoTexto(nome) || (REGIONAL.test(norm(nome)) ? null : "fpf"));
   async function descobrirSofa() {
     for (const sport of ["football", "futsal"]) {
       let lista = [];
       try { lista = await sofa.torneios(sport); } catch (e) { log(`[PT] Sofascore (${sport}): ${e.message}`); continue; }
       for (const t of lista) {
-        const org = ORG_LIGA.test(norm(t.nome)) ? "liga" : "fpf";
+        const org = orgSofa(t.nome);
+        if (!org) continue;
         const cl = classificar({ nome: t.nome, org, contexto: sport === "futsal" ? "futsal" : "" });
         if (!cl) continue;
         if (sport === "futsal") cl.mod = "futsal";
@@ -759,6 +791,27 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     }
     tabelasCache.set(k, { ts: Date.now(), linhas });
     return linhas;
+  }
+
+  // Glossário › Preparar jogo: o jogo de hoje entre estas equipas (a competição, a série e a jornada), a posição e a
+  // forma de cada uma, e os jogos entre elas nesta época, para as curiosidades que não precisam de pesquisa na web
+  function infoJogo(casa, fora, ts = Date.now()) {
+    const j = acharJogo(casa, fora, ts);
+    const comp = j && st.comps[j.comp];
+    const serie = comp?.series?.[j.serie];
+    if (!comp || !serie) return null;
+    const linhas = comp.tipo === "taca" ? [] : tabela(comp, serie);
+    const linha = (n) => linhas.find((x) => x.equipa === n) || null;
+    const entre = jogosDaSerie(comp.id, serie.id)
+      .filter((x) => x.id !== j.id && x.estado === "final" && x.hs != null && x.as != null
+        && ((x.casa === j.casa && x.fora === j.fora) || (x.casa === j.fora && x.fora === j.casa)))
+      .sort((a, b) => (b.inicio || 0) - (a.inicio || 0))
+      .map((x) => ({ casa: x.casa, fora: x.fora, hs: x.hs, as: x.as, inicio: x.inicio || null }));
+    return {
+      comp: comp.nome, serie: serie.nome || null, jornada: j.jornada || null, tipo: comp.tipo || "liga", nivel: comp.nivel || null,
+      casa: j.casa, fora: j.fora, local: j.local || null, inicio: j.inicio || null, semHora: !!j.semHora,
+      equipas: linhas.length, linhas: { casa: linha(j.casa), fora: linha(j.fora) }, entre,
+    };
   }
 
   // ───────── ciclos ─────────
@@ -1169,5 +1222,5 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
   // grupos para o filtro de ligas do site (uma entrada por organizador)
   const ligasSite = () => ORGS.map((o) => ({ key: `pt-${o.key}`, nome: `Portugal · ${o.nome}`, nome_en: `Portugal · ${o.nome}`, pais: "pt", grupo: "pt" }));
 
-  return { start, rotas, externo, evidencia, alvos, leitor, ligasSite, estado, _st: st, _jornadaAtual: jornadaAtual, _registarJogo: registarJogo, _upsertComp: upsertComp, _serieDe: serieDe, _tabela: tabela, _guardarPesquisa: guardarPesquisa };
+  return { start, rotas, externo, evidencia, alvos, leitor, ligasSite, estado, infoJogo, _st: st, _jornadaAtual: jornadaAtual, _registarJogo: registarJogo, _upsertComp: upsertComp, _serieDe: serieDe, _tabela: tabela, _guardarPesquisa: guardarPesquisa };
 }

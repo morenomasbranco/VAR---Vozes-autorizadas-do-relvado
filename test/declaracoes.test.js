@@ -4,7 +4,7 @@ import { arrumar, ptbr, pareceBrasil, avisos, numeros } from "../web/src/glossar
 import { REGRAS, REGRAS_TEXTO } from "../web/src/glossario/regras-zerozero.js";
 import { lerPeca, interno } from "../server/declaracoes.js";
 import { lerCuriosidades } from "../server/curiosidades.js";
-import { lerJson, pedirIA } from "../server/ia.js";
+import { lerJson, pedirIA, esperaDoGroq, _iaTeste } from "../server/ia.js";
 
 test("declarações: aspas «», ponto final dentro ou fora das aspas e maiúscula depois dos dois pontos", () => {
   assert.equal(arrumar('O treinador disse: "estamos preparados".'), "O treinador disse: «Estamos preparados.»");
@@ -76,7 +76,8 @@ test("IA: um modelo do Groq sem quota passa ao seguinte, e sem chaves diz o que 
   try {
     delete process.env.GEMINI_API_KEY; delete process.env.ANTHROPIC_API_KEY; delete process.env.IA_MOTORES;
     delete process.env.GROQ_API_KEY;
-    await assert.rejects(pedirIA({ sistema: "s", pedido: "p" }), /chave de IA/);
+    _iaTeste.limpar();
+    await assert.rejects(pedirIA({ sistema: "s", pedido: "p" }), (e) => e.codigo === "sem-chave" && /não está configurada/.test(e.message));
     process.env.GROQ_API_KEY = "teste";
     globalThis.fetch = async (url, op) => {
       const corpo = JSON.parse(op.body);
@@ -93,4 +94,27 @@ test("IA: um modelo do Groq sem quota passa ao seguinte, e sem chaves diz o que 
     globalThis.fetch = original;
     for (const [k, v] of [["GROQ_API_KEY", antes.g], ["GEMINI_API_KEY", antes.ge], ["ANTHROPIC_API_KEY", antes.c], ["IA_MOTORES", antes.m]]) { if (v == null) delete process.env[k]; else process.env[k] = v; }
   }
+});
+
+test("IA: sem quota em todos os modelos, a explicação em português e o erro técnico à parte; o tempo de espera do Groq", async () => {
+  const original = globalThis.fetch;
+  const antes = { g: process.env.GROQ_API_KEY, ge: process.env.GEMINI_API_KEY, c: process.env.ANTHROPIC_API_KEY, m: process.env.IA_MOTORES };
+  try {
+    _iaTeste.limpar();
+    process.env.GROQ_API_KEY = "teste"; delete process.env.GEMINI_API_KEY; delete process.env.ANTHROPIC_API_KEY; delete process.env.IA_MOTORES;
+    let pedidos = 0;
+    globalThis.fetch = async () => { pedidos++; return { ok: false, status: 429, text: async () => "Rate limit reached for model on tokens per day (TPD). Please try again in 10m5.232s." }; };
+    await assert.rejects(pedirIA({ sistema: "s", pedido: "p" }), (e) => e.codigo === "quota" && /limite de hoje/.test(e.message) && /429/.test(e.detalhe));
+    const n = pedidos;
+    // os modelos sem quota ficam de parte até ao fim da espera: o pedido seguinte nem chega ao Groq
+    await assert.rejects(pedirIA({ sistema: "s", pedido: "p", modelosGroq: ["qwen/qwen3.8-27b"] }), (e) => e.codigo === "quota");
+    assert.equal(pedidos, n);
+  } finally {
+    globalThis.fetch = original;
+    _iaTeste.limpar();
+    for (const [k, v] of [["GROQ_API_KEY", antes.g], ["GEMINI_API_KEY", antes.ge], ["ANTHROPIC_API_KEY", antes.c], ["IA_MOTORES", antes.m]]) { if (v == null) delete process.env[k]; else process.env[k] = v; }
+  }
+  assert.equal(esperaDoGroq("Please try again in 10m5.232s."), (10 * 60 + 5.232) * 1000 + 30e3);
+  assert.equal(esperaDoGroq("Please try again in 1h2m"), (3600 + 120) * 1000 + 30e3);
+  assert.equal(esperaDoGroq("sem indicação"), 15 * 60e3);
 });

@@ -84,7 +84,9 @@ test("pesquisa na web: competições, jornadas e classificação entram na vista
   assert.equal(final.viaUrl, "https://afbraga.pt/x");
   assert.equal(pt._tabela(web[0], serie)[0].equipa, "SC Maria da Fonte");
   // a segunda leitura (nomes ligeiramente diferentes) atualiza em vez de duplicar
-  pt._guardarPesquisa(alvo, lerPesquisa(JSON.stringify({ competicoes: [{ nome: "Pro Nacional", jornadas: [{ n: 6, jogos: [["Vilaverdense", "GD Joane", 1, 1, dia(-0.1), "15:00", "direto"]] }] }] }), agora), {});
+  // (a decorrer: o jogo começou há meia hora, hora de Lisboa; fora da hora do jogo, o «direto» da pesquisa não conta)
+  const lx = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(agora - 30 * 60e3)).map((p) => [p.type, p.value]));
+  pt._guardarPesquisa(alvo, lerPesquisa(JSON.stringify({ competicoes: [{ nome: "Pro Nacional", jornadas: [{ n: 6, jogos: [["Vilaverdense", "GD Joane", 1, 1, `${lx.year}-${lx.month}-${lx.day}`, `${lx.hour}:${lx.minute}`, "direto"]] }] }] }), agora), {});
   assert.equal(Object.values(pt._st.comps).filter((c) => c.fonte === "web").length, 1);
   const vivo = Object.values(pt._st.jogos).find((j) => j.casa === "Vilaverdense FC");
   assert.equal(vivo.estado, "direto");

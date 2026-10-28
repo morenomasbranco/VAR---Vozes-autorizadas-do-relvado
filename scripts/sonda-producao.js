@@ -318,3 +318,56 @@ try {
     }
   }
 } catch (e) { linha("Telegram no leitor: erro", e.message); }
+
+// Distritais e Feed: os acontecimentos de Portugal das últimas horas (de que organizador, nível e fonte) e os jogos de
+// hoje que o site dá como em direto, para ver de onde vêm os resultados das associações que apareciam no Feed
+try {
+  const ev = await j("/api/pt/eventos?limit=120");
+  const agora = Date.now();
+  const recentes = ev.filter((e) => agora - e.ts < 6 * 3600e3);
+  const porOrg = {};
+  for (const e of recentes) { const k = `${e.pt?.org || "?"}/${e.pt?.nivel || "?"}`; porOrg[k] = (porOrg[k] || 0) + 1; }
+  linha(`== Portugal: acontecimentos das últimas 6 horas == ${recentes.length}`, JSON.stringify(porOrg));
+  for (const e of recentes.slice(0, 25)) linha(`   ${new Date(e.ts).toISOString().slice(11, 16)} | ${e.pt?.org} | ${e.pt?.nivel || "-"} | ${e.score?.comp} | ${String(e.t?.pt || "").replace(/==/g, "")} | fonte ${e.pt?.fonte || "-"}${e.pt?.conta ? ` @${e.pt.conta}` : ""}`);
+  const vivo = await j("/api/pt/aovivo");
+  const porEstado = {};
+  for (const x of vivo) { const k = `${x.estado}${x.semInfo ? "+semInfo" : ""}${x.semHora ? "+semHora" : ""}`; porEstado[k] = (porEstado[k] || 0) + 1; }
+  linha(`== Portugal: jogos de hoje == ${vivo.length}`, JSON.stringify(porEstado));
+  for (const x of vivo.filter((x) => ["direto", "intervalo"].includes(x.estado) || x.semInfo).slice(0, 25)) {
+    linha(`   ${x.org} | ${x.nivel} | ${x.compNome} | ${x.casa} ${x.hs ?? ""}-${x.as ?? ""} ${x.fora} | ${x.estado}${x.semInfo ? " (sem info)" : ""} | início ${x.inicio ? new Date(x.inicio).toISOString().slice(11, 16) : "?"}${x.semHora ? " (sem hora)" : ""} | via ${x.via || x.origem || "-"} | fontes ${JSON.stringify((x.fontes || []).map((f) => `${f.tipo}${f.conta ? `@${f.conta}` : ""}`))}`);
+  }
+} catch (e) { linha("Portugal (acontecimentos e jogos de hoje): erro", e.message); }
+
+// Curiosidades dos jogos: o resumo da ESPN visto daqui (que campos traz) e a resposta do site para um jogo da ESPN
+try {
+  const sb = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/por.1/scoreboard", { signal: AbortSignal.timeout(20000) })).json();
+  const ev = (sb.events || [])[0];
+  if (ev) {
+    const r = await (await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/por.1/summary?event=${ev.id}`, { signal: AbortSignal.timeout(20000) })).json();
+    const h2h = (r.headToHeadGames || []).flatMap((g) => g.events || []);
+    linha(`== ESPN resumo (${ev.name}) == campos: ${Object.keys(r).join(", ")}`);
+    linha(`   headToHeadGames: ${h2h.length} jogos · exemplo ${JSON.stringify(h2h[0] || null).slice(0, 400)}`);
+    linha(`   form: ${JSON.stringify((r.boxscore?.form || r.lastFiveGames || []).map((f) => ({ team: f.team?.id, r: (f.events || []).map((e) => e.gameResult).join("") })))}`);
+    linha(`   standings: ${(r.standings?.groups || []).flatMap((g) => g.standings?.entries || []).length} linhas · exemplo ${JSON.stringify((r.standings?.groups || [])[0]?.standings?.entries?.[0] || null).slice(0, 300)}`);
+    linha(`   gameInfo: ${JSON.stringify(r.gameInfo || null).slice(0, 400)}`);
+    linha(`   seasonseries: ${(r.seasonseries || []).length} · exemplo ${JSON.stringify((r.seasonseries || [])[0]?.events?.[0] || null).slice(0, 500)}`);
+    linha(`   lastFiveGames (um jogo): ${JSON.stringify((r.lastFiveGames || [])[0]?.events?.[0] || null).slice(0, 400)}`);
+    const comps = r.header?.competitions?.[0]?.competitors || [];
+    linha(`   equipas: ${comps.map((c) => `${c.homeAway}:${c.team?.id}:${c.team?.displayName}`).join(" | ")}`);
+  }
+  const itens = await j("/api/items?limit=1500");
+  const jogo = (Array.isArray(itens) ? itens : itens.items || []).find((x) => x.score && String(x.id).startsWith("r:espn:"));
+  if (jogo) {
+    const c = await j(`/api/glossario/curiosidades?h=${encodeURIComponent(jogo.score.h)}&a=${encodeURIComponent(jogo.score.a)}&comp=${encodeURIComponent(jogo.score.comp || "")}`);
+    linha(`== curiosidades no site (${jogo.score.h} x ${jogo.score.a}) ==`, JSON.stringify(c).slice(0, 1500));
+  }
+} catch (e) { linha("curiosidades: erro", e.message); }
+
+// IA: os modelos sem quota, o gasto da tradução e os últimos pedidos
+try {
+  const d = await j("/api/declaracoes/estado");
+  linha("== IA ==", JSON.stringify({ motores: d.ia?.motores, semQuota: d.ia?.modelosSemQuota, pausados: d.ia?.pausados }));
+  for (const u of (d.ia?.ultimos || []).slice(0, 12)) linha(`   ${new Date(u.ts).toISOString().slice(11, 19)} | ${u.uso} | ${u.motor} ${u.modelo || ""} | ${u.erro ? `erro: ${u.erro.slice(0, 160)}` : `ok ${u.ms} ms${u.tokens ? ` · ${u.tokens} tokens` : ""}`}`);
+  const t = await j("/api/tradutor/estado");
+  linha("== tradutor ==", JSON.stringify({ viaIA: t.viaIA, viaGoogle: t.viaGoogle, ia: t.ia }));
+} catch (e) { linha("IA: erro", e.message); }
