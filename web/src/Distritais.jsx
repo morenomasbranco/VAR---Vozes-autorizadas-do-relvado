@@ -1,7 +1,8 @@
 // Secção «Distritais»: uma coluna por associação de futebol, à maneira da «Ronda pela atualidade», com as notícias e
 // os comunicados da própria associação, a imprensa que fala dela e os posts mais recentes do Instagram dos clubes. Os dados vêm de /api/distritais; o que é novo chega pelos eventos «distrital» (posts) e «oficial»
 // (notícias, que o App passa como evento da janela «distrital-noticia»). As imagens passam pelo servidor.
-// Por cima das colunas, duas faixas à maneira do Feed: os jogos de hoje, das distritais à Liga 3 (/api/pt/aovivo), e
+// Por cima de tudo, duas faixas à maneira do Feed: os jogos de hoje, das distritais à Liga 3 (/api/pt/aovivo, que
+// já não aparecem no Feed), e
 // as transmissões em direto nos canais de YouTube das associações, do Canal 11 e da FPF (/api/distritais/diretos).
 // os logótipos que passam pelo servidor vêm com o endereço relativo (/api/distritais/logo…); os que faltam escondem-se
 const logoSrc = (u) => (u && u.startsWith("/") ? (import.meta.env.VITE_API_URL || "") + u : u);
@@ -309,7 +310,8 @@ export default function Distritais({ API = "", now, query = "" }) {
     return { ...o, entradas: [...noticias, ...posts].sort((a, b) => b.ts - a.ts) };
   }), [d, q, ver]);
 
-  if (!d) return <p className="empty">{erro || "A carregar as associações e os clubes…"}</p>;
+  // os jogos de hoje (das distritais à Liga 3) aparecem logo, sem esperar pelas colunas das associações
+  if (!d) return <div className="dist"><FaixasDaBase API={API} agora={agora} orgs={[]} /><p className="empty">{erro || "A carregar as associações e os clubes…"}</p></div>;
   const e = d.estado || {};
   const vias = e.vias || {};
   const hora = (t) => new Date(t).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });

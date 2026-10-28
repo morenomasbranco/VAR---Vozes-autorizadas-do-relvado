@@ -43,9 +43,9 @@ const erro = async (quem, res) => {
   return e;
 };
 
-async function groq({ sistema, pedido, pesquisa, temperatura }) {
+async function groq({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco }) {
   const cab = { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` };
-  const candidatos = pesquisa ? GROQ_PESQUISA() : GROQ_TEXTO().map((modelo) => ({ modelo }));
+  const candidatos = pesquisa ? GROQ_PESQUISA() : (modelosGroq || GROQ_TEXTO()).map((modelo) => ({ modelo }));
   let ultimo = null;
   for (const c of candidatos) {
     const res = await fetch(`${GROQ_API}/chat/completions`, {
@@ -54,6 +54,8 @@ async function groq({ sistema, pedido, pesquisa, temperatura }) {
         model: c.modelo, temperature: temperatura,
         messages: [{ role: "system", content: sistema }, { role: "user", content: pedido }],
         ...(c.ferramenta ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
+        // os gpt-oss pensam antes de responder, e o raciocínio conta para a quota: numa tarefa simples, pouco
+        ...(esforco && /gpt-oss/.test(c.modelo) ? { reasoning_effort: esforco } : {}),
       }),
     });
     if (res.ok) {
@@ -104,20 +106,24 @@ async function claude({ sistema, pedido, pesquisa }) {
 const MOTOR = { groq, gemini, claude };
 
 // pede a um motor de cada vez até um responder com JSON; devolve { json, motor, modelo }
-export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "" }) {
-  const motores = motoresIA().filter((m) => !(pausa[m] > Date.now()));
+// «motores» limita os motores (a tradução das notícias não usa o Claude, que é pago) e «modelosGroq» muda a ordem dos
+// modelos do Groq (cada uso gasta de preferência a quota de um modelo diferente)
+export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "", motores: so = null, modelosGroq = null, esforco = null }) {
+  // a pausa de um motor sem quota é por lista de modelos (a do Groq para a tradução não pára as Declarações)
+  const chavePausa = (m) => (m === "groq" && modelosGroq ? `groq:${modelosGroq.join(",")}` : m);
+  const motores = motoresIA().filter((m) => !(pausa[chavePausa(m)] > Date.now()) && (!so || so.includes(m)));
   if (!motoresIA().length) throw Object.assign(new Error("não há nenhuma chave de IA no servidor (GROQ_API_KEY, GEMINI_API_KEY ou ANTHROPIC_API_KEY)"), { status: 503 });
   if (!motores.length) throw Object.assign(new Error("os motores de IA estão sem quota por agora; tenta daqui a uma hora"), { status: 503 });
   const erros = [];
   for (const m of motores) {
     const t0 = Date.now();
     try {
-      const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura });
+      const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco });
       const json = lerJson(r.texto);
       registar({ uso, motor: m, modelo: r.modelo, ms: Date.now() - t0 });
       return { json, motor: NOME[m], modelo: r.modelo };
     } catch (e) {
-      if (e.status === 429) pausa[m] = Date.now() + PAUSA_429;
+      if (e.status === 429) pausa[chavePausa(m)] = Date.now() + PAUSA_429;
       const msg = `${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`;
       registar({ uso, motor: m, erro: msg.slice(0, 200), ms: Date.now() - t0 });
       erros.push(`${NOME[m]}: ${msg.slice(0, 160)}`);
