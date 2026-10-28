@@ -17,12 +17,55 @@ const ler = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { ret
 const gravar = (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } };
 
 // o texto com o itálico e o negrito do zerozero (<i>, <b>) a aparecerem como tal (o resto fica escapado)
-const comEstilo = (t) => ({ __html: String(t || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])).replace(/&lt;(\/?)(i|b)&gt;/g, "<$1$2>") });
-const pedir = (url, opts) => fetch(url, opts).then((r) => r.json().catch(() => ({})).then((d) => (r.ok ? d : Promise.reject(new Error(d.erro || `erro ${r.status}`)))));
+export const comEstilo = (t) => ({ __html: String(t || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])).replace(/&lt;(\/?)(i|b)&gt;/g, "<$1$2>") });
+export const pedir = (url, opts) => fetch(url, opts).then((r) => r.json().catch(() => ({})).then((d) => (r.ok ? d : Promise.reject(new Error(d.erro || `erro ${r.status}`)))));
 
-function Copiar({ texto, rotulo = "Copiar" }) {
+export function Copiar({ texto, rotulo = "Copiar" }) {
   const [feito, setFeito] = useState(false);
   return <button type="button" className="textbtn" onClick={() => navigator.clipboard?.writeText(texto).then(() => { setFeito(true); setTimeout(() => setFeito(false), 1500); }).catch(() => {})}>{feito ? "Copiado" : rotulo}</button>;
+}
+
+// a peça escrita (Declarações e Prosebot): títulos, micro-título, lead, corpo, o que vier a mais (a figura do jogo),
+// as citações, os avisos das regras do zerozero que ainda faltam e as notas do modelo
+export function Peca({ peca, extra = null, rodape = "", rotulo = "Copiar a peça" }) {
+  const lista = avisos(peca.corpo.join("\n"), { titulo: peca.tituloSite, microtitulo: peca.microtitulo, lead: peca.lead });
+  const tudo = [peca.tituloSite, peca.microtitulo, peca.lead, ...peca.corpo].filter(Boolean).join("\n\n");
+  return (
+    <div className="gdpeca">
+      {(peca.tituloSite || peca.tituloLiveticker) && (
+        <div className="gdbloco">
+          {peca.tituloSite && <p className="gdcampo"><span className="gmod">Título (site) · {peca.tituloSite.replace(/<\/?[ib]>/g, "").length}/90</span><span className="gdtit" dangerouslySetInnerHTML={comEstilo(peca.tituloSite)} /><Copiar texto={peca.tituloSite} /></p>}
+          {peca.tituloLiveticker && <p className="gdcampo"><span className="gmod">Título (Liveticker SIC)</span><span className="gdtit" dangerouslySetInnerHTML={comEstilo(peca.tituloLiveticker)} /><Copiar texto={peca.tituloLiveticker} /></p>}
+          {peca.microtitulo && <p className="gdcampo"><span className="gmod">Micro-título</span><span dangerouslySetInnerHTML={comEstilo(peca.microtitulo)} /><Copiar texto={peca.microtitulo} /></p>}
+        </div>
+      )}
+      {peca.lead && <p className="gdlead" dangerouslySetInnerHTML={comEstilo(peca.lead)} />}
+      {peca.corpo.map((p, i) => <p key={i} className="gdpar" dangerouslySetInnerHTML={comEstilo(p)} />)}
+      {extra}
+      {peca.citacoes?.length > 0 && (
+        <div className="gdbloco">
+          <p className="gmod">Citações</p>
+          <ul className="gdcits">{peca.citacoes.map((c, i) => <li key={i}><span dangerouslySetInnerHTML={comEstilo(c)} /> <Copiar texto={c} /></li>)}</ul>
+        </div>
+      )}
+      {lista.length > 0 && (
+        <div className="gdbloco gdavisos">
+          <p className="gmod">A rever (regras do zerozero)</p>
+          <ul>{lista.map((x, i) => <li key={i}><b>{x.regra}:</b> {x.msg}</li>)}</ul>
+        </div>
+      )}
+      {peca.notas?.length > 0 && (
+        <div className="gdbloco">
+          <p className="gmod">Notas</p>
+          <ul>{peca.notas.map((n, i) => <li key={i}>{n}</li>)}</ul>
+        </div>
+      )}
+      <div className="gjogo-acoes">
+        {tudo && <Copiar texto={tudo} rotulo={rotulo} />}
+        {rodape && <span className="muted gdmotor">{rodape}</span>}
+      </div>
+    </div>
+  );
 }
 
 export default function Declaracoes({ API = "" }) {
@@ -62,8 +105,6 @@ export default function Declaracoes({ API = "" }) {
     setAviso(`Passado a texto${l ? ` (em ${l})` : ""}${d.duracao ? `, ${Math.round(d.duracao / 60) || 1} min de som` : ""}. A transcrição automática pode trocar nomes: revê antes de escrever a peça${l && !/portugu/.test(l) ? ", que sai já traduzida" : ""}.`);
   });
 
-  const lista = peca ? avisos(peca.corpo.join("\n"), { titulo: peca.tituloSite, microtitulo: peca.microtitulo, lead: peca.lead }) : [];
-  const tudo = peca ? [peca.tituloSite, peca.microtitulo, peca.lead, ...peca.corpo].filter(Boolean).join("\n\n") : "";
 
   return (
     <section className="gdecl" aria-label="Declarações">
@@ -101,42 +142,7 @@ export default function Declaracoes({ API = "" }) {
       {estado?.a && <p className="muted gdnota" aria-live="polite">{estado.a}</p>}
       {estado?.erro && <p className="gdaviso" role="alert">Não foi possível: {estado.erro}</p>}
 
-      {peca && (
-        <div className="gdpeca">
-          {(peca.tituloSite || peca.tituloLiveticker) && (
-            <div className="gdbloco">
-              {peca.tituloSite && <p className="gdcampo"><span className="gmod">Título (site) · {peca.tituloSite.replace(/<\/?[ib]>/g, "").length}/90</span><span className="gdtit" dangerouslySetInnerHTML={comEstilo(peca.tituloSite)} /><Copiar texto={peca.tituloSite} /></p>}
-              {peca.tituloLiveticker && <p className="gdcampo"><span className="gmod">Título (Liveticker SIC)</span><span className="gdtit" dangerouslySetInnerHTML={comEstilo(peca.tituloLiveticker)} /><Copiar texto={peca.tituloLiveticker} /></p>}
-              {peca.microtitulo && <p className="gdcampo"><span className="gmod">Micro-título</span><span dangerouslySetInnerHTML={comEstilo(peca.microtitulo)} /><Copiar texto={peca.microtitulo} /></p>}
-            </div>
-          )}
-          {peca.lead && <p className="gdlead" dangerouslySetInnerHTML={comEstilo(peca.lead)} />}
-          {peca.corpo.map((p, i) => <p key={i} className="gdpar" dangerouslySetInnerHTML={comEstilo(p)} />)}
-          {peca.citacoes.length > 0 && (
-            <div className="gdbloco">
-              <p className="gmod">Citações</p>
-              <ul className="gdcits">{peca.citacoes.map((c, i) => <li key={i}><span dangerouslySetInnerHTML={comEstilo(c)} /> <Copiar texto={c} /></li>)}</ul>
-            </div>
-          )}
-          {lista.length > 0 && (
-            <div className="gdbloco gdavisos">
-              <p className="gmod">A rever (regras do zerozero)</p>
-              <ul>{lista.map((x, i) => <li key={i}><b>{x.regra}:</b> {x.msg}</li>)}</ul>
-            </div>
-          )}
-          {peca.notas.length > 0 && (
-            <div className="gdbloco">
-              <p className="gmod">Notas</p>
-              <ul>{peca.notas.map((n, i) => <li key={i}>{n}</li>)}</ul>
-            </div>
-          )}
-          <div className="gjogo-acoes">
-            {tudo && <Copiar texto={tudo} rotulo="Copiar a peça" />}
-            <span className="muted gdmotor">{nomeLingua(peca.lingua) && peca.lingua !== "pt-PT" ? `Traduzido do ${nomeLingua(peca.lingua)} · ` : ""}escrito por {peca.motor} ({peca.modelo})</span>
-          </div>
-        </div>
-      )}
-
+      {peca && <Peca peca={peca} rodape={`${nomeLingua(peca.lingua) && peca.lingua !== "pt-PT" ? `Traduzido do ${nomeLingua(peca.lingua)} · ` : ""}escrito por ${peca.motor} (${peca.modelo})`} />}
     </section>
   );
 }

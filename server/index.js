@@ -30,6 +30,7 @@ import { createGlossario } from "./glossario.js";
 import { createDeclaracoes, limitador } from "./declaracoes.js";
 import { estadoIA } from "./ia.js";
 import { createCuriosidades } from "./curiosidades.js";
+import { createProsebot } from "./prosebot.js";
 import { createPortugal } from "./pt/index.js";
 import { restaurar, rotasCopia } from "./copia.js";
 import { verificarOidc } from "./oidc-github.js";
@@ -526,7 +527,10 @@ app.post("/api/declaracoes/transcrever", limiteIA, (req, res) => responder(res, 
 // Glossário › Preparar jogo: curiosidades do jogo escolhido (pesquisadas na web, guardadas um dia)
 const curiosidades = createCuriosidades({ log });
 app.get("/api/glossario/curiosidades", limiteIA, (req, res) => responder(res, curiosidades({ h: req.query.h, a: req.query.a, comp: req.query.comp, mod: req.query.mod })));
-app.get("/api/declaracoes/estado", (req, res) => res.json({ ...declaracoes.estado(), ia: estadoIA() }));
+// Glossário › Prosebot 2.0: a crónica de um jogo a partir das notas, com as regras do zerozero
+const prosebot = createProsebot({ log });
+app.post("/api/prosebot/cronica", limiteIA, express.json({ limit: "96kb" }), (req, res) => responder(res, prosebot.cronica(req.body || {})));
+app.get("/api/declaracoes/estado", (req, res) => res.json({ ...declaracoes.estado(), prosebot: prosebot.estado(), ia: estadoIA() }));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));

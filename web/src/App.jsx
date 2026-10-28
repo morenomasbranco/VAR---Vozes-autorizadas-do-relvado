@@ -370,6 +370,14 @@ function ago(ts, now) {
 const agoText = (ts, now, ui) => { const a = ago(ts, now); return a ? ui.agoWord(`${a[0]} ${a[1]}`) : ui.now; };
 // um jogo sem atualizações há mais de 150 minutos deixa de contar como em curso
 const isLive = (sc, ts, now) => !sc.ft && now - ts < 150 * 60000;
+// um acontecimento de um jogo em texto simples, para as notas do Prosebot: o título e, nos golos, o marcador e o minuto
+// («Golo do Benfica! Benfica 1–0 FC Porto — Golo de Pavlidis aos 23'»); o cartão que se atualiza fica de fora
+const textoDoEvento = (it) => {
+  const t = String(it.t?.pt || "").replace(/==/g, "").trim();
+  if (!t || /^em direto:/i.test(t)) return null;
+  const golo = (it.b?.pt || []).find((x) => /^golo de /i.test(x));
+  return golo ? `${t} — ${golo.replace(/==/g, "")}` : t;
+};
 // jogo das distritais, do Campeonato de Portugal ou da Liga 3 (vão para a secção Distritais, não para o Feed)
 const daBaseItem = (it) => !!it.pt && daBase({ org: it.pt.org, compNome: it.score?.comp, mod: it.mod || "futebol" });
 const COUNTRIES = {
@@ -2099,12 +2107,16 @@ export default function App() {
     return () => { stop = true; clearInterval(t); window.removeEventListener("pt-jogo", mudou); };
   }, [section]);
   // os jogos para o «Preparar um jogo» do Glossário: só os que estão a decorrer (sem o filtro da pesquisa)
-  const jogosGlos = useMemo(() => {
+  // os jogos para o Glossário, cada um com os acontecimentos que o VAR registou (golos e marcadores, cartões,
+  // penáltis, intervalo, final), do primeiro para o último: o Prosebot junta-os às notas da crónica
+  const jogosGlossario = useMemo(() => {
     if (section !== "glossario") return [];
     const map = new Map();
+    const evs = new Map();
     for (const it of items) {
       if (!it.score) continue;
       const k = `${it.score.comp}|${it.score.h}|${it.score.a}`;
+      if (!it.board) { if (!evs.has(k)) evs.set(k, []); evs.get(k).push(it); }
       if (map.has(k) && (map.get(k).upd || map.get(k).ts) >= (it.upd || it.ts)) continue;
       map.set(k, it);
     }
@@ -2112,9 +2124,16 @@ export default function App() {
       id: k, h: it.score.h, a: it.score.a, hs: it.score.hs, as: it.score.as, comp: leagueName(it.liga) || it.score.comp,
       mod: it.mod || "futebol", modNome: modName(it.mod || "futebol", "pt"), pais: topicOf(it) || null, paisNome: topicOf(it) ? countryName(topicOf(it), "pt") : null,
       vivo: it.pt?.jogo ? !!ptVivos?.has(it.pt.jogo) : isLive(it.score, it.upd || it.ts, now), ft: !!it.score.ft, ts: it.upd || it.ts,
-    })).filter((j) => j.vivo).sort((a, b) => b.ts - a.ts).slice(0, 80);
+      eventos: [...new Set((evs.get(k) || []).sort((a, b) => a.ts - b.ts).map(textoDoEvento).filter(Boolean))],
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, section, now, ptVivos]);
+  const jogosGlos = useMemo(() => jogosGlossario.filter((j) => j.vivo).sort((a, b) => b.ts - a.ts).slice(0, 80), [jogosGlossario]);
+  // Prosebot: primeiro os que acabaram nas últimas 18 horas (a crónica escreve-se no fim), depois os que estão a decorrer
+  const jogosProse = useMemo(() => jogosGlossario.filter((j) => j.vivo || (j.ft && now - j.ts < 18 * 3600e3))
+    .sort((a, b) => (b.ft - a.ft) || b.ts - a.ts).slice(0, 150),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [jogosGlossario]);
 
   // todos os jogos, sem o filtro de ligas, de fontes ou de pesquisa: servem para ligar cada vídeo ao seu jogo,
   // para o cartão do Feed ter sempre o resultado e o canal mesmo quando a liga está desligada nos Resultados
@@ -2855,7 +2874,7 @@ export default function App() {
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
             ) : section === "glossario" ? (
-              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} jogos={jogosGlos} /></Suspense>
+              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} jogos={jogosGlos} jogosProse={jogosProse} /></Suspense>
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "resultados" && resVista === "portugal" ? (

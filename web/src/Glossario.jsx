@@ -12,6 +12,7 @@ import { lerMeus, gravarMeus, juntar, acrescentar, apagar, fundir, contar, limpa
 import { fichaDoJogo, nomesParaEscolher } from "./glossario/jogo.js";
 import { titulosDoJogo } from "./glossario/titulos.js";
 import Declaracoes, { DECL_CSS } from "./Declaracoes.jsx";
+import Prosebot, { PROSE_CSS } from "./Prosebot.jsx";
 
 const bandeira = (code) => `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`;
 
@@ -495,9 +496,15 @@ const MODOS = [
   { id: "preparar", nome: "Preparar jogo" },
   { id: "declaracoes", nome: "Declarações" },
   { id: "sinonimos", nome: "Antónimos/Sinónimos" },
+  { id: "prosebot", nome: "Prosebot 2.0" },
 ];
 
-export default function Glossario({ API = "", query = "", jogos = [] }) {
+// as partes que são ferramentas de escrita (sem a minha lista nem as listas do glossário por baixo)
+const ESCRITA = new Set(["declaracoes", "prosebot"]);
+
+// «jogos»: os que estão a decorrer (Preparar jogo); «jogosProse»: também os que acabaram há pouco, com os acontecimentos
+// que o VAR registou (Prosebot)
+export default function Glossario({ API = "", query = "", jogos = [], jogosProse = [] }) {
   const [modo, setModo] = useState(() => { const m = ler("glos-modo", "preparar"); return MODOS.some((x) => x.id === m) ? m : "preparar"; });
   useEffect(() => { gravar("glos-modo", modo); }, [modo]);
   const [aba, setAba] = useState(() => ler("glos-aba", "expressoes"));
@@ -563,15 +570,16 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
   return (
     <MinhasCtx.Provider value={dados.minhas}>
     <div className="glos">
-      <style>{GLOS_CSS + DECL_CSS}</style>
+      <style>{GLOS_CSS + DECL_CSS + PROSE_CSS}</style>
       <div className="seg gmodos" aria-label="Partes do Glossário">
         {MODOS.map((m) => <button key={m.id} aria-pressed={modo === m.id} onClick={() => setModo(m.id)}>{m.nome}</button>)}
       </div>
       {modo === "declaracoes" && <Declaracoes API={API} />}
+      {modo === "prosebot" && <Prosebot API={API} jogos={jogosProse} jogoEscolhido={jogoAtual} dados={dados} />}
       {modo === "sinonimos" && <Pesquisa API={API} grupos={grupos} />}
       {modo === "preparar" && <PrepararJogo jogos={jogos} jogo={jogo} setJogo={setJogo} dados={dados} />}
       {modo === "preparar" && ficha && <FichaDoJogo API={API} ficha={ficha} jogo={jogoAtual} minha={minha} alternar={alternar} termos={TERMOS} ideias={IDEIAS} />}
-      {modo !== "declaracoes" && minha.length > 0 && (
+      {!ESCRITA.has(modo) && minha.length > 0 && (
         <section className="gminha" aria-label="A minha lista">
           <p className="gmod">A minha lista ({minha.length})</p>
           <div className="galc">{minha.map((p) => <button key={p} className="chip gchip on" onClick={() => alternar(p)} title="Tirar da minha lista">{p} ×</button>)}</div>
@@ -581,7 +589,7 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
           </div>
         </section>
       )}
-      {modo !== "declaracoes" && <>
+      {!ESCRITA.has(modo) && <>
       <div className="seg gabas" role="group" aria-label="Partes do glossário">
         {ABAS.map((a) => <button key={a.id} aria-pressed={aba === a.id} onClick={() => setAba(a.id)}>{a.nome}</button>)}
       </div>
