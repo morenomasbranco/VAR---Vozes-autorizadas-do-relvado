@@ -198,6 +198,10 @@ try {
   const tipos = {};
   for (const v of lista) { const k = `${v.source?.replace(/^t\.me\/.*/, "t.me") || "?"} · ${v.embed?.tipo || "sem leitor"}`; tipos[k] = (tipos[k] || 0) + 1; }
   linha(`== vídeos do Feed == ${lista.length}`, JSON.stringify(tipos));
+  // os golos do u/Lazy_Banana_1636 no r/soccer (streamff), que vão sempre para os Destaques do Feed
+  const lazy = lista.filter((v) => /^lazy_banana_1636$/i.test(v.author || ""));
+  linha(`== vídeos do u/Lazy_Banana_1636 == ${lazy.length}`);
+  for (const v of lazy.slice(0, 8)) linha(`   ${v.embed?.tipo || "sem leitor"} | ${v.video_url} | ${v.embed?.src || "-"} | ${v.title}`);
   // os que não têm leitor no site (abrem no site de origem): o endereço e o que a página de cada um oferece
   const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" };
   for (const v of lista.filter((x) => !x.embed).slice(0, 30)) {

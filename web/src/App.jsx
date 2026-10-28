@@ -719,7 +719,12 @@ function VideoImg({ v, onEscuro }) {
   return <img src={thumbUrl(v)} alt="" loading="lazy" onError={() => setFase(1)} onLoad={onEscuro ? (e) => { if (imagemEscura(e.currentTarget)) onEscuro(v.video_id); } : undefined} />;
 }
 
-function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false, onEscuro }) {
+// quem publica no Reddit os golos que vão sempre para os Destaques do Feed (os do u/Lazy_Banana_1636 no r/soccer, em
+// streamff, chegam primeiro e com boa imagem)
+const AUTORES_DESTAQUE = /^(lazy_banana_1636)$/i;
+
+// hero: o vídeo em grande no topo do Feed (com «etiqueta» por cima do título: em direto ou em destaque)
+function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false, hero = false, etiqueta = null, onEscuro }) {
   const tx = VTXT[lang] || VTXT.pt;
   const c = VCAT[v.category] || VCAT.other;
   const [falhou, setFalhou] = useState(false);
@@ -737,7 +742,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
     )
     : v.title;
   return (
-    <li className={`vcard cat-${v.category} ${mini ? "mini" : ""}`}>
+    <li className={`vcard cat-${v.category} ${mini ? "mini" : ""}${hero ? " hero" : ""}`}>
       <div className="vthumb">
         {!playing && auto && v.embed && !v.embed.servidor && (
           <button className="vplay vautobtn" onClick={() => onPlay(v.video_id)} aria-label={tx.watch}>
@@ -768,6 +773,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
           </button>
         )}
       </div>
+      {etiqueta}
       <h3 className="vtitle">{titulo}</h3>
       {(v.player || v.minute) && <p className="vsub">{v.player}{v.player && v.minute ? " " : ""}{v.minute ? `${v.minute}'` : ""}{v.opponent ? <span className="muted"> · vs {v.opponent}</span> : null}</p>}
       {v.teams && v.title && <p className="vorig" title={v.title}>{v.title}</p>}
@@ -1257,6 +1263,24 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
+/* o vídeo em grande no topo do Feed: a imagem à esquerda e o jogo à direita (um por baixo do outro no telemóvel) */
+.apito .vhero{margin:2px 0 16px}
+.apito .vcard.hero{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);grid-auto-rows:min-content;align-content:start;column-gap:20px;padding:12px;border-top-width:4px;box-shadow:0 8px 28px rgba(0,0,0,.14);animation:none}
+.apito .vcard.hero .vthumb{grid-column:1;grid-row:1 / span 7;align-self:start;border-radius:10px}
+.apito .vcard.hero > :not(.vthumb){grid-column:2}
+.apito .vheroeti{margin:2px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.apito .vheroeti .pulse{font-size:12px}
+.apito .vcard.hero .vtitle{font-family:var(--display);font-size:26px;line-height:1.15;letter-spacing:-.02em;margin:2px 0 8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.apito .vcard.hero .vsub{font-size:16px;font-weight:600}
+.apito .vcard.hero .vorig{font-size:14px;color:var(--muted);margin:6px 0 0}
+.apito .vcard.hero .vmeta{margin-top:8px}
+.apito .vcard.hero .vacts{margin-top:10px}
+@media(max-width:760px){
+  .apito .vcard.hero{grid-template-columns:minmax(0,1fr);padding:8px}
+  .apito .vcard.hero .vthumb,.apito .vcard.hero > :not(.vthumb){grid-column:1;grid-row:auto}
+  .apito .vcard.hero .vheroeti{margin-top:8px}
+  .apito .vcard.hero .vtitle{font-size:20px}
+}
 /* título dos Destaques igual ao «Feed» */
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
@@ -2085,17 +2109,19 @@ export default function App() {
   [videos, vFiltro, query]);
 
   // Destaques de vídeo: os de maior interesse das últimas 24 h. A nota junta o tipo de lance (golo, expulsão e VAR
-  // acima de defesas e fintas, e estas acima de resumos), o jogo (os três grandes, a Liga Portugal e os jogos a
-  // decorrer), os golos tardios, o número de fontes que publicaram o mesmo vídeo (sinal de que é falado) e a
-  // frescura (a nota cai para metade a cada 4 horas). No máximo dois vídeos por jogo, para a faixa não ficar só com um.
+  // acima de defesas e fintas, e estas acima de resumos), o jogo (os jogos a decorrer à frente de tudo, depois os três
+  // grandes e a Liga Portugal), os golos tardios, o número de fontes que publicaram o mesmo vídeo (sinal de que é
+  // falado), os golos do u/Lazy_Banana_1636 no r/soccer e a frescura (a nota cai para metade a cada 4 horas). No
+  // máximo dois vídeos por jogo, para a faixa não ficar só com um. O primeiro aparece em grande no topo do Feed.
   const horaDest = Math.floor(now / 60000);
   const [escuros, setEscuros] = useState(() => new Set());
   const marcaEscuro = (id) => setEscuros((s) => (s.has(id) ? s : new Set([...s, id])));
+  // o vídeo é de um jogo que está a decorrer?
+  const doJogoAoVivo = (v) => !!v.teams && aoVivo.some(({ score: sc }) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)));
   const destaquesVid = useMemo(() => {
     const t = horaDest * 60000;
     const PESO = { goal: 5, red: 4.5, var: 4, save: 3.5, skill: 3, highlight: 2, other: 0.5 };
     const GRANDES = /benfica|porto|sporting/i;
-    const aoVivoTok = aoVivo.map((g) => g.score);
     const nota = (v) => {
       const idadeH = (t - v.created_time) / 3600e3;
       if (idadeH > 24) return 0;
@@ -2103,7 +2129,8 @@ export default function App() {
       let n = PESO[v.category] ?? 1;
       if (GRANDES.test(eq)) n += 3;
       if (v.portugues) n += 1.5;
-      if (v.teams && aoVivoTok.some((sc) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)))) n += 1.5;
+      if (doJogoAoVivo(v)) n += 6;
+      if (AUTORES_DESTAQUE.test(v.author || "")) n += 4;
       const min = parseInt(v.minute, 10);
       if (v.category === "goal" && min >= 85) n += 1.5;
       if (v.player) n += 0.5;
@@ -2518,6 +2545,16 @@ export default function App() {
 
             {section === "destaque" ? (
               <>
+                {destaquesVid[0] && (
+                  <section className="vhero" aria-label={ui.videoHighlights}>
+                    <ul className="vlist">
+                      <VideoCard key={destaquesVid[0].video_id} v={destaquesVid[0]} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === destaquesVid[0].video_id} onPlay={setATocar} auto={autoVid} hero onEscuro={marcaEscuro}
+                        etiqueta={doJogoAoVivo(destaquesVid[0])
+                          ? <p className="vheroeti"><span className="pulse"><i />{ui.liveHero || "Em direto"}</span></p>
+                          : <p className="vheroeti">{ui.videoHero || "Vídeo em destaque"}</p>} />
+                    </ul>
+                  </section>
+                )}
                 <section className="livebar jv" aria-label={ui.liveNow}>
                   {aoVivo.length > 0 && (
                     <div className="livehead">
@@ -2602,7 +2639,7 @@ export default function App() {
                     );
                   })()}
                 </section>
-                {destaquesVid.length > 0 && (
+                {destaquesVid.length > 1 && (
                   <section className="vbar vdest" aria-label={ui.videoHighlights}>
                     <div className="livehead">
                       <h2 className="vdesth">{ui.videoHighlights}</h2>
@@ -2617,7 +2654,7 @@ export default function App() {
                       onMouseLeave={() => { vPausa.current = false; }}
                       onTouchStart={() => { vPausa.current = true; }}
                       onTouchEnd={() => { vPausa.current = false; vEspera.current = performance.now() + 2500; }}>
-                      {destaquesVid.map((v) => (
+                      {destaquesVid.slice(1).map((v) => (
                         <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini onEscuro={marcaEscuro} />
                       ))}
                     </ul>

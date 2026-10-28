@@ -9,7 +9,7 @@ import Parser from "rss-parser";
 import { sleep } from "../util.js";
 
 const UA = process.env.REDDIT_USER_AGENT || "web:var-feed:1.0 (agregador de videos de futebol)";
-const VIDEO_HOSTS = /(^|\.)(v\.redd\.it|streamable\.com|streamin\.(one|me|link|fun)|streamja\.com|streamff\.(com|co|link)|streamgg\.com|dubz\.(co|link|live)|streamvi\.com|clippituser\.tv|mixture\.gg|juststream\.live|streambug\.io|youtube\.com|youtu\.be|x\.com|twitter\.com|imgur\.com|gfycat\.com|redgifs\.com|dailymotion\.com|dai\.ly|vimeo\.com|streamain\.com|caulse\.com|footy\.media|goalclip\.net|streamwo\.com|streamye\.com|streamnew\.(com|net)|streamclips\.\w+|clip\.dubz\.\w+|videy\.co|vidmoly\.\w+|ok\.ru|facebook\.com|fb\.watch|instagram\.com|tiktok\.com|kick\.com|twitch\.tv|clips\.twitch\.tv)$/i;
+const VIDEO_HOSTS = /(^|\.)(v\.redd\.it|streamable\.com|streamin\.\w+|streamja\.com|streamff\.\w+|streamgg\.com|dubz\.(co|link|live)|streamvi\.com|clippituser\.tv|mixture\.gg|juststream\.live|streambug\.io|youtube\.com|youtu\.be|x\.com|twitter\.com|imgur\.com|gfycat\.com|redgifs\.com|dailymotion\.com|dai\.ly|vimeo\.com|streamain\.com|caulse\.com|footy\.media|goalclip\.net|streamwo\.com|streamye\.com|streamnew\.(com|net)|streamclips\.\w+|clip\.dubz\.\w+|videy\.co|vidmoly\.\w+|ok\.ru|facebook\.com|fb\.watch|instagram\.com|tiktok\.com|kick\.com|twitch\.tv|clips\.twitch\.tv)$/i;
 const IMAGEM = /\.(jpe?g|png|webp|gif)(\?|$)/i;
 // ligações que nunca são o vídeo: o próprio Reddit, imagens e redes que não servem vídeo diretamente
 const NAO_VIDEO = /(^|\.)(reddit\.com|redd\.it|i\.redd\.it|preview\.redd\.it|redditmedia\.com|imgur\.com|wikipedia\.org|google\.[a-z.]+)$/i;
