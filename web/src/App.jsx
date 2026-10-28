@@ -13,21 +13,24 @@ const API = import.meta.env.VITE_API_URL || "";
 const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src };
 
 /* ───────── Secções ───────── */
+// Ordem da barra, em três grupos (sep: um espaço antes): o que acontece agora (Feed, Ronda pela atualidade, ligas,
+// distritais, resultados), os clubes e as modalidades, e as ferramentas (Mercado, Neste dia, Glossário)
 const CATS = [
   { id: "destaque", pt: "Feed", en: "Feed", es: "Feed", fr: "Feed", it: "Feed", de: "Feed", hl: "dest" },
+  { id: "ronda", pt: "Ronda pela atualidade", en: "News round-up", es: "Repaso de la actualidad", fr: "Tour de l'actualité", it: "Giro dell'attualità", de: "Nachrichtenüberblick" },
   { id: "ligas", pt: "Ligas e Federações", en: "Leagues & Federations", es: "Ligas y Federaciones", fr: "Ligues et Fédérations", it: "Leghe e Federazioni", de: "Ligen und Verbände" },
+  { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
   { id: "resultados", pt: "Resultados", en: "Results", es: "Resultados", fr: "Résultats", it: "Risultati", de: "Ergebnisse" },
-  { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true },
+  { id: "porto", pt: "Porto", en: "Porto", es: "Porto", fr: "Porto", it: "Porto", de: "Porto", club: true, sep: true },
   { id: "sporting", pt: "Sporting", en: "Sporting", es: "Sporting", fr: "Sporting", it: "Sporting", de: "Sporting", club: true },
   { id: "benfica", pt: "Benfica", en: "Benfica", es: "Benfica", fr: "Benfica", it: "Benfica", de: "Benfica", club: true },
-  { id: "mercado", pt: "Mercado", en: "Transfers", es: "Mercado", fr: "Transferts", it: "Mercato", de: "Transfers" },
   { id: "modalidades", pt: "Modalidades", en: "Other sports", es: "Otros deportes", fr: "Autres sports", it: "Altri sport", de: "Andere Sportarten" },
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
+  { id: "mercado", pt: "Mercado", en: "Transfers", es: "Mercado", fr: "Transferts", it: "Mercato", de: "Transfers", hl: "merc", sep: true },
+  { id: "efemerides", pt: "Neste dia", en: "On this day", es: "Tal día como hoy", fr: "Ce jour-là", it: "Accadde oggi", de: "An diesem Tag", hl: "efem" },
+  { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar", hl: "glos" },
   // não aparece na barra de secções (as notícias continuam na coluna «Portugueses pelo mundo» do Feed)
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland", semBarra: true },
-  { id: "distritais", pt: "Distritais", en: "District football", es: "Distritales", fr: "Districts", it: "Distrettuali", de: "Bezirksligen" },
-  { id: "efemerides", pt: "Nesta semana", en: "This week in history", es: "Esta semana en la historia", fr: "Cette semaine-là", it: "Questa settimana nella storia", de: "Diese Woche in der Geschichte", hl: "efem" },
-  { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar", hl: "glos" },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.id, c]));
 
@@ -73,7 +76,7 @@ const SEM_ETIQUETA = new Set(["porto", "sporting", "benfica", "mercado", "modali
 const LISTA_CENTRADA = new Set(["porto", "sporting", "benfica", "mercado", "modalidades", "estatisticas"]);
 
 const inSection = (it, s) => {
-  if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais" || s === "glossario") return false;
+  if (s === "favoritos" || s === "capas" || s === "efemerides" || s === "ligas" || s === "distritais" || s === "glossario" || s === "ronda") return false;
   if (s === "resultados") return !!it.score;
   if (it.board) return false; // o cartão que se atualiza durante o jogo vive no quadro de resultados
   if (s === "live") return true;
@@ -1254,7 +1257,6 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
-.apito .livehead.ronda{margin:4px 0 10px}
 /* título dos Destaques igual ao «Feed» */
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
@@ -1307,16 +1309,20 @@ const CSS = `
 .apito .brandbtn:hover .tagline{text-decoration:underline;text-underline-offset:3px}
 /* Capas: dias da semana */
 .apito .capdias{flex-wrap:wrap;margin:0 0 16px;border-radius:14px}
-/* Nesta semana */
+/* Neste dia */
 .apito .tab.hl-efem{color:var(--accent);--tabc:var(--accent)}
 /* Glossário: destacado na barra das secções */
 .apito .tab.hl-glos{color:var(--hist);--tabc:var(--hist);font-weight:600}
+/* o Mercado com cor própria; e um espaço com uma risca entre os grupos da barra */
+.apito .tab.hl-merc{color:#e2683c;--tabc:#e2683c;background:color-mix(in srgb,#e2683c 14%,transparent)}
+.apito .tab.sep{margin-left:14px;position:relative}
+.apito .tab.sep::after{content:"";position:absolute;left:-8px;top:22%;bottom:22%;width:1px;background:var(--line)}
 .apito .efem{max-width:900px;margin:0 auto}
-.apito .efem .efdia{text-align:center}
+.apito .efem .efdia{text-align:center;margin-bottom:2px}
+.apito .efnota{text-align:center;font-size:13px;margin:0 0 12px}
 .apito .efdia{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 12px;letter-spacing:-.01em}
 .apito .eftipos{flex-wrap:wrap;margin:0 0 18px;border-radius:14px}
 .apito .eftipos .flag{vertical-align:-2px}
-.apito .efdias{margin-top:0}
 .apito .efdata{display:inline-block;margin:0 8px 2px 0;padding:1px 7px;border-radius:999px;background:var(--line);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
 .apito .efgrupo{margin:0 0 22px}
 .apito .efh{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;justify-content:center;gap:10px;margin:0 0 6px;padding:6px 0 8px;background:var(--bg);border-bottom:2px solid var(--accent);font-family:var(--display);font-size:19px;letter-spacing:-.015em}
@@ -1403,72 +1409,101 @@ const CSS = `
 }
 `;
 
-/* ───────── Nesta semana ───────── */
+/* ───────── Neste dia ───────── */
+// o servidor prepara a semana toda (para não haver espera quando muda o dia); aqui mostra-se só o dia de hoje, arrumado
+// por modalidade (o futebol primeiro) e, dentro de cada uma, dos aniversários mais redondos aos mais antigos
 const EFTXT = {
-  pt: { note: "O que aconteceu no desporto nos dias desta semana, há 1, 2, 3, 4, 5, 10, 15, 20… 100 anos. A lista muda sozinha quando a semana muda e é revista ao longo do dia.", ago: (n) => (n === 1 ? "Há 1 ano" : `Há ${n} anos`), tipos: { todos: "Tudo", jogo: "Jogos", acontecimento: "Acontecimentos", nascimento: "Nascimentos", morte: "Mortes" }, born: "Nasceu", died: "Morreu", loading: "A preparar a lista desta semana…", none: "Nada de desporto registado para estes aniversários.", pt: "Só Portugal", src: "Fontes: Wikipédia, Wikidata e ESPN", pens: "g.p.", more: (n) => `Mais ${n} jogos`, less: "Mostrar menos", week: (d) => `Semana de ${d}`, allDays: "Semana toda" },
-  en: { note: "What happened in sport on the days of this week, 1, 2, 3, 4, 5, 10, 15, 20… 100 years ago. The list changes by itself when the week changes and is refreshed during the day.", ago: (n) => (n === 1 ? "1 year ago" : `${n} years ago`), tipos: { todos: "All", jogo: "Matches", acontecimento: "Events", nascimento: "Births", morte: "Deaths" }, born: "Born", died: "Died", loading: "Preparing this week's list…", none: "Nothing sporting on record for these anniversaries.", pt: "Portugal only", src: "Sources: Wikipedia, Wikidata and ESPN", pens: "pens", more: (n) => `${n} more matches`, less: "Show less", week: (d) => `Week of ${d}`, allDays: "Whole week" },
-  es: { note: "Lo que pasó en el deporte en los días de esta semana, hace 1, 2, 3, 4, 5, 10, 15, 20… 100 años. La lista cambia sola cuando cambia la semana y se revisa durante el día.", ago: (n) => (n === 1 ? "Hace 1 año" : `Hace ${n} años`), tipos: { todos: "Todo", jogo: "Partidos", acontecimento: "Acontecimientos", nascimento: "Nacimientos", morte: "Fallecimientos" }, born: "Nació", died: "Murió", loading: "Preparando la lista de esta semana…", none: "No hay nada de deporte registrado para estos aniversarios.", pt: "Solo Portugal", src: "Fuentes: Wikipedia, Wikidata y ESPN", pens: "pen.", more: (n) => `${n} partidos más`, less: "Mostrar menos", week: (d) => `Semana del ${d}`, allDays: "Toda la semana" },
-  fr: { note: "Ce qui s'est passé dans le sport les jours de cette semaine, il y a 1, 2, 3, 4, 5, 10, 15, 20… 100 ans. La liste change toute seule quand la semaine change et est revue pendant la journée.", ago: (n) => (n === 1 ? "Il y a 1 an" : `Il y a ${n} ans`), tipos: { todos: "Tout", jogo: "Matchs", acontecimento: "Événements", nascimento: "Naissances", morte: "Décès" }, born: "Naissance", died: "Décès", loading: "Préparation de la liste de la semaine…", none: "Rien de sportif enregistré pour ces anniversaires.", pt: "Portugal seulement", src: "Sources : Wikipédia, Wikidata et ESPN", pens: "t.a.b.", more: (n) => `${n} matchs de plus`, less: "Afficher moins", week: (d) => `Semaine du ${d}`, allDays: "Toute la semaine" },
-  it: { note: "Cosa è successo nello sport nei giorni di questa settimana, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa. L'elenco cambia da solo quando cambia la settimana e viene rivisto durante il giorno.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di questa settimana…", none: "Niente di sportivo registrato per questi anniversari.", pt: "Solo Portogallo", src: "Fonti: Wikipedia, Wikidata ed ESPN", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", week: (d) => `Settimana del ${d}`, allDays: "Tutta la settimana" },
-  de: { note: "Was an den Tagen dieser Woche im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren. Die Liste wechselt von selbst, wenn die Woche wechselt, und wird im Laufe des Tages überprüft.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die Liste dieser Woche wird vorbereitet…", none: "Für diese Jahrestage ist nichts Sportliches verzeichnet.", pt: "Nur Portugal", src: "Quellen: Wikipedia, Wikidata und ESPN", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", week: (d) => `Woche vom ${d}`, allDays: "Ganze Woche" },
+  pt: { note: "O que aconteceu no desporto neste dia, há 1, 2, 3, 4, 5, 10, 15, 20… 100 anos.", ago: (n) => (n === 1 ? "Há 1 ano" : `Há ${n} anos`), tipos: { todos: "Tudo", jogo: "Jogos", acontecimento: "Acontecimentos", nascimento: "Nascimentos", morte: "Mortes" }, born: "Nasceu", died: "Morreu", loading: "A preparar a lista de hoje…", none: "Nada de desporto registado para este dia.", pens: "g.p.", more: (n) => `Mais ${n} jogos`, less: "Mostrar menos", day: (d) => `Neste dia · ${d}` },
+  en: { note: "What happened in sport on this day, 1, 2, 3, 4, 5, 10, 15, 20… 100 years ago.", ago: (n) => (n === 1 ? "1 year ago" : `${n} years ago`), tipos: { todos: "All", jogo: "Matches", acontecimento: "Events", nascimento: "Births", morte: "Deaths" }, born: "Born", died: "Died", loading: "Preparing today's list…", none: "Nothing sporting on record for this day.", pens: "pens", more: (n) => `${n} more matches`, less: "Show less", day: (d) => `On this day · ${d}` },
+  es: { note: "Lo que pasó en el deporte tal día como hoy, hace 1, 2, 3, 4, 5, 10, 15, 20… 100 años.", ago: (n) => (n === 1 ? "Hace 1 año" : `Hace ${n} años`), tipos: { todos: "Todo", jogo: "Partidos", acontecimento: "Acontecimientos", nascimento: "Nacimientos", morte: "Fallecimientos" }, born: "Nació", died: "Murió", loading: "Preparando la lista de hoy…", none: "No hay nada de deporte registrado para este día.", pens: "pen.", more: (n) => `${n} partidos más`, less: "Mostrar menos", day: (d) => `Tal día como hoy · ${d}` },
+  fr: { note: "Ce qui s'est passé dans le sport ce jour-là, il y a 1, 2, 3, 4, 5, 10, 15, 20… 100 ans.", ago: (n) => (n === 1 ? "Il y a 1 an" : `Il y a ${n} ans`), tipos: { todos: "Tout", jogo: "Matchs", acontecimento: "Événements", nascimento: "Naissances", morte: "Décès" }, born: "Naissance", died: "Décès", loading: "Préparation de la liste du jour…", none: "Rien de sportif enregistré pour ce jour.", pens: "t.a.b.", more: (n) => `${n} matchs de plus`, less: "Afficher moins", day: (d) => `Ce jour-là · ${d}` },
+  it: { note: "Cosa è successo nello sport in questo giorno, 1, 2, 3, 4, 5, 10, 15, 20… 100 anni fa.", ago: (n) => (n === 1 ? "1 anno fa" : `${n} anni fa`), tipos: { todos: "Tutto", jogo: "Partite", acontecimento: "Eventi", nascimento: "Nascite", morte: "Morti" }, born: "Nato", died: "Morto", loading: "Preparo l'elenco di oggi…", none: "Niente di sportivo registrato per questo giorno.", pens: "rig.", more: (n) => `Altre ${n} partite`, less: "Mostra meno", day: (d) => `Accadde oggi · ${d}` },
+  de: { note: "Was an diesem Tag im Sport passiert ist, vor 1, 2, 3, 4, 5, 10, 15, 20… 100 Jahren.", ago: (n) => (n === 1 ? "Vor 1 Jahr" : `Vor ${n} Jahren`), tipos: { todos: "Alles", jogo: "Spiele", acontecimento: "Ereignisse", nascimento: "Geburten", morte: "Todesfälle" }, born: "Geboren", died: "Gestorben", loading: "Die Liste von heute wird vorbereitet…", none: "Für diesen Tag ist nichts Sportliches verzeichnet.", pens: "i.E.", more: (n) => `${n} weitere Spiele`, less: "Weniger anzeigen", day: (d) => `An diesem Tag · ${d}` },
 };
 // quem pesquisou na web cada acontecimento: [nome curto, nome completo]
 const MOTOR_EF = { claude: ["Claude", "Claude"], gemini: ["Gemini", "Gemini (Google)"], groq: ["Groq", "Groq"] };
-const JOGOS_POR_ANO = 6; // os restantes jogos de cada ano ficam atrás de «mais»
+const JOGOS_POR_MOD = 8; // os restantes jogos de cada modalidade ficam atrás de «mais»
+// a modalidade de cada entrada: a que o servidor deu ou, nos nascimentos e mortes (que não a trazem), a que a descrição
+// deixa ver («futebolista», «tenista», «piloto de Fórmula 1»…). A ordem conta: o futebol americano antes do futebol, e o
+// futebol antes do atletismo (por causa do «Atlético»)
+const MOD_TEXTO = [
+  [/futsal|futebol de sal[aã]o/, "futsal"],
+  [/futebol americano|american football|\bnfl\b|super bowl/, "futebol_americano"],
+  [/futebolista|futebol|footballer|association football|soccer|\bfifa\b|\buefa\b/, "futebol"],
+  [/basquet|basket|\bnba\b/, "basquetebol"],
+  [/h[oó]quei em patins|roller hockey|rink hockey/, "hoquei_patins"],
+  [/h[oó]quei|hockey|\bnhl\b/, "hoquei_gelo"],
+  [/andebol|handball/, "andebol"],
+  [/voleibol|volei|volleyball/, "voleibol"],
+  [/t[eé]nis|tenista|tennis|wimbledon|roland.garros/, "tenis"],
+  [/ciclis|cycling|cyclist|tour de france|giro d.italia|volta a portugal/, "ciclismo"],
+  [/nata[cç][aã]o|nadador|swimm/, "natacao"],
+  [/f[oó]rmula 1|formula one|piloto|automobil|motorsport|racing driver|rali|rally|motogp|motociclis/, "automobilismo"],
+  [/golfe|golfista|\bgolf/, "golfe"],
+  [/r[aâ]guebi|rugby/, "ragby"],
+  [/cr[ií]quete|cricket/, "criquete"],
+  [/beisebol|basebol|baseball/, "beisebol"],
+  [/pugilis|boxe|boxer|boxing|judo|jud[oó]ca|karat|lutador|wrestl|\bufc\b|\bmma\b/, "combate"],
+  [/atletismo|atleta|athlet|maratona|marathon|sprinter|velocista/, "atletismo"],
+  [/treinador|guarda-redes|avan[cç]ado|m[eé]dio|defesa|golo|sele[cç][aã]o|ta[cç]a|campeonato|liga\b|clube/, "futebol"],
+];
+const modDoItem = (it) => {
+  if (it.mod) return it.mod;
+  if (it.tipo === "jogo") return "futebol";
+  const t = `${it.desc || ""} ${it.texto || ""} ${it.nome || ""}`.toLowerCase();
+  return MOD_TEXTO.find(([re]) => re.test(t))?.[1] || "outra";
+};
 
 function EfemeridesView({ dados, lang, theme, query }) {
   const tx = EFTXT[lang] || EFTXT.pt;
   const [tipo, setTipo] = useState("todos");
-  const [diaSel, setDiaSel] = useState(null); // null = a semana toda
   const [abertos, setAbertos] = useState({});
   const q = query.trim().toLowerCase();
   const locale = UI[lang]?.locale || "pt-PT";
-  const dias = dados?.dias || [];
-  const fmtDia = (d, opt) => new Date(`${d}T12:00:00Z`).toLocaleDateString(locale, { ...opt, timeZone: "UTC" });
-  const nomeDoDia = (d) => (d === dados?.hoje ? (CAPTXT[lang] || CAPTXT.pt).hoje : fmtDia(d, { weekday: "short", day: "numeric" }));
-  const itens = (dados?.itens || []).filter((it) => (tipo === "todos" || it.tipo === tipo) && (!diaSel || it.dia === diaSel)
+  const hoje = dados?.hoje || null;
+  const doDia = (dados?.itens || []).filter((it) => !hoje || it.dia === hoje);
+  const itens = doDia.filter((it) => (tipo === "todos" || it.tipo === tipo)
     && (!q || `${it.nome || ""} ${it.desc || ""} ${it.texto || ""} ${it.casa || ""} ${it.fora || ""} ${it.liga || ""}`.toLowerCase().includes(q)));
-  const grupos = [];
+  // uma secção por modalidade: o futebol primeiro, depois as que têm mais entradas, e as «outras» no fim
+  const porMod = new Map();
   for (const it of itens) {
-    const g = grupos[grupos.length - 1];
-    if (g && g.anos === it.anos) g.lista.push(it); else grupos.push({ anos: it.anos, ano: it.ano, lista: [it] });
+    const m = modDoItem(it);
+    if (!porMod.has(m)) porMod.set(m, []);
+    porMod.get(m).push(it);
   }
-  const contagem = (t) => (dados?.itens || []).filter((it) => (t === "todos" || it.tipo === t) && (!diaSel || it.dia === diaSel)).length;
-  const semanaTxt = dias.length ? `${fmtDia(dias[0], { day: "numeric", month: "short" })} – ${fmtDia(dias[dias.length - 1], { day: "numeric", month: "short" })}` : "";
+  const mods = [...porMod.entries()]
+    .sort((a, b) => (b[0] === "futebol") - (a[0] === "futebol") || (a[0] === "outra") - (b[0] === "outra") || b[1].length - a[1].length)
+    .map(([m, lista]) => ({ m, lista: [...lista].sort((a, b) => a.anos - b.anos) }));
+  const contagem = (t) => doDia.filter((it) => t === "todos" || it.tipo === t).length;
+  const diaTxt = hoje ? new Date(`${hoje}T12:00:00Z`).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }) : "";
+  const quando = (it) => <span className="efdata" title={String(it.ano)}>{tx.ago(it.anos)} · {it.ano}</span>;
   return (
     <div className="efem">
-      <p className="efdia">{tx.week(semanaTxt)}</p>
-      {dias.length > 0 && (
-        <div className="seg lvls eftipos efdias" role="group">
-          <button aria-pressed={!diaSel} onClick={() => setDiaSel(null)}>{tx.allDays}</button>
-          {dias.map((d) => (
-            <button key={d} aria-pressed={diaSel === d} onClick={() => setDiaSel(d)}>{nomeDoDia(d)}<span className="ct">{(dados?.itens || []).filter((it) => it.dia === d && (tipo === "todos" || it.tipo === tipo)).length}</span></button>
-          ))}
-        </div>
-      )}
+      <p className="efdia">{tx.day(diaTxt)}</p>
+      <p className="muted efnota">{tx.note}</p>
       <div className="seg lvls eftipos" role="group">
         {Object.entries(tx.tipos).map(([k, n]) => (
           <button key={k} aria-pressed={tipo === k} onClick={() => setTipo(k)}>{n}<span className="ct">{contagem(k)}</span></button>
         ))}
       </div>
-      {!dados?.pronto ? <p className="empty">{tx.loading}</p> : grupos.length === 0 ? <p className="empty">{tx.none}</p> : grupos.map((g) => {
-        const jogos = g.lista.filter((it) => it.tipo === "jogo");
-        const outros = g.lista.filter((it) => it.tipo !== "jogo");
-        const aberto = !!abertos[g.anos];
-        const jogosVis = aberto ? jogos : jogos.slice(0, JOGOS_POR_ANO);
+      {!dados?.pronto ? <p className="empty">{tx.loading}</p> : mods.length === 0 ? <p className="empty">{tx.none}</p> : mods.map(({ m, lista }) => {
+        const jogos = lista.filter((it) => it.tipo === "jogo");
+        const outros = lista.filter((it) => it.tipo !== "jogo");
+        const aberto = !!abertos[m];
+        const jogosVis = aberto ? jogos : jogos.slice(0, JOGOS_POR_MOD);
         return (
-          <section key={g.anos} className="efgrupo">
-            <h2 className="efh"><b>{tx.ago(g.anos)}</b><span className="muted">{g.ano}</span></h2>
+          <section key={m} className="efgrupo">
+            <h2 className="efh"><b>{modName(m, lang) || m}</b><span className="muted">{lista.length}</span></h2>
             <ul className="eflist">
               {outros.map((it) => (
                 <li key={it.id} className={`efitem ef-${it.tipo}`}>
                   {it.img ? <img className="efimg" src={it.img} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : <span className="efico" aria-hidden="true">{it.tipo === "nascimento" ? "🎂" : it.tipo === "morte" ? "🕊" : "🏆"}</span>}
                   <div className="eftxt">
-                    {it.dia && !diaSel && <span className="efdata">{nomeDoDia(it.dia)}</span>}
+                    {quando(it)}
                     {it.nome ? (
                       <p><span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span> <b>{it.nome}</b>{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.desc && <span className="muted"> — {it.desc}</span>}</p>
                     ) : (
-                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.mod && it.mod !== "futebol" && <> <span className="chip mod">{modName(it.mod, lang) || it.mod}</span></>}{it.claude && <> <span className="chip efclaude" title={`Encontrado na web pela pesquisa ${(it.motores || [it.motor]).map((m) => `do ${MOTOR_EF[m]?.[1] || m}`).join(" e ")}`}>pesquisa {(it.motores || [it.motor]).map((m) => MOTOR_EF[m]?.[0] || m).join(" + ")}</span></>}</p>
+                      <p>{it.tipo !== "acontecimento" && <span className="eftag">{it.tipo === "nascimento" ? tx.born : tx.died}</span>} {it.texto}{it.portugues && <> <Flag code="pt" lang={lang} /></>}{it.claude && <> <span className="chip efclaude" title={`Encontrado na web pela pesquisa ${(it.motores || [it.motor]).map((x) => `do ${MOTOR_EF[x]?.[1] || x}`).join(" e ")}`}>pesquisa {(it.motores || [it.motor]).map((x) => MOTOR_EF[x]?.[0] || x).join(" + ")}</span></>}</p>
                     )}
                   </div>
                   {it.link && <a className="textbtn" href={it.link} target="_blank" rel="noreferrer" title={it.link} style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>}
@@ -1476,7 +1511,7 @@ function EfemeridesView({ dados, lang, theme, query }) {
               ))}
               {jogosVis.map((j) => (
                 <li key={j.id} className="efitem ef-jogo">
-                  <span className="efliga">{j.dia && !diaSel && <span className="efdata">{nomeDoDia(j.dia)}</span>}<Flag code={j.bandeira} lang={lang} /> {lang === "pt" ? j.liga : j.liga_en || j.liga}{j.fase && !/^\d{4}/.test(j.fase) ? ` · ${j.fase}` : ""}</span>
+                  <span className="efliga">{quando(j)}<Flag code={j.bandeira} lang={lang} /> {lang === "pt" ? j.liga : j.liga_en || j.liga}{j.fase && !/^\d{4}/.test(j.fase) ? ` · ${j.fase}` : ""}</span>
                   <div className="efres">
                     <span className="efteam h">{j.casa}{j.logoCasa && <Crest e={{ nome: j.casa, logo: j.logoCasa }} theme={theme} size={22} />}</span>
                     <b>{j.hs}–{j.as}</b>
@@ -1487,8 +1522,8 @@ function EfemeridesView({ dados, lang, theme, query }) {
                   <a className="textbtn efespn" href={j.link} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}><ExternalLink size={13} /></a>
                 </li>
               ))}
-              {jogos.length > JOGOS_POR_ANO && (
-                <li><button className="textbtn efmais" onClick={() => setAbertos((a) => ({ ...a, [g.anos]: !aberto }))}>{aberto ? tx.less : tx.more(jogos.length - JOGOS_POR_ANO)}</button></li>
+              {jogos.length > JOGOS_POR_MOD && (
+                <li><button className="textbtn efmais" onClick={() => setAbertos((a) => ({ ...a, [m]: !aberto }))}>{aberto ? tx.less : tx.more(jogos.length - JOGOS_POR_MOD)}</button></li>
               )}
             </ul>
           </section>
@@ -1559,7 +1594,7 @@ export default function App() {
   const [ofN, setOfN] = useState({}); // entradas mostradas por coluna, antes de «Ver mais»
   const lerOfic = () => fetch(`${API}/api/oficiais`).then((r) => r.json()).then((d) => d && Array.isArray(d.itens) && setOfic(d)).catch(() => {});
   const ofEntra = (x) => setOfic((o) => ({ ...o, itens: [x, ...o.itens.filter((y) => y.id !== x.id)].sort((a, b) => b.ts - a.ts).slice(0, 2500) }));
-  const [efem, setEfem] = useState(null); // «Nesta semana»: o que aconteceu no desporto neste dia, há 1, 2… 100 anos
+  const [efem, setEfem] = useState(null); // «Neste dia»: o que aconteceu no desporto neste dia, há 1, 2… 100 anos
   const vRef = useRef(null); // faixa horizontal dos vídeos
   // Destaques: a faixa desliza sozinha da esquerda para a direita e pára enquanto o cursor (ou o dedo) está por cima
   const vPausa = useRef(false);
@@ -1580,7 +1615,7 @@ export default function App() {
   }, []);
   // as capas dos jornais saíram do site: já não se pedem ao servidor
   const lerCapas = () => {};
-  // «Nesta semana»: lido no arranque, quando muda a língua e quando o servidor avisa que a lista mudou
+  // «Neste dia»: lido no arranque, quando muda a língua e quando o servidor avisa que a lista mudou
   const lerEfem = (l = lang) => fetch(`${API}/api/efemerides?lang=${l}`).then((r) => r.json()).then((d) => d && setEfem(d)).catch(() => {});
   const langRef = useRef(lang);
   useEffect(() => { langRef.current = lang; lerEfem(lang); }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1590,7 +1625,7 @@ export default function App() {
     const t = setTimeout(() => lerEfem(langRef.current), efem?.completo ? 10 * 60000 : 5000);
     return () => clearTimeout(t);
   }, [efem]); // eslint-disable-line react-hooks/exhaustive-deps
-  // à meia-noite de Lisboa, as capas de hoje e o «Nesta semana» mudam de dia sem ser preciso recarregar a página
+  // à meia-noite de Lisboa, as capas de hoje e o «Neste dia» mudam de dia sem ser preciso recarregar a página
   const diaHoje = diaLisboa(now);
   useEffect(() => { lerCapas(); lerEfem(langRef.current); setCapasDia(null); }, [diaHoje]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -1761,7 +1796,7 @@ export default function App() {
     es.addEventListener("video-update", vidEntra);
     // capas novas (o jornal publicou a de amanhã, ou chegou uma capa de outro dia da semana)
     es.addEventListener("capas", () => lerCapas());
-    // a lista do «Nesta semana» foi refeita (mudou o dia ou foi revista)
+    // a lista do «Neste dia» foi refeita (mudou o dia ou foi revista)
     es.addEventListener("efemerides", () => lerEfem(langRef.current));
     // notícia ou comunicado oficial novo (ou o mesmo, já com o título traduzido)
     // «corrigido»: a mesma entrada com a hora certa (não pisca como nova)
@@ -1962,7 +1997,7 @@ export default function App() {
     if (!TRADUZIDAS[lang]) return;
     const sinal = { parado: false };
     const t = setTimeout(() => {
-      const aVista = section === "destaque"
+      const aVista = section === "destaque" || section === "ronda"
         ? COLS.flatMap((c) => (colunas[c.id] || []).slice(0, 6))
         : visible.slice(0, 24);
       traduz("tudo", aVista.filter((it) => !it.score && !it.pending && !it.b?.[lang]), sinal);
@@ -2439,7 +2474,7 @@ export default function App() {
           </div>
           <nav className="tabs" aria-label={ui.sectionsLabel}>
             {CATS.filter((c) => !c.semBarra).map((c) => (
-              <button key={c.id} className={`tab ${c.hl ? `hl hl-${c.hl}` : ""}`} aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
+              <button key={c.id} className={`tab ${c.hl ? `hl hl-${c.hl}` : ""}${c.sep ? " sep" : ""}`} aria-pressed={section === c.id} onClick={(e) => { setSection(c.id); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }}
                 style={c.club ? { "--tabc": `var(--${c.id})` } : undefined}>
                 {emLingua(c, lang)}
                 {unreadBy[c.id] > 0 && <span className="count">{unreadBy[c.id]}</span>}
@@ -2588,9 +2623,9 @@ export default function App() {
                     </ul>
                   </section>
                 )}
-                <div className="livehead ronda">
-                  <h2 className="vdesth">{ui.ronda || "Ronda pela atualidade"}</h2>
-                </div>
+              </>
+            ) : section === "ronda" ? (
+              <>
                 <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
                   <div style={{ width: colsW || 1 }} />
                 </div>
