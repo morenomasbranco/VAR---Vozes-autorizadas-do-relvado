@@ -31,6 +31,7 @@ import { createDeclaracoes, limitador } from "./declaracoes.js";
 import { estadoIA } from "./ia.js";
 import { createCuriosidades } from "./curiosidades.js";
 import { createProsebot } from "./prosebot.js";
+import { createImagens } from "./imagens.js";
 import { createPortugal } from "./pt/index.js";
 import { restaurar, rotasCopia } from "./copia.js";
 import { verificarOidc } from "./oidc-github.js";
@@ -456,6 +457,18 @@ app.get("/api/videos/thumb/:id", async (req, res) => {
     res.set({ "Content-Type": "image/svg+xml; charset=utf-8" }).send(cartaoSvg(null));
   }
 });
+// «Hoje no VAR» (Feed): a imagem de cada manchete, ida buscar à notícia, ao post do X ou ao do Telegram
+const imagens = createImagens({ log });
+app.get("/api/noticias/imagem/:id", async (req, res) => {
+  const it = store.get(String(req.params.id));
+  if (!it) return res.status(404).end();
+  try {
+    const img = await imagens.imagem(it);
+    if (!img) return res.set("Cache-Control", "public, max-age=600").status(404).end();
+    res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=3600" }).send(img.buf);
+  } catch { if (!res.headersSent) res.status(404).end(); }
+});
+app.get("/api/noticias/imagens/estado", (req, res) => res.json(imagens.estado()));
 app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS, contaTelegram: !!clienteTelegram() }));
 // Retransmissor: um computador de casa lê o Reddit (os servidores de alojamento são bloqueados pelo Reddit)
 // e envia para aqui as publicações com vídeo. Protegido pela chave VIDEOS_RELAY_TOKEN do .env.
