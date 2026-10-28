@@ -736,8 +736,7 @@ function VideoImg({ v, onEscuro }) {
 // streamff, chegam primeiro e com boa imagem)
 const AUTORES_DESTAQUE = /^(lazy_banana_1636)$/i;
 
-// hero: o vídeo em grande no topo do Feed (com «etiqueta» por cima do título: em direto ou em destaque)
-function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false, hero = false, etiqueta = null, onEscuro }) {
+function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, mini = false, onEscuro }) {
   const tx = VTXT[lang] || VTXT.pt;
   const c = VCAT[v.category] || VCAT.other;
   const [falhou, setFalhou] = useState(false);
@@ -755,7 +754,7 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
     )
     : v.title;
   return (
-    <li className={`vcard cat-${v.category} ${mini ? "mini" : ""}${hero ? " hero" : ""}`}>
+    <li className={`vcard cat-${v.category} ${mini ? "mini" : ""}`}>
       <div className="vthumb">
         {!playing && auto && v.embed && !v.embed.servidor && (
           <button className="vplay vautobtn" onClick={() => onPlay(v.video_id)} aria-label={tx.watch}>
@@ -786,7 +785,6 @@ function VideoCard({ v, lang, now, ui, theme, playing, onPlay, auto = false, min
           </button>
         )}
       </div>
-      {etiqueta}
       <h3 className="vtitle">{titulo}</h3>
       {(v.player || v.minute) && <p className="vsub">{v.player}{v.player && v.minute ? " " : ""}{v.minute ? `${v.minute}'` : ""}{v.opponent ? <span className="muted"> · vs {v.opponent}</span> : null}</p>}
       {v.teams && v.title && <p className="vorig" title={v.title}>{v.title}</p>}
@@ -1276,52 +1274,38 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
-/* «Hoje no VAR»: o vídeo em destaque e as manchetes do dia lado a lado, e o dia em números por baixo */
+/* «Hoje no VAR»: a imagem da manchete escolhida e as manchetes do dia lado a lado */
 .apito .hoje{margin:8px 0 20px;padding:14px 16px 12px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,var(--raise)),var(--raise) 55%)}
 .apito .hojecab{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 12px}
 .apito .hojedata{font-size:13px;font-weight:600;color:var(--muted)}
-.apito .hojegrid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:start}
-.apito .hojegrid.so{grid-template-columns:minmax(0,1fr)}
-.apito .hojevid{margin:0}
-.apito .hojegrid:not(.so) .vcard.hero{grid-template-columns:minmax(0,1fr);box-shadow:none}
-.apito .hojegrid:not(.so) .vcard.hero .vthumb,.apito .hojegrid:not(.so) .vcard.hero > :not(.vthumb){grid-column:1;grid-row:auto}
-.apito .hojegrid:not(.so) .vcard.hero .vheroeti{margin-top:10px}
-.apito .hojegrid:not(.so) .vcard.hero .vtitle{font-size:22px}
+.apito .vheroeti{margin:2px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.apito .hojegrid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:stretch}
+/* a imagem da manchete escolhida, com o título por cima (sem imagem, o título sobre a cor) */
+.apito .hojefoto{position:relative;display:block;min-height:340px;border-radius:12px;overflow:hidden;color:#fff;text-decoration:none;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 30%,#0b120e))}
+.apito .hojefoto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:hojefade .35s ease-out}
+@keyframes hojefade{from{opacity:.25}to{opacity:1}}
+.apito .hojefoto-txt{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:56px 18px 16px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.85))}
+.apito .hojefoto.sem .hojefoto-txt{top:0;justify-content:flex-end;background:none}
+.apito .hojefoto .vheroeti{color:#fff;opacity:.9;margin:0}
+.apito .hojefoto-tit{font-family:var(--display);font-weight:700;font-size:27px;line-height:1.15;letter-spacing:-.015em;text-wrap:balance}
+.apito .hojefoto:hover .hojefoto-tit{text-decoration:underline;text-decoration-thickness:2px}
+.apito .hojefoto mark.hl{background:none;color:inherit;padding:0}
+.apito .hojefoto .mmeta{color:rgba(255,255,255,.85)}
 .apito .manchetes ol{list-style:none;margin:0;padding:0;counter-reset:m}
-.apito .manchetes li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.apito .manchetes li{border-bottom:1px solid var(--line)}
+.apito .mbtn{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:10px 8px;margin:2px 0;color:inherit;font:inherit;cursor:pointer}
+.apito .mbtn:hover{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.apito .manchetes li.on .mbtn{background:color-mix(in srgb,var(--accent) 16%,transparent)}
 .apito .manchetes li:last-child{border-bottom:0}
 .apito .mnum{flex:none;width:30px;font-family:var(--display);font-size:30px;font-weight:800;line-height:.95;color:var(--accent);text-align:center;font-variant-numeric:tabular-nums}
 .apito .manchetes li:first-child .mnum{font-size:38px}
 .apito .mtxt{min-width:0;display:flex;flex-direction:column;gap:3px}
-.apito .mtxt a,.apito .mtxt > span:first-child{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.25;color:var(--ink);text-decoration:none}
-.apito .manchetes li:first-child .mtxt a,.apito .manchetes li:first-child .mtxt > span:first-child{font-size:19px}
-.apito .mtxt a:hover{text-decoration:underline}
+.apito .mtit{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.25;color:var(--ink)}
+.apito .manchetes li:first-child .mtit{font-size:18px}
 .apito .mmeta{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .apito .mronda{margin-top:6px;font-weight:600}
-.apito .hojenum{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px dashed var(--line);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.apito .hojenum li{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px}
-.apito .hojenum b{font-family:var(--display);font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
-.apito .hojenum span{font-size:11.5px;color:var(--muted);line-height:1.25}
-@media(max-width:860px){.apito .hojegrid{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:560px){.apito .hoje{padding:10px} .apito .hojenum{grid-template-columns:repeat(2,minmax(0,1fr))} .apito .hojenum b{font-size:24px}}
-/* o vídeo em destaque do Feed: a imagem à esquerda e o jogo à direita (um por baixo do outro no telemóvel, e também
-   quando divide o «Hoje no VAR» com as manchetes) */
-.apito .vcard.hero{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);grid-auto-rows:min-content;align-content:start;column-gap:20px;padding:12px;border-top-width:4px;box-shadow:0 8px 28px rgba(0,0,0,.14);animation:none}
-.apito .vcard.hero .vthumb{grid-column:1;grid-row:1 / span 7;align-self:start;border-radius:10px}
-.apito .vcard.hero > :not(.vthumb){grid-column:2}
-.apito .vheroeti{margin:2px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
-.apito .vheroeti .pulse{font-size:12px}
-.apito .vcard.hero .vtitle{font-family:var(--display);font-size:26px;line-height:1.15;letter-spacing:-.02em;margin:2px 0 8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.apito .vcard.hero .vsub{font-size:16px;font-weight:600}
-.apito .vcard.hero .vorig{font-size:14px;color:var(--muted);margin:6px 0 0}
-.apito .vcard.hero .vmeta{margin-top:8px}
-.apito .vcard.hero .vacts{margin-top:10px}
-@media(max-width:760px){
-  .apito .vcard.hero{grid-template-columns:minmax(0,1fr);padding:8px}
-  .apito .vcard.hero .vthumb,.apito .vcard.hero > :not(.vthumb){grid-column:1;grid-row:auto}
-  .apito .vcard.hero .vheroeti{margin-top:8px}
-  .apito .vcard.hero .vtitle{font-size:20px}
-}
+@media(max-width:860px){.apito .hojegrid{grid-template-columns:minmax(0,1fr)} .apito .hojefoto{min-height:250px} .apito .hojefoto-tit{font-size:21px}}
+@media(max-width:560px){.apito .hoje{padding:10px}}
 /* título dos Destaques igual ao «Feed» */
 .apito .vdesth{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.02em;margin:0;line-height:1.1}
 .apito .vdest .vcard.mini .vorig{display:none}
@@ -2181,20 +2165,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colunas, minuto, lang]);
   const dataHoje = (([p, ...r]) => p.toUpperCase() + r.join(""))(new Date(now).toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Lisbon" }));
-  const numerosDoDia = useMemo(() => {
-    const t = minuto * 60000;
-    const dia = 24 * 3600e3;
-    const golos = videos.filter((v) => v.category === "goal" && t - v.created_time < dia).length;
-    const vivos = aoVivo.length;
-    const noticias = items.filter((it) => !it.score && !it.board && it.src !== "resultados" && t - it.ts < dia).length;
-    const fontes = new Set(items.filter((it) => !it.score && t - it.ts < dia).map((it) => it.src)).size;
-    return [
-      { n: vivos, t: vivos === 1 ? "jogo a decorrer" : "jogos a decorrer" },
-      { n: golos, t: golos === 1 ? "golo em vídeo nas últimas 24 horas" : "golos em vídeo nas últimas 24 horas" },
-      { n: noticias, t: "notícias nas últimas 24 horas" },
-      { n: fontes, t: "fontes a acompanhar" },
-    ];
-  }, [videos, aoVivo, items, minuto]);
+  // a manchete escolhida no «Hoje no VAR» (por omissão, a mais recente) e as imagens que não carregaram (fica o título
+  // sobre a cor); as imagens das cinco manchetes começam logo a carregar, para a troca ser imediata
+  const [mSel, setMSel] = useState(null);
+  const [imgFalhou, setImgFalhou] = useState(() => new Set());
+  const imagemDe = (id) => `${API}/api/noticias/imagem/${encodeURIComponent(id)}`;
+  const idsManchetes = manchetes.map((m) => m.it.id).join("|");
+  useEffect(() => {
+    if (section !== "destaque") return;
+    for (const m of manchetes) { const im = new Image(); im.src = imagemDe(m.it.id); }
+  }, [idsManchetes, section]); // eslint-disable-line react-hooks/exhaustive-deps
   // o vídeo é de um jogo que está a decorrer?
   const doJogoAoVivo = (v) => !!v.teams && aoVivo.some(({ score: sc }) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)));
   const destaquesVid = useMemo(() => {
@@ -2714,50 +2694,7 @@ export default function App() {
                     );
                   })()}
                 </section>
-                {(destaquesVid[0] || manchetes.length > 0) && (
-                  <section className="hoje" aria-label="Hoje no VAR">
-                    <div className="hojecab">
-                      <h2 className="vdesth">Hoje no VAR</h2>
-                      <span className="hojedata">{dataHoje}</span>
-                    </div>
-                    <div className={`hojegrid ${destaquesVid[0] && manchetes.length ? "" : "so"}`}>
-                      {destaquesVid[0] && (
-                        <ul className="vlist hojevid">
-                          <VideoCard key={destaquesVid[0].video_id} v={destaquesVid[0]} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === destaquesVid[0].video_id} onPlay={setATocar} auto={autoVid} hero onEscuro={marcaEscuro}
-                            etiqueta={doJogoAoVivo(destaquesVid[0])
-                              ? <p className="vheroeti"><span className="pulse"><i />Em direto</span></p>
-                              : <p className="vheroeti">Vídeo em destaque</p>} />
-                        </ul>
-                      )}
-                      {manchetes.length > 0 && (
-                        <div className="manchetes">
-                          <p className="vheroeti">As manchetes do dia</p>
-                          <ol>
-                            {manchetes.map(({ it, col }, i) => (
-                              <li key={it.id} className={it.unread ? "unread" : ""}>
-                                <span className="mnum" aria-hidden="true">{i + 1}</span>
-                                <div className="mtxt">
-                                  {postUrl(it)
-                                    ? <a href={postUrl(it)} target="_blank" rel="noreferrer" onClick={() => markRead(it.id)}><Rich text={T(it)} /></a>
-                                    : <span><Rich text={T(it)} /></span>}
-                                  <span className="mmeta">
-                                    <Flag code={col.pais} lang={lang} /> {srcName(srcOf(it))} · <span translate="no">{agoText(it.ts, now, ui)}</span>
-                                    {it.also?.length > 0 && <span className="mconf"> · {ui.nConfirms(it.also.length)}</span>}
-                                  </span>
-                                </div>
-                              </li>
-                            ))}
-                          </ol>
-                          <button className="textbtn mronda" onClick={() => { setSection("ronda"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Toda a Ronda pela atualidade <ArrowRight size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                    <ul className="hojenum">
-                      {numerosDoDia.map((x) => <li key={x.t}><b>{x.n}</b><span>{x.t}</span></li>)}
-                    </ul>
-                  </section>
-                )}
-                {destaquesVid.length > 1 && (
+                {destaquesVid.length > 0 && (
                   <section className="vbar vdest" aria-label={ui.videoHighlights}>
                     <div className="livehead">
                       <h2 className="vdesth">{ui.videoHighlights}</h2>
@@ -2772,12 +2709,56 @@ export default function App() {
                       onMouseLeave={() => { vPausa.current = false; }}
                       onTouchStart={() => { vPausa.current = true; }}
                       onTouchEnd={() => { vPausa.current = false; vEspera.current = performance.now() + 2500; }}>
-                      {destaquesVid.slice(1).map((v) => (
+                      {destaquesVid.map((v) => (
                         <VideoCard key={v.video_id} v={v} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === v.video_id} onPlay={setATocar} auto={autoVid} mini onEscuro={marcaEscuro} />
                       ))}
                     </ul>
                   </section>
                 )}
+                {manchetes.length > 0 && (() => {
+                  // a imagem grande é a da manchete escolhida; sem escolha, a da mais recente
+                  const recente = manchetes.reduce((x, y) => (y.it.ts > x.it.ts ? y : x));
+                  const sel = manchetes.find((m) => m.it.id === mSel) || recente;
+                  const semImg = imgFalhou.has(sel.it.id);
+                  return (
+                    <section className="hoje" aria-label="Hoje no VAR">
+                      <div className="hojecab">
+                        <h2 className="vdesth">Hoje no VAR</h2>
+                        <span className="hojedata">{dataHoje}</span>
+                      </div>
+                      <div className="hojegrid">
+                        <a className={`hojefoto ${semImg ? "sem" : ""}`} href={postUrl(sel.it) || undefined} target="_blank" rel="noreferrer" onClick={() => markRead(sel.it.id)}>
+                          {!semImg && <img key={sel.it.id} src={imagemDe(sel.it.id)} alt="" onError={() => setImgFalhou((x) => new Set(x).add(sel.it.id))} />}
+                          <span className="hojefoto-txt">
+                            <span className="vheroeti">{sel === recente ? "A manchete mais recente" : `Manchete ${manchetes.indexOf(sel) + 1}`}</span>
+                            <span className="hojefoto-tit"><Rich text={T(sel.it)} /></span>
+                            <span className="mmeta"><Flag code={sel.col.pais} lang={lang} /> {srcName(srcOf(sel.it))} · <span translate="no">{agoText(sel.it.ts, now, ui)}</span>{sel.it.also?.length > 0 && <> · {ui.nConfirms(sel.it.also.length)}</>}</span>
+                          </span>
+                        </a>
+                        <div className="manchetes">
+                          <p className="vheroeti">As manchetes do dia</p>
+                          <ol>
+                            {manchetes.map(({ it, col }, i) => (
+                              <li key={it.id} className={`${it.unread ? "unread" : ""}${sel.it.id === it.id ? " on" : ""}`}>
+                                <button type="button" className="mbtn" aria-pressed={sel.it.id === it.id} onClick={() => setMSel(it.id)}>
+                                  <span className="mnum" aria-hidden="true">{i + 1}</span>
+                                  <span className="mtxt">
+                                    <span className="mtit"><Rich text={T(it)} /></span>
+                                    <span className="mmeta">
+                                      <Flag code={col.pais} lang={lang} /> {srcName(srcOf(it))} · <span translate="no">{agoText(it.ts, now, ui)}</span>
+                                      {it.also?.length > 0 && <span className="mconf"> · {ui.nConfirms(it.also.length)}</span>}
+                                    </span>
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ol>
+                          <button className="textbtn mronda" onClick={() => { setSection("ronda"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Toda a Ronda pela atualidade <ArrowRight size={14} /></button>
+                        </div>
+                      </div>
+                    </section>
+                  );
+                })()}
               </>
             ) : section === "ronda" ? (
               <>

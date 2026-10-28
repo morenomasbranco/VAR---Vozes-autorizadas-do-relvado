@@ -371,3 +371,19 @@ try {
   const t = await j("/api/tradutor/estado");
   linha("== tradutor ==", JSON.stringify({ viaIA: t.viaIA, viaGoogle: t.viaGoogle, ia: t.ia }));
 } catch (e) { linha("IA: erro", e.message); }
+
+// «Hoje no VAR»: a imagem das notícias mais fortes das últimas horas (de onde vem e quanto demora)
+try {
+  const itens = await j("/api/items?limit=800");
+  const agora = Date.now();
+  const fortes = (Array.isArray(itens) ? itens : []).filter((x) => !x.score && !x.board && x.src !== "resultados" && agora - x.ts < 18 * 3600e3)
+    .sort((a, b) => ((b.imp || 0) * 3 + (b.also?.length || 0) * 2) - ((a.imp || 0) * 3 + (a.also?.length || 0) * 2)).slice(0, 8);
+  linha(`== imagens das manchetes == ${fortes.length} notícias`);
+  for (const x of fortes) {
+    const t0 = Date.now();
+    const r = await fetch(`${SITE}/api/noticias/imagem/${encodeURIComponent(x.id)}`, { signal: AbortSignal.timeout(40000) }).catch((e) => ({ status: `erro ${e.message}`, headers: { get: () => "" } }));
+    const tam = r.arrayBuffer ? (await r.arrayBuffer()).byteLength : 0;
+    linha(`   ${r.status} ${r.headers.get("content-type") || ""} ${Math.round(tam / 1024)} KB · ${Date.now() - t0} ms | ${(x.url || "").slice(0, 90)} | ${String(x.t?.pt || "").replace(/==/g, "").slice(0, 70)}`);
+  }
+  linha("   estado:", JSON.stringify(await j("/api/noticias/imagens/estado")));
+} catch (e) { linha("imagens das manchetes: erro", e.message); }
