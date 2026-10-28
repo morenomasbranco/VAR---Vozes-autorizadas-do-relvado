@@ -118,7 +118,7 @@ async function videoDaPagina(url) {
 
 export function createDeclaracoes({ log = () => {}, porta = 3001, canaisTelegram = () => [] } = {}) {
   const estado = { escritas: 0, traduzidas: 0, transcritas: 0, erros: 0, ultimoErro: null };
-  const falhou = (e) => { estado.erros++; estado.ultimoErro = { msg: String(e.message).slice(0, 300), ts: Date.now() }; };
+  const falhou = (e) => { estado.erros++; estado.ultimoErro = { msg: String(e.detalhe || e.message).slice(0, 300), ts: Date.now() }; };
 
   async function escrever({ texto, quem = "", contexto = "", tipo = "peca" } = {}) {
     const t = limpaTexto(texto, MAX_TEXTO);

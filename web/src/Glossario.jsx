@@ -1,4 +1,5 @@
-// Secção «Glossário»: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol), alcunhas
+// Secção «Ferramentas» (o id continua «glossario»), em cinco partes: Preparar jogo, Declarações, Antónimos/Sinónimos,
+// Prosebot 2.0 e Glossário. O Glossário: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol), alcunhas
 // e cidades dos clubes, sinónimos das competições e dos países, citações e ideias, e uma pesquisa de sinónimos e antónimos.
 // «Preparar um jogo»: escolhe-se um jogo (dos que estão em direto, que o App passa em «jogos», arrumados por modalidade, país e
 // competição) ou escrevem-se as equipas, e o glossário destaca as palavras que fazem sentido e sugere títulos para o
@@ -243,36 +244,54 @@ function Titulos({ ficha, jogo }) {
   );
 }
 
-// as curiosidades do jogo escolhido: as do próprio glossário (ideias e notas que falam das equipas) logo, e as
-// pesquisadas na web pelo servidor (/api/glossario/curiosidades, guardadas um dia) quando chegam
+// as curiosidades do jogo escolhido (/api/glossario/curiosidades): logo as que vêm de dados (historial, forma,
+// classificação, estádio e árbitro, pela ESPN ou pelo que o site tem de Portugal) e as do próprio glossário (ideias e
+// notas que falam das equipas); as pesquisadas na web pela IA só quando se pede (gastam a quota gratuita do dia)
 function Curiosidades({ API, jogo, ficha, ideias }) {
-  const [net, setNet] = useState(null); // { estado: "a procurar" | "ok" | "erro", dados, erro }
+  const [dados, setDados] = useState(null); // { estado: "a procurar" | "ok" | "erro", lista }
+  const [web, setWeb] = useState(null); // { estado: "a procurar" | "ok" | "erro", lista, motor, erro }
   const chave = `${jogo.h}|${jogo.a}|${jogo.comp || ""}`;
+  const pedir = (naWeb) => {
+    const q = new URLSearchParams({ h: jogo.h || "", a: jogo.a || "", comp: jogo.comp || "", mod: jogo.mod || "", ...(naWeb ? { web: "1" } : {}) });
+    return fetch(`${API}/api/glossario/curiosidades?${q}`).then((r) => r.json().then((d) => (r.ok ? d : Promise.reject(new Error(d.erro || r.status)))));
+  };
   useEffect(() => {
     let vivo = true;
-    setNet({ estado: "a procurar" });
-    const q = new URLSearchParams({ h: jogo.h || "", a: jogo.a || "", comp: jogo.comp || "", mod: jogo.mod || "" });
-    fetch(`${API}/api/glossario/curiosidades?${q}`)
-      .then((r) => r.json().then((d) => (r.ok ? d : Promise.reject(new Error(d.erro || r.status)))))
-      .then((d) => { if (vivo) setNet({ estado: "ok", dados: d }); })
-      .catch((e) => { if (vivo) setNet({ estado: "erro", erro: e.message }); });
+    setDados({ estado: "a procurar" });
+    setWeb(null);
+    pedir(false)
+      .then((d) => { if (vivo) setDados({ estado: "ok", lista: d.dados || [] }); })
+      .catch(() => { if (vivo) setDados({ estado: "erro" }); });
     return () => { vivo = false; };
   }, [chave]); // eslint-disable-line react-hooks/exhaustive-deps
+  const procurarNaWeb = () => {
+    setWeb({ estado: "a procurar" });
+    pedir(true)
+      .then((d) => setWeb(d.webErro ? { estado: "erro", erro: d.webErro } : { estado: "ok", lista: d.web || [], motor: d.motor }))
+      .catch(() => setWeb({ estado: "erro", erro: "A pesquisa na web não respondeu agora. Tenta daqui a pouco." }));
+  };
   const nomes = [ficha.casa?.clube?.nome, ficha.fora?.clube?.nome, ficha.casa?.selecao?.n, ficha.fora?.selecao?.n, jogo.h, jogo.a]
     .filter((x) => x && x.length > 2).map(norm);
   const locais = ideias.filter((c) => nomes.some((n) => norm(`${c.tema} ${c.t}`).includes(n))).slice(0, 6);
-  const daNet = net?.estado === "ok" ? net.dados.curiosidades : [];
+  const deDados = dados?.estado === "ok" ? dados.lista : [];
+  const daWeb = web?.estado === "ok" ? web.lista : [];
   return (
     <div className="gfcard gflarga gcurios">
       <p className="gmod">Curiosidades do jogo</p>
       <ul className="gcurlista">
+        {deDados.map((c) => <li key={c.texto}>{c.texto} <span className="gfonte">· {c.fonte === "VAR" ? "dados do VAR" : c.fonte}</span></li>)}
         {locais.map((c) => <li key={c.t}><span className="gmod">{c.tema}</span> {c.t}</li>)}
-        {daNet.map((c) => <li key={c.texto}>{c.texto}{c.fonte && <> <a className="gfonte" href={c.fonte} target="_blank" rel="noreferrer">fonte</a></>}</li>)}
+        {daWeb.map((c) => <li key={c.texto}>{c.texto}{c.fonte && <> <a className="gfonte" href={c.fonte} target="_blank" rel="noreferrer">fonte</a></>}</li>)}
       </ul>
-      {net?.estado === "a procurar" && <p className="muted gcurest">A procurar curiosidades na web…</p>}
-      {net?.estado === "ok" && !daNet.length && !locais.length && <p className="muted gcurest">Não foram encontradas curiosidades confirmadas para este jogo.</p>}
-      {net?.estado === "ok" && daNet.length > 0 && <p className="muted gcurest">Pesquisadas na web por {net.dados.motor}: confirma antes de publicar.</p>}
-      {net?.estado === "erro" && <p className="muted gcurest">Não foi possível procurar curiosidades agora ({net.erro}).</p>}
+      {dados?.estado === "a procurar" && <p className="muted gcurest">A juntar os dados do jogo…</p>}
+      {dados?.estado === "erro" && <p className="muted gcurest">Não foi possível juntar os dados do jogo agora.</p>}
+      {dados?.estado === "ok" && !deDados.length && !locais.length && !daWeb.length && <p className="muted gcurest">Ainda não há dados deste jogo (historial, forma, classificação). Experimenta a pesquisa na web.</p>}
+      {web?.estado === "a procurar" && <p className="muted gcurest">A procurar curiosidades na web… (pode levar um minuto)</p>}
+      {web?.estado === "ok" && (daWeb.length > 0
+        ? <p className="muted gcurest">As últimas foram pesquisadas na web por {web.motor}: confirma antes de publicar.</p>
+        : <p className="muted gcurest">A pesquisa na web não encontrou curiosidades confirmadas para este jogo.</p>)}
+      {web?.estado === "erro" && <p className="muted gcurest">{web.erro}</p>}
+      {!web && <button className="textbtn gcurweb" onClick={procurarNaWeb}>Procurar mais curiosidades na web (IA)</button>}
     </div>
   );
 }
@@ -497,10 +516,8 @@ const MODOS = [
   { id: "declaracoes", nome: "Declarações" },
   { id: "sinonimos", nome: "Antónimos/Sinónimos" },
   { id: "prosebot", nome: "Prosebot 2.0" },
+  { id: "glossario", nome: "Glossário" },
 ];
-
-// as partes que são ferramentas de escrita (sem a minha lista nem as listas do glossário por baixo)
-const ESCRITA = new Set(["declaracoes", "prosebot"]);
 
 // «jogos»: os que estão a decorrer (Preparar jogo); «jogosProse»: também os que acabaram há pouco, com os acontecimentos
 // que o VAR registou (Prosebot)
@@ -571,7 +588,7 @@ export default function Glossario({ API = "", query = "", jogos = [], jogosProse
     <MinhasCtx.Provider value={dados.minhas}>
     <div className="glos">
       <style>{GLOS_CSS + DECL_CSS + PROSE_CSS}</style>
-      <div className="seg gmodos" aria-label="Partes do Glossário">
+      <div className="seg gmodos" aria-label="Ferramentas">
         {MODOS.map((m) => <button key={m.id} aria-pressed={modo === m.id} onClick={() => setModo(m.id)}>{m.nome}</button>)}
       </div>
       {modo === "declaracoes" && <Declaracoes API={API} />}
@@ -579,7 +596,10 @@ export default function Glossario({ API = "", query = "", jogos = [], jogosProse
       {modo === "sinonimos" && <Pesquisa API={API} grupos={grupos} />}
       {modo === "preparar" && <PrepararJogo jogos={jogos} jogo={jogo} setJogo={setJogo} dados={dados} />}
       {modo === "preparar" && ficha && <FichaDoJogo API={API} ficha={ficha} jogo={jogoAtual} minha={minha} alternar={alternar} termos={TERMOS} ideias={IDEIAS} />}
-      {!ESCRITA.has(modo) && minha.length > 0 && (
+      {modo === "preparar" && minha.length > 0 && (
+        <p className="muted gminha-resumo">{minha.length === 1 ? "Uma palavra" : `${minha.length} palavras`} na minha lista · <button className="textbtn" onClick={() => setModo("glossario")}>Ver no Glossário</button></p>
+      )}
+      {modo === "glossario" && minha.length > 0 && (
         <section className="gminha" aria-label="A minha lista">
           <p className="gmod">A minha lista ({minha.length})</p>
           <div className="galc">{minha.map((p) => <button key={p} className="chip gchip on" onClick={() => alternar(p)} title="Tirar da minha lista">{p} ×</button>)}</div>
@@ -589,7 +609,7 @@ export default function Glossario({ API = "", query = "", jogos = [], jogosProse
           </div>
         </section>
       )}
-      {!ESCRITA.has(modo) && <>
+      {modo === "glossario" && <>
       <div className="seg gabas" role="group" aria-label="Partes do glossário">
         {ABAS.map((a) => <button key={a.id} aria-pressed={aba === a.id} onClick={() => setAba(a.id)}>{a.nome}</button>)}
       </div>
@@ -722,6 +742,8 @@ const GLOS_CSS = `
 .apito .gcurlista .gmod{margin-right:4px}
 .apito .gfonte{font-size:12px;color:var(--muted)}
 .apito .gcurest{font-size:12.5px;margin:6px 0 0}
+.apito .gcurweb{margin-top:6px;font-size:13px;font-weight:600;color:var(--hist)}
+.apito .gminha-resumo{text-align:center;font-size:13px;margin:-6px 0 14px}
 .apito .gbusca,.apito .gjogo,.apito .gminha{border:1px solid var(--line);border-left:4px solid var(--hist);border-radius:10px;background:var(--raise);padding:12px 14px;margin:0 0 16px}
 .apito .gjogo{border-left-color:var(--hist)}
 .apito .gminha{border-left-color:var(--ink)}
@@ -784,10 +806,12 @@ const GLOS_CSS = `
 .apito .glos .gmods{border:0;background:none;gap:4px}
 .apito .glos .gmods button{border:1px solid var(--line);background:var(--raise)}
 .apito .glos .gmods button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.apito .gtermos{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:0}
-.apito .gtermo{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--raise)}
+/* as expressões em lista: a expressão à esquerda e a explicação à direita, uma por linha */
+.apito .gtermos{display:block;margin:0 auto;max-width:980px;border-top:1px solid var(--line)}
+.apito .gtermo{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);gap:4px 18px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.apito .gtermo.gdest{border-radius:6px}
 .apito .gtermo dt{font-weight:700;font-size:16px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.apito .gtermo dd{margin:4px 0 0;font-size:14px}
+.apito .gtermo dd{margin:0;font-size:14px}
 .apito .gtermo dd p{margin:0 0 4px}
 .apito .gmod{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0}
 .apito .gsin b,.apito .gant b{font-weight:600}
@@ -826,6 +850,6 @@ const GLOS_CSS = `
 .apito .gcita.meu{border-left-style:dashed;border-left-color:var(--hist)}
 .apito .gideias li.meu{border-bottom-style:dashed}
 @media (max-width:640px){
-  .apito .gtermos,.apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos,.apito .gtitulos,.apito .gcurlista{grid-template-columns:minmax(0,1fr)}
+  .apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos,.apito .gtitulos,.apito .gcurlista,.apito .gtermo{grid-template-columns:minmax(0,1fr)}
 }
 `;

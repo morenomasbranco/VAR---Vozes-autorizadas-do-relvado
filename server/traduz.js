@@ -61,9 +61,14 @@ async function callGemini(lingua, itens) {
   return Array.isArray(out) ? out : [];
 }
 
-// os modelos do Groq para as traduções, por ordem: rápidos e com quota própria (a do gpt-oss-120b fica para o
-// «Neste dia» e a do qwen, de preferência, para as Declarações)
-const MODELOS_TRADUCAO = () => [process.env.TRADUTOR_GROQ_MODEL, "openai/gpt-oss-20b", "qwen/qwen3.8-27b"].filter(Boolean);
+// os modelos do Groq para as traduções: só o qwen. A quota do Groq é por modelo e por dia, e os gpt-oss ficam para o
+// que precisa de pesquisa na web (o 120b para o «Neste dia», o 20b para as curiosidades dos jogos) — a tradução
+// chegou a gastar a quota toda do gpt-oss-20b e as curiosidades deixaram de funcionar. Além disso, a tradução tem um
+// orçamento de tokens por dia (TRADUTOR_IA_TOKENS_DIA), para sobrar quota do qwen para as Declarações e o Prosebot;
+// passado o orçamento, segue o Google Tradutor até ao dia seguinte
+const MODELOS_TRADUCAO = () => [process.env.TRADUTOR_GROQ_MODEL || "qwen/qwen3.8-27b"];
+const ORCAMENTO_DIA = () => Number(process.env.TRADUTOR_IA_TOKENS_DIA) || 250000;
+const diaDeLisboa = (t = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon" }).format(new Date(t));
 const SISTEMA_IA = `Traduzes títulos e pontos de notícias de futebol (e de outros desportos) para português de Portugal, como os escreveria um jornalista do zerozero ou do Record.
 Regras:
 - Percebe o sentido no mundo do futebol antes de traduzir. Mercado: «X make move for Y» / «X move for Y» = «X avança por Y» ou «X quer contratar Y» (Y é o jogador; X é o clube interessado, nunca o contrário); «Y move to X» / «Y joins X» = «Y muda-se para X» / «Y reforça o X»; «linked with» = «associado a»; «in talks» = «em negociações»; «agreement in principle» = «acordo de princípio»; «Here we go» fica «Here we go!»; «loan» = «empréstimo»; «release clause» = «cláusula de rescisão»; «sacked» = «despedido».
@@ -100,9 +105,13 @@ export function createTradutor({ log }) {
     }));
   }
 
-  // pelo modelo de linguagem (só para português): devolve null se não houver motor ou se não responder
+  // pelo modelo de linguagem (só para português): devolve null se não houver motor, se o orçamento do dia acabou ou se
+  // não responder
+  const gasto = { dia: diaDeLisboa(), tokens: 0 };
   async function porIA(lang, itens) {
     if (lang !== "pt" || !motoresIA().includes("groq") || process.env.TRADUTOR_IA === "0") return null;
+    if (gasto.dia !== diaDeLisboa()) Object.assign(gasto, { dia: diaDeLisboa(), tokens: 0 });
+    if (gasto.tokens >= ORCAMENTO_DIA()) return null;
     const lista = itens.map((it, i) => [
       `[${i}]`,
       it.titulo ? `título: ${it.titulo}` : null,
@@ -110,6 +119,8 @@ export function createTradutor({ log }) {
     ].filter(Boolean).join("\n")).join("\n\n");
     try {
       const r = await pedirIA({ sistema: SISTEMA_IA, pedido: `Itens a traduzir (${itens.length}):\n\n${lista}`, temperatura: 0.1, uso: "tradução das notícias", motores: ["groq"], modelosGroq: MODELOS_TRADUCAO(), esforco: "low" });
+      // sem a contagem do Groq, uma estimativa (cerca de três caracteres por token, pedido e resposta)
+      gasto.tokens += r.tokens ?? Math.round((SISTEMA_IA.length + lista.length * 2) / 3);
       const out = (Array.isArray(r.json?.traducoes) ? r.json.traducoes : [])
         .filter((o) => Number.isInteger(o?.i) && o.i >= 0 && o.i < itens.length)
         .map((o) => ({ i: o.i, titulo: typeof o.titulo === "string" && itens[o.i].titulo ? o.titulo.trim() : undefined, pontos: Array.isArray(o.pontos) && itens[o.i].pontos?.length ? o.pontos.map(String) : undefined }));
@@ -118,7 +129,7 @@ export function createTradutor({ log }) {
       if (!ok.length) return null;
       return ok;
     } catch (e) {
-      if (Date.now() - avisoIA > 600000) { avisoIA = Date.now(); log(`[Tradutor] IA: ${e.message.slice(0, 200)}`); }
+      if (Date.now() - avisoIA > 600000) { avisoIA = Date.now(); log(`[Tradutor] IA: ${String(e.detalhe || e.message).slice(0, 200)}`); }
       return null;
     }
   }
@@ -193,6 +204,7 @@ export function createTradutor({ log }) {
       ...contas,
       fila: fila.length,
       pausadoAte: pausaGemini > Date.now() ? pausaGemini : null,
+      ia: { dia: gasto.dia, tokens: gasto.tokens, orcamento: ORCAMENTO_DIA(), modelos: MODELOS_TRADUCAO() },
       chaveGemini: !!KEY,
       googleTradutor: estadoGoogle(),
     }),

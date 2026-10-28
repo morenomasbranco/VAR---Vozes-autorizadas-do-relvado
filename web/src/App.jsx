@@ -14,7 +14,7 @@ const srcOf = (it) => SRC[it.src] || { handle: it.src, name: it.name || it.src }
 
 /* ───────── Secções ───────── */
 // Ordem da barra, em três grupos (sep: um espaço antes): o que acontece agora (Feed, Ronda pela atualidade, ligas,
-// distritais, resultados), os clubes e as modalidades, e as ferramentas (Mercado, Neste dia, Glossário)
+// distritais, resultados), os clubes e as modalidades, e o resto (Mercado, Neste dia, Ferramentas)
 const CATS = [
   { id: "destaque", pt: "Feed", en: "Feed", es: "Feed", fr: "Feed", it: "Feed", de: "Feed", hl: "dest" },
   { id: "ronda", pt: "Ronda pela atualidade", en: "News round-up", es: "Repaso de la actualidad", fr: "Tour de l'actualité", it: "Giro dell'attualità", de: "Nachrichtenüberblick" },
@@ -28,7 +28,9 @@ const CATS = [
   { id: "estatisticas", pt: "Estatísticas", en: "Stats", es: "Estadísticas", fr: "Statistiques", it: "Statistiche", de: "Statistiken" },
   { id: "mercado", pt: "Mercado", en: "Transfers", es: "Mercado", fr: "Transferts", it: "Mercato", de: "Transfers", hl: "merc", sep: true },
   { id: "efemerides", pt: "Neste dia", en: "On this day", es: "Tal día como hoy", fr: "Ce jour-là", it: "Accadde oggi", de: "An diesem Tag", hl: "efem" },
-  { id: "glossario", pt: "Glossário", en: "Glossary", es: "Glosario", fr: "Glossaire", it: "Glossario", de: "Glossar", hl: "glos" },
+  // a secção chama-se «Ferramentas» (Preparar jogo, Declarações, Antónimos/Sinónimos, Prosebot 2.0 e Glossário); o id
+  // fica «glossario» para não mudar o que já está guardado nos browsers
+  { id: "glossario", pt: "Ferramentas", en: "Tools", es: "Herramientas", fr: "Outils", it: "Strumenti", de: "Werkzeuge", hl: "glos" },
   // não aparece na barra de secções (as notícias continuam na coluna «Portugueses pelo mundo» do Feed)
   { id: "portugueses", pt: "Portugueses pelo mundo", en: "Portuguese abroad", es: "Portugueses por el mundo", fr: "Portugais à l'étranger", it: "Portoghesi nel mondo", de: "Portugiesen im Ausland", semBarra: true },
 ];
@@ -378,8 +380,9 @@ const textoDoEvento = (it) => {
   const golo = (it.b?.pt || []).find((x) => /^golo de /i.test(x));
   return golo ? `${t} — ${golo.replace(/==/g, "")}` : t;
 };
-// jogo das distritais, do Campeonato de Portugal ou da Liga 3 (vão para a secção Distritais, não para o Feed)
-const daBaseItem = (it) => !!it.pt && daBase({ org: it.pt.org, compNome: it.score?.comp, mod: it.mod || "futebol" });
+// jogo das distritais (de qualquer modalidade), do Campeonato de Portugal ou da Liga 3: vai para a secção Distritais,
+// não para o Feed
+const daBaseItem = (it) => !!it.pt && daBase({ org: it.pt.org, nivel: it.pt.nivel, compNome: it.score?.comp, mod: it.mod || "futebol" });
 const COUNTRIES = {
   pt: ["Portugal", "Portugal"], gb: ["Reino Unido", "United Kingdom"], "gb-eng": ["Inglaterra", "England"], es: ["Espanha", "Spain"],
   fr: ["França", "France"], it: ["Itália", "Italy"], de: ["Alemanha", "Germany"], nl: ["Países Baixos", "Netherlands"],
@@ -2149,7 +2152,8 @@ export default function App() {
   }, [items]);
 
   // jogos a decorrer, para a página inicial (o quadro completo continua na secção Resultados)
-  const aoVivo = useMemo(() => games.filter((it) => isLive(it.score, it.upd || it.ts, now)), [games, now]);
+  // (sem os das distritais, do Campeonato de Portugal e da Liga 3, que estão na secção Distritais)
+  const aoVivo = useMemo(() => games.filter((it) => isLive(it.score, it.upd || it.ts, now) && !daBaseItem(it)), [games, now]);
   // próximas transmissões na televisão portuguesa, quando não há jogos a decorrer
   const proximasTv = useMemo(() => zapping.filter((z) => z.inicio > now - 15 * 60000).slice(0, 10), [zapping, now]);
 
@@ -2181,7 +2185,7 @@ export default function App() {
     const t = minuto * 60000;
     const dia = 24 * 3600e3;
     const golos = videos.filter((v) => v.category === "goal" && t - v.created_time < dia).length;
-    const vivos = aoVivo.filter((g) => !daBaseItem(g)).length;
+    const vivos = aoVivo.length;
     const noticias = items.filter((it) => !it.score && !it.board && it.src !== "resultados" && t - it.ts < dia).length;
     const fontes = new Set(items.filter((it) => !it.score && t - it.ts < dia).map((it) => it.src)).size;
     return [
@@ -2253,7 +2257,7 @@ export default function App() {
       // o jogo com o par de equipas mais parecido (a decorrer primeiro, depois o mais próximo na hora)
       let jogo = null, nota = 0;
       for (const g of jogosTodos) {
-        if (Math.abs((g.upd || g.ts) - v.created_time) > 5 * 3600e3) continue;
+        if (Math.abs((g.upd || g.ts) - v.created_time) > 5 * 3600e3 || daBaseItem(g)) continue;
         const n = parNota(g.score.h, g.score.a, h, a) + (isLive(g.score, g.upd || g.ts, t) ? 0.5 : 0);
         if (n > 0.5 && n > nota) { nota = n; jogo = g; }
       }
@@ -2874,7 +2878,7 @@ export default function App() {
             ) : section === "distritais" ? (
               <Distritais API={API} now={now} query={query} />
             ) : section === "glossario" ? (
-              <Suspense fallback={<p className="empty">A abrir o glossário…</p>}><Glossario API={API} query={query} jogos={jogosGlos} jogosProse={jogosProse} /></Suspense>
+              <Suspense fallback={<p className="empty">A abrir as ferramentas…</p>}><Glossario API={API} query={query} jogos={jogosGlos} jogosProse={jogosProse} /></Suspense>
             ) : section === "efemerides" ? (
               <EfemeridesView dados={efem} lang={lang} theme={theme} query={query} />
             ) : section === "resultados" && resVista === "portugal" ? (

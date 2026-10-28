@@ -21,6 +21,13 @@ const PRAZO = (Number(process.env.IA_PRAZO_S) || 90) * 1000;
 const PAUSA_429 = 3600e3;
 
 const pausa = {}; // motor → até quando fica de parte (429)
+// modelo do Groq → até quando está sem quota (o Groq diz quanto falta: «Please try again in 10m5.2s»)
+const pausaModelo = {};
+export function esperaDoGroq(texto) {
+  const m = String(texto || "").match(/try again in\s+(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:([\d.]+)s)?/i);
+  if (!m || !(m[1] || m[2] || m[3])) return 15 * 60e3;
+  return Math.min(24 * 3600e3, ((+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0)) * 1000 + 30e3);
+}
 const ultimos = []; // os últimos pedidos, para /api/ia/estado
 const registar = (x) => { ultimos.unshift({ ts: Date.now(), ...x }); ultimos.length = Math.min(ultimos.length, 15); };
 
@@ -48,6 +55,7 @@ async function groq({ sistema, pedido, pesquisa, temperatura, modelosGroq, esfor
   const candidatos = pesquisa ? GROQ_PESQUISA() : (modelosGroq || GROQ_TEXTO()).map((modelo) => ({ modelo }));
   let ultimo = null;
   for (const c of candidatos) {
+    if (pausaModelo[c.modelo] > Date.now()) { ultimo ||= Object.assign(new Error(`Groq (${c.modelo}) sem quota até ${new Date(pausaModelo[c.modelo]).toISOString()}`), { status: 429 }); continue; }
     const res = await fetch(`${GROQ_API}/chat/completions`, {
       method: "POST", headers: cab, signal: AbortSignal.timeout(PRAZO),
       body: JSON.stringify({
@@ -60,9 +68,10 @@ async function groq({ sistema, pedido, pesquisa, temperatura, modelosGroq, esfor
     });
     if (res.ok) {
       const j = await res.json();
-      return { texto: j.choices?.[0]?.message?.content || "", modelo: c.modelo };
+      return { texto: j.choices?.[0]?.message?.content || "", modelo: c.modelo, tokens: j.usage?.total_tokens ?? null };
     }
     ultimo = await erro(`Groq (${c.modelo})`, res);
+    if (res.status === 429) pausaModelo[c.modelo] = Date.now() + esperaDoGroq(ultimo.message);
     // modelo que esta conta não tem, que não aceita a ferramenta ou sem quota: experimenta-se o seguinte
     if (res.status === 404 || res.status === 429 || (res.status === 400 && /model|tool|browser_search|parsing/i.test(ultimo.message))) continue;
     throw ultimo;
@@ -105,31 +114,35 @@ async function claude({ sistema, pedido, pesquisa }) {
 
 const MOTOR = { groq, gemini, claude };
 
-// pede a um motor de cada vez até um responder com JSON; devolve { json, motor, modelo }
+const MSG_QUOTA = "a IA gratuita chegou ao limite de hoje; volta a tentar mais tarde";
+
+// pede a um motor de cada vez até um responder com JSON; devolve { json, motor, modelo, tokens }
 // «motores» limita os motores (a tradução das notícias não usa o Claude, que é pago) e «modelosGroq» muda a ordem dos
 // modelos do Groq (cada uso gasta de preferência a quota de um modelo diferente)
 export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "", motores: so = null, modelosGroq = null, esforco = null }) {
   // a pausa de um motor sem quota é por lista de modelos (a do Groq para a tradução não pára as Declarações)
   const chavePausa = (m) => (m === "groq" && modelosGroq ? `groq:${modelosGroq.join(",")}` : m);
   const motores = motoresIA().filter((m) => !(pausa[chavePausa(m)] > Date.now()) && (!so || so.includes(m)));
-  if (!motoresIA().length) throw Object.assign(new Error("não há nenhuma chave de IA no servidor (GROQ_API_KEY, GEMINI_API_KEY ou ANTHROPIC_API_KEY)"), { status: 503 });
-  if (!motores.length) throw Object.assign(new Error("os motores de IA estão sem quota por agora; tenta daqui a uma hora"), { status: 503 });
+  if (!motoresIA().length) throw Object.assign(new Error("a IA não está configurada no servidor"), { status: 503, codigo: "sem-chave", detalhe: "não há nenhuma chave de IA no servidor (GROQ_API_KEY, GEMINI_API_KEY ou ANTHROPIC_API_KEY)" });
+  if (!motores.length) throw Object.assign(new Error(MSG_QUOTA), { status: 503, codigo: "quota", detalhe: "todos os motores em pausa por falta de quota" });
   const erros = [];
   for (const m of motores) {
     const t0 = Date.now();
     try {
       const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco });
       const json = lerJson(r.texto);
-      registar({ uso, motor: m, modelo: r.modelo, ms: Date.now() - t0 });
-      return { json, motor: NOME[m], modelo: r.modelo };
+      registar({ uso, motor: m, modelo: r.modelo, ms: Date.now() - t0, tokens: r.tokens ?? undefined });
+      return { json, motor: NOME[m], modelo: r.modelo, tokens: r.tokens ?? null };
     } catch (e) {
       if (e.status === 429) pausa[chavePausa(m)] = Date.now() + PAUSA_429;
       const msg = `${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`;
       registar({ uso, motor: m, erro: msg.slice(0, 200), ms: Date.now() - t0 });
-      erros.push(`${NOME[m]}: ${msg.slice(0, 160)}`);
+      erros.push({ quota: e.status === 429, texto: `${NOME[m]}: ${msg.slice(0, 160)}` });
     }
   }
-  throw Object.assign(new Error(`nenhum motor de IA respondeu (${erros.join(" · ")})`), { status: 502 });
+  // para quem usa o site, a explicação em português; o erro técnico fica em «detalhe» (e no estado da IA)
+  const quota = erros.some((x) => x.quota) && erros.every((x) => x.quota || /UND_ERR|fetch failed|timeout|aborted/i.test(x.texto));
+  throw Object.assign(new Error(quota ? MSG_QUOTA : "a IA não respondeu agora; tenta daqui a pouco"), { status: quota ? 503 : 502, codigo: quota ? "quota" : "falhou", detalhe: `nenhum motor de IA respondeu (${erros.map((x) => x.texto).join(" · ")})` });
 }
 
 // Passar a fala de um vídeo a texto: o Whisper do Groq (gratuito, até 25 MB por ficheiro; o servidor manda só o som,
@@ -158,6 +171,9 @@ export async function transcrever(audio, { nome = "audio.mp3", tipo = "audio/mpe
 
 export const estadoIA = () => ({
   motores: motoresIA(),
+  modelosSemQuota: Object.fromEntries(Object.entries(pausaModelo).filter(([, t]) => t > Date.now()).map(([m, t]) => [m, new Date(t).toISOString()])),
   pausados: Object.fromEntries(Object.entries(pausa).filter(([, t]) => t > Date.now()).map(([m, t]) => [m, new Date(t).toISOString()])),
   ultimos,
 });
+
+export const _iaTeste = { limpar: () => { for (const k of Object.keys(pausa)) delete pausa[k]; for (const k of Object.keys(pausaModelo)) delete pausaModelo[k]; } };

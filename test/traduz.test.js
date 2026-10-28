@@ -21,10 +21,11 @@ test("tradutor: os títulos em português passam primeiro pelo modelo de linguag
   await comAmbiente({ GROQ_API_KEY: "teste", IA_MOTORES: null, GEMINI_API_KEY: null, ANTHROPIC_API_KEY: null }, async (url, op) => {
     pedidos.push(String(url));
     const corpo = JSON.parse(op.body);
-    assert.equal(corpo.model, "openai/gpt-oss-20b");
-    assert.equal(corpo.reasoning_effort, "low");
+    // só o qwen: os gpt-oss ficam para a pesquisa na web (Neste dia e curiosidades)
+    assert.equal(corpo.model, "qwen/qwen3.8-27b");
+    assert.equal(corpo.reasoning_effort, undefined);
     assert.match(corpo.messages[1].content, /Real Madrid make move for ==Mac Allister==/);
-    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"traducoes":[{"i":0,"titulo":"Real Madrid avança por ==Mac Allister=="}]}' } }] }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"traducoes":[{"i":0,"titulo":"Real Madrid avança por ==Mac Allister=="}]}' } }], usage: { total_tokens: 420 } }) };
   }, async () => {
     const t = createTradutor({ log: () => {} });
     const [r] = await t.pedir("pt", [{ id: "x1", titulo: "Real Madrid make move for ==Mac Allister==" }]);
@@ -32,6 +33,7 @@ test("tradutor: os títulos em português passam primeiro pelo modelo de linguag
     assert.equal(pedidos.length, 1);
     assert.ok(pedidos[0].includes("api.groq.com"));
     assert.equal(t.estado().viaIA, 1);
+    assert.equal(t.estado().ia.tokens, 420); // o gasto do dia conta para o orçamento da tradução
   });
 });
 
