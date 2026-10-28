@@ -787,7 +787,7 @@ const GLOS_CSS = `
 .apito .gchip.on{background:var(--hist);border-color:var(--hist);color:#fff}
 .apito .gtermo dt .gchip{font-size:15px;font-weight:700;border:0;background:none;padding:0;line-height:1.3}
 .apito .gtermo dt .gchip.on{color:var(--hist);background:none}
-.apito .gsin .gchip,.apito .gant .gchip{margin:0 3px 3px 0;line-height:18px;font-size:12.5px}
+.apito .gsin .gchip,.apito .gant .gchip{margin:0 2px 1px 0;line-height:16px;font-size:12px}
 .apito .gdest{border-color:var(--hist) !important;box-shadow:0 0 0 1px var(--hist);background:color-mix(in srgb,var(--hist) 7%,var(--raise))}
 .apito .gcomp li.gdest{padding:8px 10px;border-radius:8px}
 .apito .gsub{margin:8px 0 0}
@@ -806,13 +806,13 @@ const GLOS_CSS = `
 .apito .glos .gmods{border:0;background:none;gap:4px}
 .apito .glos .gmods button{border:1px solid var(--line);background:var(--raise)}
 .apito .glos .gmods button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-/* as expressões em lista: a expressão à esquerda e a explicação à direita, uma por linha */
+/* as expressões em lista, coladas umas às outras: a expressão à esquerda e a explicação à direita, uma por linha */
 .apito .gtermos{display:block;margin:0 auto;max-width:980px;border-top:1px solid var(--line)}
-.apito .gtermo{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);gap:4px 18px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.apito .gtermo{display:grid;grid-template-columns:minmax(130px,210px) minmax(0,1fr);gap:0 14px;padding:3px 4px;border-bottom:1px solid var(--line)}
 .apito .gtermo.gdest{border-radius:6px}
-.apito .gtermo dt{font-weight:700;font-size:16px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.apito .gtermo dd{margin:0;font-size:14px}
-.apito .gtermo dd p{margin:0 0 4px}
+.apito .gtermo dt{font-weight:700;font-size:15px;line-height:1.3;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.apito .gtermo dd{margin:0;font-size:13.5px;line-height:1.35}
+.apito .gtermo dd p{margin:0}
 .apito .gmod{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0}
 .apito .gsin b,.apito .gant b{font-weight:600}
 .apito .gant{color:var(--muted)}
