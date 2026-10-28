@@ -369,7 +369,8 @@ try {
   linha("== IA ==", JSON.stringify({ motores: d.ia?.motores, semQuota: d.ia?.modelosSemQuota, pausados: d.ia?.pausados }));
   for (const u of (d.ia?.ultimos || []).slice(0, 12)) linha(`   ${new Date(u.ts).toISOString().slice(11, 19)} | ${u.uso} | ${u.motor} ${u.modelo || ""} | ${u.erro ? `erro: ${u.erro.slice(0, 160)}` : `ok ${u.ms} ms${u.tokens ? ` · ${u.tokens} tokens` : ""}`}`);
   const t = await j("/api/tradutor/estado");
-  linha("== tradutor ==", JSON.stringify({ viaIA: t.viaIA, viaGoogle: t.viaGoogle, ia: t.ia }));
+  linha("== tradutor ==", JSON.stringify({ pedidas: t.pedidas, feitas: t.feitas, semQuota: t.semQuota, viaIA: t.viaIA, viaGoogle: t.viaGoogle, viaGemini: t.viaGemini, fila: t.fila, ia: t.ia }));
+  linha("   Google Tradutor:", JSON.stringify(t.googleTradutor), "· Gemini em pausa até", t.pausadoAte ? new Date(t.pausadoAte).toISOString() : "-");
 } catch (e) { linha("IA: erro", e.message); }
 
 // «Hoje no VAR»: a imagem das notícias mais fortes das últimas horas (de onde vem e quanto demora)

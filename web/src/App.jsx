@@ -1281,18 +1281,22 @@ const CSS = `
 .apito .vheroeti{margin:2px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
 .apito .hojegrid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:stretch}
 /* a imagem da manchete escolhida, com o título por cima (sem imagem, o título sobre a cor) */
-.apito .hojefoto{position:relative;display:block;min-height:340px;border-radius:12px;overflow:hidden;color:#fff;text-decoration:none;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 30%,#0b120e))}
-.apito .hojefoto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:hojefade .35s ease-out}
+.apito .hojefoto{position:relative;display:block;min-height:340px;border-radius:12px;overflow:hidden;color:#fff;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 30%,#0b120e))}
+.apito .hojefoto-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:hojefade .35s ease-out}
 @keyframes hojefade{from{opacity:.25}to{opacity:1}}
 .apito .hojefoto-txt{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:56px 18px 16px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.85))}
 .apito .hojefoto.sem .hojefoto-txt{top:0;justify-content:flex-end;background:none}
 .apito .hojefoto .vheroeti{color:#fff;opacity:.9;margin:0}
 .apito .hojefoto-tit{font-family:var(--display);font-weight:700;font-size:27px;line-height:1.15;letter-spacing:-.015em;text-wrap:balance}
-.apito .hojefoto:hover .hojefoto-tit{text-decoration:underline;text-decoration-thickness:2px}
+.apito .hojeler{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:6px 12px;border-radius:999px;background:#fff;color:#111;font-size:13px;font-weight:700;text-decoration:none}
+.apito .hojeler:hover{background:var(--accent);color:#111}
 .apito .hojefoto mark.hl{background:none;color:inherit;padding:0}
 .apito .hojefoto .mmeta{color:rgba(255,255,255,.85)}
 .apito .manchetes ol{list-style:none;margin:0;padding:0;counter-reset:m}
-.apito .manchetes li{border-bottom:1px solid var(--line)}
+.apito .manchetes li{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--line)}
+.apito .manchetes li .mbtn{flex:1;min-width:0}
+.apito .mver{flex:none;display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;color:var(--ink);text-decoration:none;white-space:nowrap}
+.apito .mver:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .apito .mbtn{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:10px 8px;margin:2px 0;color:inherit;font:inherit;cursor:pointer}
 .apito .mbtn:hover{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .apito .manchetes li.on .mbtn{background:color-mix(in srgb,var(--accent) 16%,transparent)}
@@ -1318,9 +1322,7 @@ const CSS = `
 .apito .ofic{margin:0 0 10px}
 .apito .ofic .livehead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-bottom:10px}
 .apito .ofic .seg{margin:0}
-.apito .ocols{scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding-bottom:6px}
-.apito .ocols::-webkit-scrollbar{display:block;height:7px}
-.apito .ocols::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.apito .ocols{padding-bottom:6px}
 .apito .oitem .ctitle a{color:inherit;text-decoration:none}
 .apito .oitem .ctitle a:hover{text-decoration:underline}
 .apito .otipo{font-size:10px;padding:1px 6px}
@@ -1735,7 +1737,8 @@ export default function App() {
   const [showSources, setShowSources] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
-  // barra de deslizar das colunas, colocada acima dos cabeçalhos dos países
+  // barra de deslizar das colunas, colocada acima dos cabeçalhos dos países (Ronda pela atualidade) ou das ligas e
+// federações (só uma das secções está aberta de cada vez, por isso as duas usam as mesmas referências)
   const colsRef = useRef(null);
   const barraRef = useRef(null);
   const [colsW, setColsW] = useState(0);
@@ -2038,7 +2041,7 @@ export default function App() {
     ro?.observe(el);
     window.addEventListener("resize", medir);
     return () => { ro?.disconnect(); window.removeEventListener("resize", medir); };
-  }, [section, lang, colunas]);
+  }, [section, lang, colunas, ofic.grupos.length]);
 
   // Fase 2: os pontos, só das notícias que estão à vista na secção aberta — na primeira página
   // são as das colunas, nas outras secções é a lista. O resto do feed fica só com o título traduzido.
@@ -2727,16 +2730,17 @@ export default function App() {
                         <span className="hojedata">{dataHoje}</span>
                       </div>
                       <div className="hojegrid">
-                        <a className={`hojefoto ${semImg ? "sem" : ""}`} href={postUrl(sel.it) || undefined} target="_blank" rel="noreferrer" onClick={() => markRead(sel.it.id)}>
-                          {!semImg && <img key={sel.it.id} src={imagemDe(sel.it.id)} alt="" onError={() => setImgFalhou((x) => new Set(x).add(sel.it.id))} />}
+                        <div className={`hojefoto ${semImg ? "sem" : ""}`}>
+                          {!semImg && <img key={sel.it.id} className="hojefoto-img" src={imagemDe(sel.it.id)} alt="" onError={() => setImgFalhou((x) => new Set(x).add(sel.it.id))} />}
                           <span className="hojefoto-txt">
                             <span className="vheroeti">{sel === recente ? "A manchete mais recente" : `Manchete ${manchetes.indexOf(sel) + 1}`}</span>
                             <span className="hojefoto-tit"><Rich text={T(sel.it)} /></span>
                             <span className="mmeta"><Flag code={sel.col.pais} lang={lang} /> {srcName(srcOf(sel.it))} · <span translate="no">{agoText(sel.it.ts, now, ui)}</span>{sel.it.also?.length > 0 && <> · {ui.nConfirms(sel.it.also.length)}</>}</span>
+                            {postUrl(sel.it) && <a className="hojeler" href={postUrl(sel.it)} target="_blank" rel="noreferrer" onClick={() => markRead(sel.it.id)}>Ler a peça em {srcName(srcOf(sel.it))} <ExternalLink size={14} /></a>}
                           </span>
-                        </a>
+                        </div>
                         <div className="manchetes">
-                          <p className="vheroeti">As manchetes do dia</p>
+                          <p className="vheroeti">Últimas Manchetes</p>
                           <ol>
                             {manchetes.map(({ it, col }, i) => (
                               <li key={it.id} className={`${it.unread ? "unread" : ""}${sel.it.id === it.id ? " on" : ""}`}>
@@ -2750,6 +2754,7 @@ export default function App() {
                                     </span>
                                   </span>
                                 </button>
+                                {postUrl(it) && <a className="mver" href={postUrl(it)} target="_blank" rel="noreferrer" onClick={() => markRead(it.id)} title={`Ler a peça em ${srcName(srcOf(it))}`}><ExternalLink size={13} /> Ler</a>}
                               </li>
                             ))}
                           </ol>
@@ -2822,7 +2827,11 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    <div className="cols ocols">
+                    {/* a barra de deslizar fica aqui em cima, logo abaixo dos botões (como na Ronda pela atualidade) */}
+                    <div className="colsbar" ref={barraRef} onScroll={() => sincroniza(barraRef, colsRef)} aria-hidden="true">
+                      <div style={{ width: colsW || 1 }} />
+                    </div>
+                    <div className="cols ocols" ref={colsRef} onScroll={() => sincroniza(colsRef, barraRef)}>
                       {ofic.grupos.map((g) => {
                         const daCol = lista.filter((x) => x.grupo === g.id);
                         const n = ofN[g.id] || 15;
