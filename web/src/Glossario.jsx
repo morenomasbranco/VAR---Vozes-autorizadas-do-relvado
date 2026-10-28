@@ -11,6 +11,7 @@ import { norm, lista, unicos, indice, procurarLocal } from "./glossario/pesquisa
 import { lerMeus, gravarMeus, juntar, acrescentar, apagar, fundir, contar, limpar } from "./glossario/meus.js";
 import { fichaDoJogo, nomesParaEscolher } from "./glossario/jogo.js";
 import { titulosDoJogo } from "./glossario/titulos.js";
+import Declaracoes, { DECL_CSS } from "./Declaracoes.jsx";
 
 const bandeira = (code) => `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`;
 
@@ -241,8 +242,42 @@ function Titulos({ ficha, jogo }) {
   );
 }
 
+// as curiosidades do jogo escolhido: as do próprio glossário (ideias e notas que falam das equipas) logo, e as
+// pesquisadas na web pelo servidor (/api/glossario/curiosidades, guardadas um dia) quando chegam
+function Curiosidades({ API, jogo, ficha, ideias }) {
+  const [net, setNet] = useState(null); // { estado: "a procurar" | "ok" | "erro", dados, erro }
+  const chave = `${jogo.h}|${jogo.a}|${jogo.comp || ""}`;
+  useEffect(() => {
+    let vivo = true;
+    setNet({ estado: "a procurar" });
+    const q = new URLSearchParams({ h: jogo.h || "", a: jogo.a || "", comp: jogo.comp || "", mod: jogo.mod || "" });
+    fetch(`${API}/api/glossario/curiosidades?${q}`)
+      .then((r) => r.json().then((d) => (r.ok ? d : Promise.reject(new Error(d.erro || r.status)))))
+      .then((d) => { if (vivo) setNet({ estado: "ok", dados: d }); })
+      .catch((e) => { if (vivo) setNet({ estado: "erro", erro: e.message }); });
+    return () => { vivo = false; };
+  }, [chave]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nomes = [ficha.casa?.clube?.nome, ficha.fora?.clube?.nome, ficha.casa?.selecao?.n, ficha.fora?.selecao?.n, jogo.h, jogo.a]
+    .filter((x) => x && x.length > 2).map(norm);
+  const locais = ideias.filter((c) => nomes.some((n) => norm(`${c.tema} ${c.t}`).includes(n))).slice(0, 6);
+  const daNet = net?.estado === "ok" ? net.dados.curiosidades : [];
+  return (
+    <div className="gfcard gflarga gcurios">
+      <p className="gmod">Curiosidades do jogo</p>
+      <ul className="gcurlista">
+        {locais.map((c) => <li key={c.t}><span className="gmod">{c.tema}</span> {c.t}</li>)}
+        {daNet.map((c) => <li key={c.texto}>{c.texto}{c.fonte && <> <a className="gfonte" href={c.fonte} target="_blank" rel="noreferrer">fonte</a></>}</li>)}
+      </ul>
+      {net?.estado === "a procurar" && <p className="muted gcurest">A procurar curiosidades na web…</p>}
+      {net?.estado === "ok" && !daNet.length && !locais.length && <p className="muted gcurest">Não foram encontradas curiosidades confirmadas para este jogo.</p>}
+      {net?.estado === "ok" && daNet.length > 0 && <p className="muted gcurest">Pesquisadas na web por {net.dados.motor}: confirma antes de publicar.</p>}
+      {net?.estado === "erro" && <p className="muted gcurest">Não foi possível procurar curiosidades agora ({net.erro}).</p>}
+    </div>
+  );
+}
+
 // a ficha do jogo escolhido: as palavras de cada equipa, da prova, dos países e as expressões que dão jeito
-function FichaDoJogo({ ficha, jogo, minha, alternar, termos }) {
+function FichaDoJogo({ API, ficha, jogo, minha, alternar, termos, ideias }) {
   const TERMO = useMemo(() => new Map(termos.map((x) => [x.t, x])), [termos]);
   const P = (p) => <Palavra key={p} p={p} lista={minha} alternar={alternar} />;
   const lado = (l, papel) => {
@@ -274,6 +309,7 @@ function FichaDoJogo({ ficha, jogo, minha, alternar, termos }) {
     <section className="gficha" aria-label="Palavras para este jogo">
       <div className="gfcards">
         <Titulos ficha={ficha} jogo={jogo} />
+        <Curiosidades API={API} jogo={jogo} ficha={ficha} ideias={ideias} />
         {lado(ficha.casa, "Casa · visitado")}
         {lado(ficha.fora, "Fora · visitante")}
         {ficha.prova && (
@@ -454,7 +490,16 @@ function MinhasPalavras({ meus, setMeus }) {
   );
 }
 
+// as três partes do Glossário
+const MODOS = [
+  { id: "preparar", nome: "Preparar jogo" },
+  { id: "declaracoes", nome: "Declarações" },
+  { id: "sinonimos", nome: "Antónimos/Sinónimos" },
+];
+
 export default function Glossario({ API = "", query = "", jogos = [] }) {
+  const [modo, setModo] = useState(() => { const m = ler("glos-modo", "preparar"); return MODOS.some((x) => x.id === m) ? m : "preparar"; });
+  useEffect(() => { gravar("glos-modo", modo); }, [modo]);
   const [aba, setAba] = useState(() => ler("glos-aba", "expressoes"));
   const [mod, setMod] = useState(() => ler("glos-mod", "todas"));
   const [pais, setPais] = useState(() => ler("glos-pais", "pt"));
@@ -518,11 +563,15 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
   return (
     <MinhasCtx.Provider value={dados.minhas}>
     <div className="glos">
-      <style>{GLOS_CSS}</style>
-      <Pesquisa API={API} grupos={grupos} />
-      <PrepararJogo jogos={jogos} jogo={jogo} setJogo={setJogo} dados={dados} />
-      {ficha && <FichaDoJogo ficha={ficha} jogo={jogoAtual} minha={minha} alternar={alternar} termos={TERMOS} />}
-      {minha.length > 0 && (
+      <style>{GLOS_CSS + DECL_CSS}</style>
+      <div className="seg gmodos" aria-label="Partes do Glossário">
+        {MODOS.map((m) => <button key={m.id} aria-pressed={modo === m.id} onClick={() => setModo(m.id)}>{m.nome}</button>)}
+      </div>
+      {modo === "declaracoes" && <Declaracoes API={API} />}
+      {modo === "sinonimos" && <Pesquisa API={API} grupos={grupos} />}
+      {modo === "preparar" && <PrepararJogo jogos={jogos} jogo={jogo} setJogo={setJogo} dados={dados} />}
+      {modo === "preparar" && ficha && <FichaDoJogo API={API} ficha={ficha} jogo={jogoAtual} minha={minha} alternar={alternar} termos={TERMOS} ideias={IDEIAS} />}
+      {modo !== "declaracoes" && minha.length > 0 && (
         <section className="gminha" aria-label="A minha lista">
           <p className="gmod">A minha lista ({minha.length})</p>
           <div className="galc">{minha.map((p) => <button key={p} className="chip gchip on" onClick={() => alternar(p)} title="Tirar da minha lista">{p} ×</button>)}</div>
@@ -532,6 +581,7 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
           </div>
         </section>
       )}
+      {modo !== "declaracoes" && <>
       <div className="seg gabas" role="group" aria-label="Partes do glossário">
         {ABAS.map((a) => <button key={a.id} aria-pressed={aba === a.id} onClick={() => setAba(a.id)}>{a.nome}</button>)}
       </div>
@@ -647,6 +697,7 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
           )}
         </div>
       ))}
+      </>}
     </div>
     </MinhasCtx.Provider>
   );
@@ -654,6 +705,15 @@ export default function Glossario({ API = "", query = "", jogos = [] }) {
 
 const GLOS_CSS = `
 .apito .glos{max-width:1200px;margin:0 auto;padding-bottom:40px}
+.apito .glos .gmodos{display:flex;width:fit-content;max-width:100%;margin:0 auto 16px;justify-content:center;flex-wrap:wrap;gap:4px;border:0;background:none}
+.apito .glos .gmodos button{font-weight:600;font-size:14.5px;padding:7px 16px;border:1px solid var(--hist);color:var(--hist);background:var(--raise);border-radius:999px}
+.apito .glos .gmodos button[aria-pressed="true"]{background:var(--hist);color:#fff}
+.apito .gcurios{border-color:var(--hist)}
+.apito .gcurlista{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:4px 18px;font-size:14px}
+.apito .gcurlista li{padding:5px 0;border-bottom:1px solid var(--line);line-height:1.4}
+.apito .gcurlista .gmod{margin-right:4px}
+.apito .gfonte{font-size:12px;color:var(--muted)}
+.apito .gcurest{font-size:12.5px;margin:6px 0 0}
 .apito .gbusca,.apito .gjogo,.apito .gminha{border:1px solid var(--line);border-left:4px solid var(--hist);border-radius:10px;background:var(--raise);padding:12px 14px;margin:0 0 16px}
 .apito .gjogo{border-left-color:var(--hist)}
 .apito .gminha{border-left-color:var(--ink)}
@@ -758,6 +818,6 @@ const GLOS_CSS = `
 .apito .gcita.meu{border-left-style:dashed;border-left-color:var(--hist)}
 .apito .gideias li.meu{border-bottom-style:dashed}
 @media (max-width:640px){
-  .apito .gtermos,.apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos,.apito .gtitulos{grid-template-columns:minmax(0,1fr)}
+  .apito .gtermos,.apito .gclubes,.apito .gcomps,.apito .gnotas,.apito .gfcards,.apito .gftermos,.apito .gtitulos,.apito .gcurlista{grid-template-columns:minmax(0,1fr)}
 }
 `;

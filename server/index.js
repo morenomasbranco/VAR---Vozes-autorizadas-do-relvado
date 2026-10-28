@@ -27,6 +27,9 @@ import { createCapas } from "./sources/capas.js";
 import { createEfemerides } from "./sources/efemerides.js";
 import { createOficiais } from "./sources/oficiais.js";
 import { createGlossario } from "./glossario.js";
+import { createDeclaracoes, limitador } from "./declaracoes.js";
+import { estadoIA } from "./ia.js";
+import { createCuriosidades } from "./curiosidades.js";
 import { createPortugal } from "./pt/index.js";
 import { restaurar, rotasCopia } from "./copia.js";
 import { verificarOidc } from "./oidc-github.js";
@@ -511,6 +514,19 @@ app.get("/api/glossario/palavra", async (req, res) => {
   }
 });
 app.get("/api/glossario/estado", (req, res) => res.json(glossario.estado()));
+// Glossário › Declarações: escrever a peça (regras do zerozero), traduzir para português de Portugal e passar a fala de
+// um vídeo a texto. Usam os modelos gratuitos (Groq, Gemini), por isso cada pessoa tem um limite de pedidos por hora
+const declaracoes = createDeclaracoes({ log, porta: PORT, canaisTelegram: () => (VIDEOS_CFG.telegram || []).map((c) => c.canal) });
+const limiteIA = limitador({ porHora: Number(process.env.DECLARACOES_POR_HORA) || 40 });
+const responder = (res, p) => p.then((d) => res.json(d)).catch((e) => { if (!res.headersSent) res.status(e.status || 500).json({ erro: e.message }); });
+app.post("/api/declaracoes/escrever", limiteIA, express.json({ limit: "128kb" }), (req, res) => responder(res, declaracoes.escrever(req.body || {})));
+app.post("/api/declaracoes/traduzir", limiteIA, express.json({ limit: "128kb" }), (req, res) => responder(res, declaracoes.traduzir(req.body || {})));
+// ?url=… (o endereço do vídeo) ou o próprio ficheiro no corpo do pedido (?nome=… com a extensão)
+app.post("/api/declaracoes/transcrever", limiteIA, (req, res) => responder(res, declaracoes.transcrever({ url: req.query.url ? String(req.query.url) : null, req, nome: String(req.query.nome || "") })));
+// Glossário › Preparar jogo: curiosidades do jogo escolhido (pesquisadas na web, guardadas um dia)
+const curiosidades = createCuriosidades({ log });
+app.get("/api/glossario/curiosidades", limiteIA, (req, res) => responder(res, curiosidades({ h: req.query.h, a: req.query.a, comp: req.query.comp, mod: req.query.mod })));
+app.get("/api/declaracoes/estado", (req, res) => res.json({ ...declaracoes.estado(), ia: estadoIA() }));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));
