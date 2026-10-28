@@ -194,6 +194,10 @@ export function createPortugal({ log = console.log, broadcast = () => {}, ligas 
     const comp = st.comps[j.comp];
     if (!comp || comp.externo) return; // as da Liga/ESPN já dão as notícias pelo ligas.json
     if (!visivel(comp)) return; // a mesma competição chega por outra fonte, que é a que dá as notícias
+    // um jogo de outro dia (um resultado que a FPF só publicou agora, um golo lido atrasado num post antigo) não é
+    // notícia do momento: no Feed aparecia como resultado de hoje
+    // (um jogo das 23h que acaba depois da meia-noite conta: até seis horas depois do início)
+    if (j.inicio && diaLisboa(j.inicio) !== diaLisboa(Date.now()) && Math.abs(Date.now() - j.inicio) > 6 * 3600e3 && !["direto", "intervalo"].includes(j.estado)) return;
     const serie = comp.series?.[j.serie];
     const contexto = [comp.nome, serie?.nome, j.jornada ? `${j.jornada}.ª jornada` : null].filter(Boolean).join(" · ");
     const via = prova.conta ? `${FONTE_TXT[prova.tipo] || prova.tipo} de @${prova.conta}` : FONTE_TXT[prova.tipo] || null;

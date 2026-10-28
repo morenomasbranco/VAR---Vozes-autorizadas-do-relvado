@@ -1,9 +1,13 @@
 // Tradução automática das notícias para as línguas que não vêm do enriquecimento (fr, de, it, es), e para
 // português e inglês nas notícias que o Gemini não chegou a tratar (limite gratuito esgotado).
-// Primeiro o Google Tradutor público (gratuito, sem chave, sem quota); se falhar, o Gemini. O resultado
-// fica guardado na própria notícia: cada título é traduzido uma vez, sirva para um leitor ou para mil.
+// Para português: primeiro um modelo de linguagem do Groq (server/ia.js), que percebe a linguagem dos títulos de
+// futebol — o Google Tradutor traduzia «Real Madrid make move for Mac Allister» como «Mac Allister mexe-se para sair
+// do Real Madrid». Sem ele (sem chave ou sem quota), e nas outras línguas, o Google Tradutor público (gratuito, sem
+// chave, sem quota); se falhar, o Gemini. O resultado fica guardado na própria notícia: cada título é traduzido uma
+// vez, sirva para um leitor ou para mil.
 import { sleep } from "./util.js";
 import { traduzirGoogle, estadoGoogle } from "./gtradutor.js";
+import { pedirIA, motoresIA } from "./ia.js";
 
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = process.env.GEMINI_TRADUTOR_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
@@ -57,6 +61,18 @@ async function callGemini(lingua, itens) {
   return Array.isArray(out) ? out : [];
 }
 
+// os modelos do Groq para as traduções, por ordem: rápidos e com quota própria (a do gpt-oss-120b fica para o
+// «Neste dia» e a do qwen, de preferência, para as Declarações)
+const MODELOS_TRADUCAO = () => [process.env.TRADUTOR_GROQ_MODEL, "openai/gpt-oss-20b", "qwen/qwen3.8-27b"].filter(Boolean);
+const SISTEMA_IA = `Traduzes títulos e pontos de notícias de futebol (e de outros desportos) para português de Portugal, como os escreveria um jornalista do zerozero ou do Record.
+Regras:
+- Percebe o sentido no mundo do futebol antes de traduzir. Mercado: «X make move for Y» / «X move for Y» = «X avança por Y» ou «X quer contratar Y» (Y é o jogador; X é o clube interessado, nunca o contrário); «Y move to X» / «Y joins X» = «Y muda-se para X» / «Y reforça o X»; «linked with» = «associado a»; «in talks» = «em negociações»; «agreement in principle» = «acordo de princípio»; «Here we go» fica «Here we go!»; «loan» = «empréstimo»; «release clause» = «cláusula de rescisão»; «sacked» = «despedido».
+- Vocabulário de Portugal: equipa, golo, guarda-redes, treinador, plantel, relvado, adeptos, avançado, médio, defesa-central. Nunca do Brasil.
+- Mantém os nomes de pessoas, clubes, competições e canais; o que vier entre == == fica exatamente igual, com os sinais.
+- Não acrescentes nem retires informação; tom de título de jornal, curto e direto; maiúscula só no início e nos nomes próprios.
+- Se o texto já estiver em português de Portugal, devolve-o igual.
+Respondes APENAS com JSON: {"traducoes": [{"i": 0, "titulo": "…", "pontos": ["…"]}]} — um objeto por item, com o mesmo i e só os campos que o item trouxe.`;
+
 export function createTradutor({ log }) {
   const fila = []; // { lang, item, resolve }
   const aCaminho = new Set(); // `${lang}:${id}` já na fila, para o mesmo título não seguir duas vezes
@@ -64,7 +80,7 @@ export function createTradutor({ log }) {
   let lastCall = 0; // travão de ritmo: o plano gratuito limita pedidos por minuto
   let pausaGemini = 0;
   let recent429 = [];
-  const contas = { pedidas: 0, feitas: 0, semQuota: 0, viaGoogle: 0, viaGemini: 0 };
+  const contas = { pedidas: 0, feitas: 0, semQuota: 0, viaIA: 0, viaGoogle: 0, viaGemini: 0 };
 
   // pelo Google Tradutor: títulos e pontos numa só lista de linhas, desfeita no fim
   async function porGoogle(lang, itens) {
@@ -84,8 +100,41 @@ export function createTradutor({ log }) {
     }));
   }
 
-  // traduz um lote; devolve null quando nem o Google nem o Gemini responderam
+  // pelo modelo de linguagem (só para português): devolve null se não houver motor ou se não responder
+  async function porIA(lang, itens) {
+    if (lang !== "pt" || !motoresIA().includes("groq") || process.env.TRADUTOR_IA === "0") return null;
+    const lista = itens.map((it, i) => [
+      `[${i}]`,
+      it.titulo ? `título: ${it.titulo}` : null,
+      it.pontos?.length ? `pontos:\n${it.pontos.map((p) => `- ${p}`).join("\n")}` : null,
+    ].filter(Boolean).join("\n")).join("\n\n");
+    try {
+      const r = await pedirIA({ sistema: SISTEMA_IA, pedido: `Itens a traduzir (${itens.length}):\n\n${lista}`, temperatura: 0.1, uso: "tradução das notícias", motores: ["groq"], modelosGroq: MODELOS_TRADUCAO(), esforco: "low" });
+      const out = (Array.isArray(r.json?.traducoes) ? r.json.traducoes : [])
+        .filter((o) => Number.isInteger(o?.i) && o.i >= 0 && o.i < itens.length)
+        .map((o) => ({ i: o.i, titulo: typeof o.titulo === "string" && itens[o.i].titulo ? o.titulo.trim() : undefined, pontos: Array.isArray(o.pontos) && itens[o.i].pontos?.length ? o.pontos.map(String) : undefined }));
+      // um título sem os nomes marcados com ==…== perdeu-os na tradução: fica para o Google
+      const ok = out.filter((o) => !o.titulo || (itens[o.i].titulo.match(/==/g) || []).length === (o.titulo.match(/==/g) || []).length);
+      if (!ok.length) return null;
+      return ok;
+    } catch (e) {
+      if (Date.now() - avisoIA > 600000) { avisoIA = Date.now(); log(`[Tradutor] IA: ${e.message.slice(0, 200)}`); }
+      return null;
+    }
+  }
+  let avisoIA = 0;
+
+  // traduz um lote; devolve null quando nem a IA, nem o Google, nem o Gemini responderam
   async function traduzir(lang, itens) {
+    const ia = await porIA(lang, itens);
+    if (ia) {
+      contas.viaIA += ia.length;
+      // os que a IA não devolveu seguem para o Google
+      const faltam = itens.map((it, i) => i).filter((i) => !ia.some((o) => o.i === i));
+      if (!faltam.length) return ia;
+      const g = await porGoogle(lang, faltam.map((i) => itens[i]));
+      return [...ia, ...(g || []).map((o) => ({ ...o, i: faltam[o.i] }))];
+    }
     const g = await porGoogle(lang, itens);
     if (g) { contas.viaGoogle += itens.length; return g; }
     if (!KEY || Date.now() < pausaGemini) return null;

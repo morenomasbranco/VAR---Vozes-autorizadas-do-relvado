@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import Portugal, { PT_CSS } from "./Portugal.jsx";
-import Distritais, { DIST_CSS } from "./Distritais.jsx";
+import Distritais, { DIST_CSS, daBase } from "./Distritais.jsx";
 // o glossário só se carrega quando se abre a secção
 const Glossario = lazy(() => import("./Glossario.jsx"));
 import { Sun, Moon, Pause, Play, Copy, Share2, ExternalLink, Search, Check, CheckCheck, SlidersHorizontal, ListFilter, Star, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2, X as Fechar } from "lucide-react";
@@ -370,6 +370,8 @@ function ago(ts, now) {
 const agoText = (ts, now, ui) => { const a = ago(ts, now); return a ? ui.agoWord(`${a[0]} ${a[1]}`) : ui.now; };
 // um jogo sem atualizações há mais de 150 minutos deixa de contar como em curso
 const isLive = (sc, ts, now) => !sc.ft && now - ts < 150 * 60000;
+// jogo das distritais, do Campeonato de Portugal ou da Liga 3 (vão para a secção Distritais, não para o Feed)
+const daBaseItem = (it) => !!it.pt && daBase({ org: it.pt.org, compNome: it.score?.comp, mod: it.mod || "futebol" });
 const COUNTRIES = {
   pt: ["Portugal", "Portugal"], gb: ["Reino Unido", "United Kingdom"], "gb-eng": ["Inglaterra", "England"], es: ["Espanha", "Spain"],
   fr: ["França", "France"], it: ["Itália", "Italy"], de: ["Alemanha", "Germany"], nl: ["Países Baixos", "Netherlands"],
@@ -1263,8 +1265,36 @@ const CSS = `
 .apito .jvgrid .vcard.mini{flex:none;width:auto;min-width:0}
 .apito .jvmais{display:flex;justify-content:center;margin-top:10px}
 .apito .vdest{margin:6px 0 18px}
-/* o vídeo em grande no topo do Feed: a imagem à esquerda e o jogo à direita (um por baixo do outro no telemóvel) */
-.apito .vhero{margin:2px 0 16px}
+/* «Hoje no VAR»: o vídeo em destaque e as manchetes do dia lado a lado, e o dia em números por baixo */
+.apito .hoje{margin:8px 0 20px;padding:14px 16px 12px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,var(--raise)),var(--raise) 55%)}
+.apito .hojecab{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.apito .hojedata{font-size:13px;font-weight:600;color:var(--muted)}
+.apito .hojegrid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:start}
+.apito .hojegrid.so{grid-template-columns:minmax(0,1fr)}
+.apito .hojevid{margin:0}
+.apito .hojegrid:not(.so) .vcard.hero{grid-template-columns:minmax(0,1fr);box-shadow:none}
+.apito .hojegrid:not(.so) .vcard.hero .vthumb,.apito .hojegrid:not(.so) .vcard.hero > :not(.vthumb){grid-column:1;grid-row:auto}
+.apito .hojegrid:not(.so) .vcard.hero .vheroeti{margin-top:10px}
+.apito .hojegrid:not(.so) .vcard.hero .vtitle{font-size:22px}
+.apito .manchetes ol{list-style:none;margin:0;padding:0;counter-reset:m}
+.apito .manchetes li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.apito .manchetes li:last-child{border-bottom:0}
+.apito .mnum{flex:none;width:30px;font-family:var(--display);font-size:30px;font-weight:800;line-height:.95;color:var(--accent);text-align:center;font-variant-numeric:tabular-nums}
+.apito .manchetes li:first-child .mnum{font-size:38px}
+.apito .mtxt{min-width:0;display:flex;flex-direction:column;gap:3px}
+.apito .mtxt a,.apito .mtxt > span:first-child{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.25;color:var(--ink);text-decoration:none}
+.apito .manchetes li:first-child .mtxt a,.apito .manchetes li:first-child .mtxt > span:first-child{font-size:19px}
+.apito .mtxt a:hover{text-decoration:underline}
+.apito .mmeta{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.apito .mronda{margin-top:6px;font-weight:600}
+.apito .hojenum{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px dashed var(--line);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.apito .hojenum li{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px}
+.apito .hojenum b{font-family:var(--display);font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.apito .hojenum span{font-size:11.5px;color:var(--muted);line-height:1.25}
+@media(max-width:860px){.apito .hojegrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:560px){.apito .hoje{padding:10px} .apito .hojenum{grid-template-columns:repeat(2,minmax(0,1fr))} .apito .hojenum b{font-size:24px}}
+/* o vídeo em destaque do Feed: a imagem à esquerda e o jogo à direita (um por baixo do outro no telemóvel, e também
+   quando divide o «Hoje no VAR» com as manchetes) */
 .apito .vcard.hero{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);grid-auto-rows:min-content;align-content:start;column-gap:20px;padding:12px;border-top-width:4px;box-shadow:0 8px 28px rgba(0,0,0,.14);animation:none}
 .apito .vcard.hero .vthumb{grid-column:1;grid-row:1 / span 7;align-self:start;border-radius:10px}
 .apito .vcard.hero > :not(.vthumb){grid-column:2}
@@ -2116,6 +2146,32 @@ export default function App() {
   const horaDest = Math.floor(now / 60000);
   const [escuros, setEscuros] = useState(() => new Set());
   const marcaEscuro = (id) => setEscuros((s) => (s.has(id) ? s : new Set([...s, id])));
+  // «Hoje no VAR», no Feed: as manchetes do dia (as notícias mais fortes da Ronda pela atualidade nas últimas 18 horas:
+  // importância, confirmações de outras fontes e destaque, com um pequeno desconto pela idade), a data e o dia em números
+  const manchetes = useMemo(() => {
+    const t = minuto * 60000;
+    const nota = (it) => (it.imp || 0) * 3 + Math.min(4, it.also?.length || 0) * 2 + (it.hot ? 3 : 0) - ((t - it.ts) / 3600e3) * 0.25;
+    return COLS.flatMap((c) => (colunas[c.id] || []).map((it) => ({ it, col: c })))
+      .filter(({ it }) => t - it.ts < 18 * 3600e3 && T(it))
+      .sort((a, b) => nota(b.it) - nota(a.it))
+      .slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colunas, minuto, lang]);
+  const dataHoje = (([p, ...r]) => p.toUpperCase() + r.join(""))(new Date(now).toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Lisbon" }));
+  const numerosDoDia = useMemo(() => {
+    const t = minuto * 60000;
+    const dia = 24 * 3600e3;
+    const golos = videos.filter((v) => v.category === "goal" && t - v.created_time < dia).length;
+    const vivos = aoVivo.filter((g) => !daBaseItem(g)).length;
+    const noticias = items.filter((it) => !it.score && !it.board && it.src !== "resultados" && t - it.ts < dia).length;
+    const fontes = new Set(items.filter((it) => !it.score && t - it.ts < dia).map((it) => it.src)).size;
+    return [
+      { n: vivos, t: vivos === 1 ? "jogo a decorrer" : "jogos a decorrer" },
+      { n: golos, t: golos === 1 ? "golo em vídeo nas últimas 24 horas" : "golos em vídeo nas últimas 24 horas" },
+      { n: noticias, t: "notícias nas últimas 24 horas" },
+      { n: fontes, t: "fontes a acompanhar" },
+    ];
+  }, [videos, aoVivo, items, minuto]);
   // o vídeo é de um jogo que está a decorrer?
   const doJogoAoVivo = (v) => !!v.teams && aoVivo.some(({ score: sc }) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)));
   const destaquesVid = useMemo(() => {
@@ -2161,10 +2217,16 @@ export default function App() {
     const grupos = new Map();
     const semJogo = [];
     const chaveJogo = (g) => `g:${g.score.comp}|${g.score.h}|${g.score.a}`;
-    for (const g of games) if (isLive(g.score, g.upd || g.ts, t)) grupos.set(chaveJogo(g), { key: chaveJogo(g), jogo: g, live: true, vids: [], ult: g.upd || g.ts });
     // no Feed só entram jogos de agora: os vídeos de jogos que já acabaram ficam 3 horas e depois saem
     // (o feed guarda vídeos durante dias, e apareciam jogos do Brasileirão de há dois dias)
     const RECENTE = 3 * 3600e3;
+    // os jogos a decorrer e os que acabaram nas últimas 3 horas (os resultados do momento); os das distritais, do
+    // Campeonato de Portugal e da Liga 3 ficam na secção Distritais
+    for (const g of games) {
+      if (daBaseItem(g)) continue;
+      if (isLive(g.score, g.upd || g.ts, t)) grupos.set(chaveJogo(g), { key: chaveJogo(g), jogo: g, live: true, vids: [], ult: g.upd || g.ts });
+      else if (g.score.ft && t - (g.upd || g.ts) < RECENTE) grupos.set(chaveJogo(g), { key: chaveJogo(g), jogo: g, live: false, vids: [], ult: g.upd || g.ts });
+    }
     for (const v of videosVis) {
       const h = v.teams?.home || v.home_team, a = v.teams?.away || v.away_team;
       const velho = t - v.created_time > RECENTE;
@@ -2545,16 +2607,6 @@ export default function App() {
 
             {section === "destaque" ? (
               <>
-                {destaquesVid[0] && (
-                  <section className="vhero" aria-label={ui.videoHighlights}>
-                    <ul className="vlist">
-                      <VideoCard key={destaquesVid[0].video_id} v={destaquesVid[0]} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === destaquesVid[0].video_id} onPlay={setATocar} auto={autoVid} hero onEscuro={marcaEscuro}
-                        etiqueta={doJogoAoVivo(destaquesVid[0])
-                          ? <p className="vheroeti"><span className="pulse"><i />{ui.liveHero || "Em direto"}</span></p>
-                          : <p className="vheroeti">{ui.videoHero || "Vídeo em destaque"}</p>} />
-                    </ul>
-                  </section>
-                )}
                 <section className="livebar jv" aria-label={ui.liveNow}>
                   {aoVivo.length > 0 && (
                     <div className="livehead">
@@ -2639,6 +2691,49 @@ export default function App() {
                     );
                   })()}
                 </section>
+                {(destaquesVid[0] || manchetes.length > 0) && (
+                  <section className="hoje" aria-label="Hoje no VAR">
+                    <div className="hojecab">
+                      <h2 className="vdesth">Hoje no VAR</h2>
+                      <span className="hojedata">{dataHoje}</span>
+                    </div>
+                    <div className={`hojegrid ${destaquesVid[0] && manchetes.length ? "" : "so"}`}>
+                      {destaquesVid[0] && (
+                        <ul className="vlist hojevid">
+                          <VideoCard key={destaquesVid[0].video_id} v={destaquesVid[0]} lang={lang} now={now} ui={ui} theme={theme} playing={aTocar === destaquesVid[0].video_id} onPlay={setATocar} auto={autoVid} hero onEscuro={marcaEscuro}
+                            etiqueta={doJogoAoVivo(destaquesVid[0])
+                              ? <p className="vheroeti"><span className="pulse"><i />Em direto</span></p>
+                              : <p className="vheroeti">Vídeo em destaque</p>} />
+                        </ul>
+                      )}
+                      {manchetes.length > 0 && (
+                        <div className="manchetes">
+                          <p className="vheroeti">As manchetes do dia</p>
+                          <ol>
+                            {manchetes.map(({ it, col }, i) => (
+                              <li key={it.id} className={it.unread ? "unread" : ""}>
+                                <span className="mnum" aria-hidden="true">{i + 1}</span>
+                                <div className="mtxt">
+                                  {postUrl(it)
+                                    ? <a href={postUrl(it)} target="_blank" rel="noreferrer" onClick={() => markRead(it.id)}><Rich text={T(it)} /></a>
+                                    : <span><Rich text={T(it)} /></span>}
+                                  <span className="mmeta">
+                                    <Flag code={col.pais} lang={lang} /> {srcName(srcOf(it))} · <span translate="no">{agoText(it.ts, now, ui)}</span>
+                                    {it.also?.length > 0 && <span className="mconf"> · {ui.nConfirms(it.also.length)}</span>}
+                                  </span>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                          <button className="textbtn mronda" onClick={() => { setSection("ronda"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Toda a Ronda pela atualidade <ArrowRight size={14} /></button>
+                        </div>
+                      )}
+                    </div>
+                    <ul className="hojenum">
+                      {numerosDoDia.map((x) => <li key={x.t}><b>{x.n}</b><span>{x.t}</span></li>)}
+                    </ul>
+                  </section>
+                )}
                 {destaquesVid.length > 1 && (
                   <section className="vbar vdest" aria-label={ui.videoHighlights}>
                     <div className="livehead">
