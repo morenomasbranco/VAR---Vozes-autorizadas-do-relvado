@@ -1,6 +1,7 @@
 // Glossário › Notas: citações (texto, autor, onde) e ideias e curiosidades sobre futebol, jornalismo, rádio e a vida.
 
 export const CITACOES = [
+  { t: "Quando se perde a vantagem do custo, tem de se construir uma vantagem que o custo não consiga destruir." },
   { t: "Sabem que deviam pisar x terrenos, que deviam pressionar y jogador e que deviam tocar de primeira em w espaço. O problema é que, muitas vezes, os jogadores não dominam o abecedário.", a: "Renato Soares", o: "crónica do Milan-Benfica" },
   { t: "O único limite do humor é o timing.", a: "Alexandre Santos", o: "Reportagem, de João Bispo (2026)" },
   { t: "O árbitro é a pessoa mais bem posicionada em campo… é onde tem de estar o n.º 10, sempre a ver o árbitro.", a: "Papu Gómez", o: "Primeiro Toque, podcast de Daniel Sousa" },
