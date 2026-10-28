@@ -1,10 +1,9 @@
 // Glossário › Declarações: cola-se o que alguém disse (ou passa-se a fala de um vídeo a texto) e o VAR escreve a peça
-// com as regras do zerozero, em português de Portugal (traduz do Brasil e de outras línguas). Sem IA, «Arrumar»
-// aplica no browser as regras mecânicas (aspas, pontuação, números, vocabulário do Brasil). Os avisos dizem o que as
-// regras pedem e ainda falta.
+// com as regras do zerozero, em português de Portugal (traduz do Brasil e de outras línguas). As regras mecânicas
+// (aspas, pontuação, números) aplicam-se por cima do que o modelo escreveu, e os avisos dizem o que as regras pedem e
+// ainda falta.
 import { useMemo, useRef, useState } from "react";
-import { REGRAS } from "./glossario/regras-zerozero.js";
-import { arrumar, ptbr, pareceBrasil, avisos } from "./glossario/declaracoes.js";
+import { arrumar, pareceBrasil, avisos } from "./glossario/declaracoes.js";
 
 const TIPOS = [
   { id: "peca", nome: "Peça" },
@@ -51,15 +50,6 @@ export default function Declaracoes({ API = "" }) {
     const a = (x) => arrumar(x, { perguntaResposta: tipo === "pr" });
     setPeca({ ...d, tituloSite: a(d.tituloSite), tituloLiveticker: a(d.tituloLiveticker), microtitulo: a(d.microtitulo), lead: a(d.lead), corpo: d.corpo.map(a), citacoes: d.citacoes.map(a) });
   });
-  const traduzir = () => correr("A traduzir…", async () => {
-    const d = await pedir(`${API}/api/declaracoes/traduzir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto }) });
-    mudarTexto(arrumar(d.texto, { perguntaResposta: tipo === "pr" }));
-    setAviso(`Traduzido ${nomeLingua(d.lingua) ? `do ${nomeLingua(d.lingua)} ` : ""}para português de Portugal (${d.motor}).`);
-  });
-  const arrumarAqui = () => {
-    mudarTexto(arrumar(brasil ? ptbr(texto) : texto, { perguntaResposta: tipo === "pr" }));
-    setAviso(brasil ? "Arrumado e passado do português do Brasil (vocabulário e construções mais comuns: confirma o resto)." : "Arrumado: aspas, pontuação das citações e números.");
-  };
   const transcrever = () => correr("A passar o vídeo a texto… (pode levar um minuto)", async () => {
     const f = ficheiro.current?.files?.[0];
     if (!f && !url.trim()) throw new Error("escolhe um vídeo ou cola o endereço dele");
@@ -95,7 +85,7 @@ export default function Declaracoes({ API = "" }) {
         </div>
       )}
       <textarea className="gdtexto" value={texto} onChange={(e) => mudarTexto(e.target.value)} rows={9} placeholder={"Cola aqui as declarações.\nEx.: «Foi um jogo muito difícil, mas a equipa esteve à altura…»"} aria-label="Declarações" />
-      {brasil && <p className="gdaviso">Parece português do Brasil: «Traduzir» ou «Arrumar» passam-no para português de Portugal.</p>}
+      {brasil && <p className="gdaviso">Parece português do Brasil: a peça sai já em português de Portugal.</p>}
       {aviso && <p className="muted gdnota">{aviso}</p>}
       <div className="gform gdcampos">
         <input value={quem} onChange={(e) => { setQuem(e.target.value); gravar("decl-quem", e.target.value); }} placeholder="Quem fala (ex.: Francesco Farioli, treinador do FC Porto)" aria-label="Quem fala" />
@@ -106,8 +96,6 @@ export default function Declaracoes({ API = "" }) {
       </div>
       <div className="gjogo-acoes gdacoes">
         <button className="gir" disabled={ocupado || texto.trim().length < 10} onClick={escrever}>Escrever {tipo === "citacoes" ? "as citações" : "a peça"}</button>
-        <button className="textbtn" disabled={ocupado || !texto.trim()} onClick={traduzir}>Traduzir para PT-PT</button>
-        <button className="textbtn" disabled={ocupado || !texto.trim()} onClick={arrumarAqui} title="Sem IA: aspas, pontuação das citações, números e vocabulário do Brasil">Arrumar sem IA</button>
         {texto && <button className="textbtn" disabled={ocupado} onClick={() => { mudarTexto(""); setPeca(null); setAviso(null); }}>Limpar</button>}
       </div>
       {estado?.a && <p className="muted gdnota" aria-live="polite">{estado.a}</p>}
@@ -149,10 +137,6 @@ export default function Declaracoes({ API = "" }) {
         </div>
       )}
 
-      <details className="gdregras">
-        <summary>Regras de escrita do zerozero</summary>
-        <ol>{REGRAS.map((g) => <li key={g.t}><b>{g.t}</b><ul>{g.r.map((x) => <li key={x}>{x}</li>)}</ul></li>)}</ol>
-      </details>
     </section>
   );
 }
@@ -183,9 +167,4 @@ export const DECL_CSS = `
 .apito .gdavisos{border:1px dashed var(--live);border-radius:8px;padding:8px 12px}
 .apito .gdavisos ul,.apito .gdbloco > ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
 .apito .gdmotor{font-size:12px}
-.apito .gdregras{margin-top:12px;font-size:13.5px}
-.apito .gdregras summary{cursor:pointer;font-weight:600;color:var(--hist);text-align:center}
-.apito .gdregras ol{margin:8px auto 0;max-width:820px;padding-left:22px}
-.apito .gdregras ol > li{margin:0 0 6px}
-.apito .gdregras ul{margin:2px 0 0;padding-left:16px;color:var(--muted)}
 `;
