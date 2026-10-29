@@ -1,9 +1,10 @@
 // Glossário › Prosebot 2.0: a crónica de um jogo escrita a partir das notas de quem o viu, com as regras de escrita do
 // zerozero. O site manda o jogo (equipas, resultado, competição, quando e onde), as notas (e os acontecimentos que o VAR
 // registou, se a pessoa os juntou), a figura do jogo, o tamanho e o vocabulário do glossário para as duas equipas
-// (alcunhas, estádio, cidade), e um modelo de linguagem (server/ia.js) escreve título, lead e corpo: o Claude primeiro,
-// se houver chave (PROSEBOT_MOTORES), e o Groq e o Gemini de reserva. Depois, o servidor procura na crónica o que não
-// está no que foi dado ao modelo (minutos, números, resultados e nomes) e devolve-o em «confirmar».
+// (alcunhas, estádio, cidade), e um modelo de linguagem gratuito (server/ia.js) escreve título, lead e corpo: o Gemini
+// primeiro (o modelo por trás do NotebookLM, com uma lista de modelos com quota própria) e o Groq de reserva
+// (PROSEBOT_MOTORES); o Claude, pago, não entra. Depois, o servidor procura na crónica o que não está no que foi dado
+// ao modelo (minutos, números, resultados e nomes) e devolve-o em «confirmar».
 import { pedirIA } from "./ia.js";
 import { lerPeca } from "./declaracoes.js";
 import { REGRAS_TEXTO } from "../web/src/glossario/regras-zerozero.js";
@@ -28,9 +29,11 @@ export const TAMANHOS = {
   normal: "até cerca de 450 palavras: lead e cinco a sete parágrafos",
   longa: "até cerca de 700 palavras: lead e oito a dez parágrafos, com espaço para a análise",
 };
-// os motores, pela ordem em que se experimentam (os que não têm chave ficam de fora), e os modelos do Groq para escrever
-// (o qwen fica para o fim: a tradução das notícias gasta-lhe o limite por minuto)
-const MOTORES = () => String(process.env.PROSEBOT_MOTORES || "claude,groq,gemini").split(",").map((m) => m.trim()).filter(Boolean);
+// os motores gratuitos, pela ordem em que se experimentam (os que não têm chave ficam de fora), e os modelos de cada um
+// para escrever: no Gemini, os melhores a escrever primeiro e o das notícias (o GEMINI_MODEL, que se gasta depressa) no
+// fim; no Groq, o qwen fica para o fim (a tradução das notícias gasta-lhe o limite por minuto)
+const MOTORES = () => String(process.env.PROSEBOT_MOTORES || "gemini,groq").split(",").map((m) => m.trim()).filter(Boolean);
+const MODELOS_GEMINI = () => [...new Set([process.env.PROSEBOT_GEMINI_MODEL, "gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"].filter(Boolean))];
 const MODELOS_GROQ = () => [process.env.PROSEBOT_GROQ_MODEL, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "qwen/qwen3.8-27b"].filter(Boolean);
 
 const SISTEMA = `És jornalista do zerozero e escreves a crónica de um jogo a partir das notas de quem o viu, em português de Portugal (norma europeia, Acordo Ortográfico de 1990).
@@ -149,7 +152,7 @@ export function createProsebot({ log = () => {} } = {}) {
     const t0 = Date.now();
     const sobre = { tamanho: pedidoSite.tamanho || "normal", mod: modDaCronica(pedidoSite.mod) };
     try {
-      const r = await pedirIA({ sistema: SISTEMA, pedido, temperatura: 0.3, uso: "prosebot", ordem: MOTORES(), modelosGroq: MODELOS_GROQ(), esforco: "low", maxTokens: 16000 });
+      const r = await pedirIA({ sistema: SISTEMA, pedido, temperatura: 0.3, uso: "prosebot", motores: MOTORES(), ordem: MOTORES(), modelosGemini: MODELOS_GEMINI(), modelosGroq: MODELOS_GROQ(), esforco: "low" });
       const c = lerCronica(r.json);
       if (!c.corpo.length && !c.lead) throw Object.assign(new Error("o modelo não devolveu a crónica; tenta outra vez"), { status: 502 });
       const confirmar = verificarFactos(c, fonteDosFactos(pedidoSite));

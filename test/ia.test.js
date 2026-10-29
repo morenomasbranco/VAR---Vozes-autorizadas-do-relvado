@@ -38,7 +38,7 @@ test("IA: uma resposta do Groq cortada no limite de tokens (ou sem JSON) passa a
   });
 });
 
-test("IA: as crónicas começam pelo Claude (com o esforço, o fallback e o máximo de tokens); recusado, passa ao Groq", async () => {
+test("IA: com «ordem», o Claude primeiro (com o esforço, o fallback e o máximo de tokens); recusado, passa ao Groq", async () => {
   const pedidos = [];
   await comAmbiente({ GROQ_API_KEY: "g", ANTHROPIC_API_KEY: "c" }, async (url, op) => {
     pedidos.push({ url: String(url), cab: op.headers, corpo: JSON.parse(op.body) });
@@ -68,5 +68,45 @@ test("IA: as crónicas começam pelo Claude (com o esforço, o fallback e o máx
     const r3 = await pedirIA({ sistema: "s", pedido: "p3" });
     assert.equal(r3.motor, "Groq");
     assert.match(pedidos[n].url, /groq/);
+  });
+});
+
+test("IA: no Gemini, cada modelo tem a sua quota: sem ela (ou sem o modelo), passa ao seguinte, e a resposta vem em modo JSON", async () => {
+  const pedidos = [];
+  const quotaDoDia = JSON.stringify({ error: { code: 429, message: "Quota exceeded", details: [{ "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } });
+  await comAmbiente({ GEMINI_API_KEY: "k" }, async (url, op) => {
+    const modelo = String(url).match(/models\/([^:]+):/)[1];
+    pedidos.push({ modelo, corpo: JSON.parse(op.body) });
+    if (modelo === "m1") return { ok: false, status: 429, text: async () => quotaDoDia };
+    if (modelo === "m2") return { ok: false, status: 404, text: async () => "model not found" };
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '{"lead": "do Gemini"}' }] }, finishReason: "STOP" }] }) };
+  }, async () => {
+    const r = await pedirIA({ sistema: "s", pedido: "p", modelosGemini: ["m1", "m2", "m3"] });
+    assert.equal(r.motor, "Gemini");
+    assert.equal(r.modelo, "m3");
+    assert.deepEqual(r.json, { lead: "do Gemini" });
+    assert.deepEqual(pedidos.map((x) => x.modelo), ["m1", "m2", "m3"]);
+    assert.equal(pedidos[2].corpo.generationConfig.responseMimeType, "application/json");
+    // o modelo sem a quota do dia e o que não existe ficam de parte: o pedido seguinte vai direto ao m3
+    await pedirIA({ sistema: "s", pedido: "p2", modelosGemini: ["m1", "m2", "m3"] });
+    assert.deepEqual(pedidos.slice(3).map((x) => x.modelo), ["m3"]);
+    // com pesquisa na web não há modo JSON (o Gemini não aceita os dois juntos)
+    await pedirIA({ sistema: "s", pedido: "p3", pesquisa: true, modelosGemini: ["m3"] });
+    assert.equal(pedidos.at(-1).corpo.generationConfig.responseMimeType, undefined);
+    assert.deepEqual(pedidos.at(-1).corpo.tools, [{ google_search: {} }]);
+  });
+});
+
+test("IA: com «motores», o Claude fica de fora mesmo havendo chave (as crónicas só usam os gratuitos)", async () => {
+  const hosts = [];
+  await comAmbiente({ GEMINI_API_KEY: "k", GROQ_API_KEY: "g", ANTHROPIC_API_KEY: "c" }, async (url) => {
+    hosts.push(new URL(String(url)).hostname);
+    if (String(url).includes("generativelanguage")) return { ok: false, status: 429, text: async () => "Quota exceeded, retry in 30s" };
+    return groqOk('{"lead": "do Groq"}');
+  }, async () => {
+    const r = await pedirIA({ sistema: "s", pedido: "p", motores: ["gemini", "groq"], ordem: ["gemini", "groq"], modelosGemini: ["m1"] });
+    assert.equal(r.motor, "Groq");
+    assert.ok(!hosts.some((h) => /anthropic/.test(h)), "o Claude não é chamado");
+    assert.deepEqual(hosts.slice(0, 2), ["generativelanguage.googleapis.com", "api.groq.com"]);
   });
 });

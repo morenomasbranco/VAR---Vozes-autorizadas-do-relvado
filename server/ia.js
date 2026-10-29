@@ -1,8 +1,8 @@
 // Os modelos de linguagem que o site usa fora do «Neste dia» (Ferramentas: Declarações, Prosebot, sinónimos de frases e
 // as curiosidades dos jogos): o Groq e o Gemini (gratuitos) e o Claude (pago), os que tiverem chave. Experimenta-se um de
 // cada vez, pela ordem de IA_MOTORES (por omissão groq, gemini, claude) ou pela que cada uso pedir (as crónicas começam
-// pelo Claude). O Gemini ou o Claude sem quota (429) ficam de parte uma hora; no Groq, cada modelo fica de parte o tempo
-// que o próprio Groq indicar.
+// pelo Gemini). O Claude sem quota (429) fica de parte uma hora; no Groq e no Gemini, cada modelo fica de parte o tempo
+// que o próprio motor indicar (no Gemini, a quota do dia volta à meia-noite da Califórnia).
 // O JSON vem no texto da resposta (nem todos os modelos gratuitos o dão de outra maneira), e lê-se com tolerância.
 const GROQ_API = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").replace(/\/$/, "");
 const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
@@ -31,6 +31,24 @@ export function esperaDoGroq(texto) {
   const m = String(texto || "").match(/try again in\s+(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:([\d.]+)s)?/i);
   if (!m || !(m[1] || m[2] || m[3])) return 15 * 60e3;
   return Math.min(24 * 3600e3, ((+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0)) * 1000 + 30e3);
+}
+// A quota gratuita do Gemini volta à meia-noite da Califórnia (8 ou 9 da manhã em Lisboa)
+export function proximaMeiaNoitePacifico(agora = Date.now()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(agora)).map((x) => [x.type, x.value]));
+  const passou = ((+p.hour * 60 + +p.minute) * 60 + +p.second) * 1000;
+  return agora - passou + 86400e3 + 60e3; // e um minuto de margem
+}
+// o que diz um 429 do Gemini: quanto esperar (RetryInfo) e se foi a quota do dia que acabou
+export function lerRecusa(texto, agora = Date.now()) {
+  let j = null;
+  try { j = JSON.parse(texto); } catch { /* texto simples */ }
+  const det = j?.error?.details || [];
+  const espera = det.map((d) => String(d.retryDelay || "").match(/^([\d.]+)s$/)?.[1]).find(Boolean);
+  const quotas = det.flatMap((d) => d.violations || []).map((v) => `${v.quotaId || ""} ${v.quotaMetric || ""}`).join(" ");
+  const diaria = /PerDay|per_day|daily/i.test(quotas) || (/quota/i.test(texto) && !espera && !/PerMinute/i.test(quotas));
+  // «limit: 0»: este modelo não tem quota gratuita nenhuma (por exemplo, a pesquisa Google nos 3.x)
+  const semQuota = /limit:\s*0\b/i.test(texto) || det.flatMap((d) => d.violations || []).some((v) => String(v.quotaValue ?? "") === "0");
+  return { diaria: diaria || semQuota, semQuota, ate: semQuota ? agora + 86400e3 : diaria ? proximaMeiaNoitePacifico(agora) : agora + Math.max(60e3, (Number(espera) || 60) * 1000) };
 }
 const ultimos = []; // os últimos pedidos, para /api/ia/estado
 const registar = (x) => { ultimos.unshift({ ts: Date.now(), ...x }); ultimos.length = Math.min(ultimos.length, 15); };
@@ -108,22 +126,42 @@ async function groq({ sistema, pedido, pesquisa, temperatura, modelosGroq, esfor
   throw ultimo || new Error("nenhum modelo do Groq respondeu");
 }
 
-async function gemini({ sistema, pedido, pesquisa, temperatura }) {
-  const res = await fetch(`${GEMINI_API}/models/${GEMINI_MODELO()}:generateContent`, {
-    method: "POST", signal: AbortSignal.timeout(PRAZO),
-    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: sistema }] },
-      contents: [{ role: "user", parts: [{ text: pedido }] }],
-      ...(pesquisa ? { tools: [{ google_search: {} }] } : {}),
-      generationConfig: { temperature: temperatura },
-    }),
-  });
-  if (!res.ok) throw await erro("Gemini", res);
-  const j = await res.json();
-  const texto = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-  if (!texto && j.promptFeedback?.blockReason) throw new Error(`pedido recusado pelo Gemini (${j.promptFeedback.blockReason})`);
-  return { texto, modelo: GEMINI_MODELO() };
+// No Gemini, cada modelo tem a sua quota gratuita (por minuto e por dia), e a do GEMINI_MODEL gasta-se com as notícias:
+// quem pede uma lista de modelos («modelosGemini») passa ao seguinte quando um fica sem quota (429: o tempo que o Gemini
+// disser, ou até a quota do dia voltar), não existe (404) ou responde sem o JSON pedido. Sem pesquisa na web, a resposta
+// vem em modo JSON.
+async function gemini({ sistema, pedido, pesquisa, temperatura, modelosGemini }) {
+  let ultimo = null;
+  for (const modelo of modelosGemini?.length ? modelosGemini : [GEMINI_MODELO()]) {
+    const k = `gemini:${modelo}`;
+    if (pausaModelo[k] > Date.now()) { ultimo ||= Object.assign(new Error(`Gemini (${modelo}) sem quota até ${new Date(pausaModelo[k]).toISOString()}`), { status: 429 }); continue; }
+    const res = await fetch(`${GEMINI_API}/models/${modelo}:generateContent`, {
+      method: "POST", signal: AbortSignal.timeout(PRAZO),
+      headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: sistema }] },
+        contents: [{ role: "user", parts: [{ text: pedido }] }],
+        ...(pesquisa ? { tools: [{ google_search: {} }] } : {}),
+        generationConfig: { temperature: temperatura, ...(pesquisa ? {} : { responseMimeType: "application/json" }) },
+      }),
+    });
+    if (res.ok) {
+      const j = await res.json();
+      const texto = (j.candidates?.[0]?.content?.parts || []).map((x) => x.text || "").join("");
+      if (!texto && j.promptFeedback?.blockReason) throw new Error(`pedido recusado pelo Gemini (${j.promptFeedback.blockReason})`);
+      try { lerJson(texto); } catch {
+        ultimo = new Error(`Gemini (${modelo}) respondeu sem o JSON pedido (${j.candidates?.[0]?.finishReason || "?"})`);
+        continue;
+      }
+      return { texto, modelo };
+    }
+    const txt = await res.text().catch(() => "");
+    ultimo = Object.assign(new Error(`Gemini (${modelo}) respondeu ${res.status}: ${txt.slice(0, 300)}`), { status: res.status });
+    if (res.status === 429) { pausaModelo[k] = lerRecusa(txt).ate; continue; }
+    if (res.status === 404 || (res.status === 400 && /model/i.test(txt))) { pausaModelo[k] = Date.now() + 86400e3; continue; }
+    throw ultimo;
+  }
+  throw ultimo || new Error("nenhum modelo do Gemini respondeu");
 }
 
 // O Claude pensa antes de responder (o esforço diz quanto) e, se recusar um pedido, a própria API passa-o ao modelo
@@ -152,11 +190,11 @@ const MOTOR = { groq, gemini, claude };
 const MSG_QUOTA = "a IA gratuita chegou ao limite de hoje; volta a tentar mais tarde";
 
 // pede a um motor de cada vez até um responder com JSON; devolve { json, motor, modelo, tokens }
-// «motores» limita os motores (a tradução das notícias não usa o Claude, que é pago), «ordem» muda a ordem em que se
-// experimentam (as crónicas começam pelo Claude), «modelosGroq» muda a ordem dos modelos do Groq (cada uso gasta de
-// preferência a quota de um modelo diferente) e «maxTokens» é o tamanho máximo da resposta do Claude (com o que pensa;
-// no Groq não se indica, porque o limite por minuto do plano gratuito conta-o como se fosse gasto)
-export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "", motores: so = null, ordem = null, modelosGroq = null, esforco = null, maxTokens = null }) {
+// «motores» limita os motores (a tradução das notícias e as crónicas não usam o Claude, que é pago), «ordem» muda a ordem
+// em que se experimentam (as crónicas começam pelo Gemini), «modelosGroq» e «modelosGemini» dizem os modelos de cada um,
+// pela ordem (cada uso gasta de preferência a quota de um modelo diferente) e «maxTokens» é o tamanho máximo da resposta
+// do Claude (com o que pensa; no Groq não se indica, porque o limite por minuto do plano gratuito conta-o como gasto)
+export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "", motores: so = null, ordem = null, modelosGroq = null, modelosGemini = null, esforco = null, maxTokens = null }) {
   // a pausa de um motor sem quota é por lista de modelos (a do Groq para a tradução não pára as Declarações)
   const chavePausa = (m) => (m === "groq" && modelosGroq ? `groq:${modelosGroq.join(",")}` : m);
   const comChave = motoresIA();
@@ -168,13 +206,14 @@ export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura =
   for (const m of motores) {
     const t0 = Date.now();
     try {
-      const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco, maxTokens });
+      const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura, modelosGroq, modelosGemini, esforco, maxTokens });
       const json = lerJson(r.texto);
       registar({ uso, motor: m, modelo: r.modelo, ms: Date.now() - t0, tokens: r.tokens ?? undefined });
       return { json, motor: NOME[m], modelo: r.modelo, tokens: r.tokens ?? null };
     } catch (e) {
-      // (no Groq, cada modelo fica de parte o tempo que o Groq diz — às vezes são segundos, um limite por minuto)
-      if (e.status === 429 && m !== "groq") pausa[chavePausa(m)] = Date.now() + PAUSA_429;
+      // (no Groq e no Gemini, cada modelo fica de parte o tempo que o motor disser — às vezes são segundos, um limite por
+      // minuto; o Claude fica de parte uma hora)
+      if (e.status === 429 && m === "claude") pausa[chavePausa(m)] = Date.now() + PAUSA_429;
       const msg = `${e.message}${e.cause?.code ? ` (${e.cause.code})` : ""}`;
       registar({ uso, motor: m, erro: msg.slice(0, 200), ms: Date.now() - t0 });
       erros.push({ quota: e.status === 429, texto: `${NOME[m]}: ${msg.slice(0, 160)}` });
