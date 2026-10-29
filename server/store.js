@@ -32,6 +32,17 @@ export function remove(id) {
 
 export const touch = () => { dirty = true; };
 
+// a imagem que a fonte deu a um post já guardado (como notícia ou como confirmação), se ainda não a tinha
+export function juntarImagem(postId, img) {
+  for (const it of items) {
+    const alvo = it.postId === postId ? it : it.also?.find((a) => a.postId === postId);
+    if (!alvo) continue;
+    if (!alvo.img) { alvo.img = img; dirty = true; }
+    return alvo;
+  }
+  return null;
+}
+
 export function add(item) {
   // o texto original só serve para mostrar o post e comparar títulos; guardá-lo inteiro era o que enchia a memória
   if (typeof item.text === "string" && item.text.length > TEXTO_MAX) item = { ...item, text: item.text.slice(0, TEXTO_MAX) };

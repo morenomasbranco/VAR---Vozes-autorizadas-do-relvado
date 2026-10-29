@@ -1,5 +1,5 @@
 // Secção «Ferramentas» (o id continua «glossario»), em cinco partes: Preparar jogo, Declarações, Antónimos/Sinónimos,
-// Prosebot 2.0 e Glossário. O Glossário: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol), alcunhas
+// Prosebot 2.0 e Glossário. O Glossário: expressões e vocabulário por modalidade (futebol, futsal, hóquei em patins, basquetebol, andebol, voleibol), alcunhas
 // e cidades dos clubes, sinónimos das competições e dos países, citações e ideias, e uma pesquisa de sinónimos e antónimos.
 // «Preparar um jogo»: escolhe-se um jogo (dos que estão em direto, que o App passa em «jogos», arrumados por modalidade, país e
 // competição) ou escrevem-se as equipas, e o glossário destaca as palavras que fazem sentido e sugere títulos para o
@@ -104,7 +104,8 @@ function Palavra({ p, lista: minha, alternar, titulo }) {
 // as modalidades do «escolher à mão» (as do glossário e as das ligas norte-americanas)
 const MODS_MAO = [
   { id: "futebol", nome: "Futebol" }, { id: "futsal", nome: "Futsal" }, { id: "hoquei", nome: "Hóquei em patins" },
-  { id: "basquete", nome: "Basquetebol" }, { id: "hoquei_gelo", nome: "Hóquei no gelo" }, { id: "futebol_americano", nome: "Futebol americano" },
+  { id: "basquete", nome: "Basquetebol" }, { id: "andebol", nome: "Andebol" }, { id: "voleibol", nome: "Voleibol" },
+  { id: "hoquei_gelo", nome: "Hóquei no gelo" }, { id: "futebol_americano", nome: "Futebol americano" },
 ];
 const NOME_MOD = Object.fromEntries(MODS_MAO.map((m) => [m.id, m.nome]));
 const mesmoJogo = (a, b) => !!a && !!b && a.h === b.h && a.a === b.a && (a.comp || "") === (b.comp || "");

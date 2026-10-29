@@ -1,13 +1,15 @@
 // Glossário › Expressões e vocabulário. Cada termo: t (termo), d (definição), m (modalidade), s (sinónimos), a (antónimos),
 // e (exemplo). Os sinónimos e os antónimos alimentam também a pesquisa de palavras do glossário.
-// m: futebol, futsal, hoquei (hóquei em patins), basquete (basquetebol), geral (desporto em geral), lingua (língua,
-// jornalismo e comunicação: palavras e figuras de estilo que dão jeito a quem escreve ou narra)
+// m: futebol, futsal, hoquei (hóquei em patins), basquete (basquetebol), andebol, voleibol, geral (desporto em geral),
+// lingua (língua, jornalismo e comunicação: palavras e figuras de estilo que dão jeito a quem escreve ou narra)
 
 export const MODS = [
   { id: "futebol", nome: "Futebol" },
   { id: "futsal", nome: "Futsal" },
   { id: "hoquei", nome: "Hóquei em patins" },
   { id: "basquete", nome: "Basquetebol" },
+  { id: "andebol", nome: "Andebol" },
+  { id: "voleibol", nome: "Voleibol" },
   { id: "geral", nome: "Desporto em geral" },
   { id: "lingua", nome: "Língua, jornalismo e comunicação" },
 ];
@@ -369,6 +371,47 @@ export const TERMOS = [
   { t: "MVP", m: "geral", d: "Most Valuable Player: o jogador mais valioso de um jogo, de uma prova ou de uma época.", s: ["melhor jogador", "figura", "homem do jogo"] },
   { t: "estreante", m: "geral", d: "Jogador na primeira época numa liga.", s: ["rookie", "novato", "caloiro"], a: ["veterano"] },
   { t: "veterano", m: "geral", d: "Jogador com muitos anos de carreira.", s: ["experiente", "histórico", "velha guarda"], a: ["estreante", "novato"] },
+
+  /* ───────── Andebol ───────── */
+  { t: "sete metros", m: "andebol", d: "O castigo máximo do andebol: um remate da linha dos sete metros, só com o guarda-redes pela frente.", s: ["livre de sete metros", "penálti do andebol"], e: "«O guarda-redes defendeu dois sete metros nos últimos cinco minutos.»" },
+  { t: "exclusão", m: "andebol", d: "Castigo de dois minutos: o jogador sai e a equipa joga em inferioridade numérica.", s: ["dois minutos", "exclusão de dois minutos", "suspensão temporária"] },
+  { t: "desqualificação", m: "andebol", d: "Cartão vermelho: o jogador não volta ao jogo, e a equipa cumpre dois minutos com menos um.", s: ["cartão vermelho", "expulsão"] },
+  { t: "pivô (andebol)", m: "andebol", d: "O jogador que atua entre os defesas adversários, junto à linha dos seis metros, a abrir espaços e a finalizar.", s: ["pivot", "jogador de seis metros"] },
+  { t: "lateral (andebol)", m: "andebol", d: "Os jogadores da primeira linha, à esquerda e à direita do central, que rematam de longe.", s: ["lateral esquerdo", "lateral direito", "primeira linha"] },
+  { t: "central (andebol)", m: "andebol", d: "O organizador do ataque, no meio da primeira linha.", s: ["armador", "construtor de jogo"] },
+  { t: "ponta", m: "andebol", d: "Os jogadores das extremidades, junto às linhas laterais, que finalizam em ângulos apertados e lançam o contra-ataque.", s: ["ponta esquerda", "ponta direita", "extremo"] },
+  { t: "área dos seis metros", m: "andebol", d: "A área da baliza, onde só o guarda-redes pode estar; os remates fazem-se em salto por cima dela.", s: ["seis metros", "área de baliza"] },
+  { t: "linha dos nove metros", m: "andebol", d: "A linha tracejada de onde se marcam os livres.", s: ["nove metros", "linha de livre"] },
+  { t: "remate em suspensão", m: "andebol", d: "Remate no ar, no ponto mais alto do salto, típico da primeira linha.", s: ["remate em salto"], a: ["remate em apoio"] },
+  { t: "remate em apoio", m: "andebol", d: "Remate com os pés no chão, que apanha o guarda-redes desprevenido.", a: ["remate em suspensão"] },
+  { t: "kempa", m: "andebol", d: "Passe por cima da área que um colega agarra no ar e remata antes de tocar no chão.", s: ["voo", "jogada aérea"] },
+  { t: "primeira vaga", m: "andebol", d: "O contra-ataque mais rápido, logo a seguir a recuperar a bola; a segunda vaga junta mais jogadores.", s: ["contra-ataque", "transição rápida", "segunda vaga"] },
+  { t: "jogo passivo", m: "andebol", d: "Atacar sem intenção de rematar: os árbitros levantam o braço (aviso de passividade) e a equipa fica com poucos passes para o fazer.", s: ["passividade", "aviso de jogo passivo"] },
+  { t: "sete contra seis", m: "andebol", d: "Atacar com sete jogadores de campo, trocando o guarda-redes por mais um atacante (e a baliza fica deserta).", s: ["7x6", "ataque sem guarda-redes"] },
+  { t: "defesa 6:0", m: "andebol", d: "Os seis defesas alinhados junto à área.", s: ["defesa em linha", "seis-zero"], a: ["defesa 5:1", "defesa 3:2:1"] },
+  { t: "defesa 5:1", m: "andebol", d: "Cinco defesas junto à área e um avançado a pressionar o central adversário; a 3:2:1 adianta ainda mais jogadores.", s: ["cinco-um", "defesa 3:2:1", "defesa avançada"], a: ["defesa 6:0"] },
+  { t: "passos (andebol)", m: "andebol", d: "Infração: dar mais de três passos com a bola na mão (ou segurá-la mais de três segundos).", s: ["três passos", "falta técnica"] },
+  { t: "time-out de equipa", m: "andebol", d: "Paragem de um minuto pedida pelo treinador: até três por jogo, no máximo dois em cada parte.", s: ["pedido de tempo", "desconto de tempo"] },
+  { t: "parcial", m: "geral", d: "Sequência de golos ou pontos de uma equipa sem resposta do adversário (ex.: um parcial de 5-0); no voleibol, o resultado de cada set.", s: ["série", "corrida", "run"] },
+
+  /* ───────── Voleibol ───────── */
+  { t: "set", m: "voleibol", d: "Cada parcial do jogo, ganho por quem chega primeiro aos 25 pontos com dois de vantagem; ganha o jogo quem vencer três sets.", s: ["parcial", "partida (BR)"] },
+  { t: "tie-break", m: "voleibol", d: "O quinto set, que decide o jogo, jogado só até aos 15 pontos.", s: ["quinto set", "negra", "set decisivo"] },
+  { t: "ás", m: "voleibol", d: "Ponto direto de serviço: o adversário não consegue receber a bola.", s: ["serviço direto", "ace"] },
+  { t: "serviço", m: "voleibol", d: "O batimento que põe cada jogada em jogo, de trás da linha final.", s: ["saque", "serviço em salto", "serviço flutuante"] },
+  { t: "receção", m: "voleibol", d: "O primeiro toque da equipa que recebe o serviço, para o distribuidor.", s: ["receção ao serviço", "passe"] },
+  { t: "manchete", m: "voleibol", d: "Passe com os antebraços juntos, usado sobretudo na receção e na defesa.", s: ["passe de antebraços"] },
+  { t: "passe de dedos", m: "voleibol", d: "Passe por cima da cabeça, com as pontas dos dedos, típico do distribuidor.", s: ["toque de dedos", "passe alto"] },
+  { t: "distribuidor", m: "voleibol", d: "O jogador do segundo toque, que escolhe quem ataca.", s: ["passador", "levantador (BR)"] },
+  { t: "oposto", m: "voleibol", d: "O atacante que joga do lado oposto ao distribuidor; costuma ser quem mais pontos faz.", s: ["atacante oposto"] },
+  { t: "central (voleibol)", m: "voleibol", d: "O jogador do meio da rede, especialista do bloco e do ataque rápido.", s: ["bloqueador central", "zona 3"] },
+  { t: "recetor-atacante", m: "voleibol", d: "Recebe o serviço e ataca pela ponta (zona 4).", s: ["ponta", "zona 4", "atacante de ponta"] },
+  { t: "líbero (voleibol)", m: "voleibol", d: "O especialista da receção e da defesa, com camisola de outra cor; não serve nem ataca acima da rede.", s: ["defensor", "libero"] },
+  { t: "bloco (voleibol)", m: "voleibol", d: "Os jogadores junto à rede saltam para travar o ataque adversário; o ponto de bloco vale tanto como um ataque.", s: ["bloqueio", "muro"] },
+  { t: "remate (voleibol)", m: "voleibol", d: "O ataque: a bola batida com força, de cima para baixo, para o campo adversário.", s: ["ataque", "spike"] },
+  { t: "ponto de set", m: "voleibol", d: "A jogada que pode dar o set a uma equipa; ponto de jogo, a que pode dar o jogo.", s: ["set point", "bola de set", "ponto de jogo", "match point"] },
+  { t: "rotação (voleibol)", m: "voleibol", d: "As equipas rodam uma posição, no sentido dos ponteiros do relógio, cada vez que recuperam o serviço.", s: ["rodar"] },
+  { t: "falha de serviço", m: "voleibol", d: "Serviço para fora ou para a rede: o ponto vai para o adversário.", s: ["serviço falhado", "erro de serviço"], a: ["ás"] },
 
   /* ───────── Jornalismo e comunicação ───────── */
   { t: "lead", m: "lingua", d: "O primeiro parágrafo de uma notícia, com o essencial (quem, o quê, quando, onde, como e porquê).", s: ["lide", "entrada", "abertura"] },

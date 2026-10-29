@@ -379,12 +379,27 @@ try {
   const agora = Date.now();
   const fortes = (Array.isArray(itens) ? itens : []).filter((x) => !x.score && !x.board && x.src !== "resultados" && agora - x.ts < 18 * 3600e3)
     .sort((a, b) => ((b.imp || 0) * 3 + (b.also?.length || 0) * 2) - ((a.imp || 0) * 3 + (a.also?.length || 0) * 2)).slice(0, 8);
-  linha(`== imagens das manchetes == ${fortes.length} notícias`);
+  const comImg = (x) => [x, ...(x.also || [])].map((f) => f.img).filter(Boolean);
+  linha(`== imagens das manchetes == ${fortes.length} notícias · com imagem do feed/Telegram: ${fortes.filter((x) => comImg(x).length).length}`);
   for (const x of fortes) {
     const t0 = Date.now();
     const r = await fetch(`${SITE}/api/noticias/imagem/${encodeURIComponent(x.id)}`, { signal: AbortSignal.timeout(40000) }).catch((e) => ({ status: `erro ${e.message}`, headers: { get: () => "" } }));
     const tam = r.arrayBuffer ? (await r.arrayBuffer()).byteLength : 0;
-    linha(`   ${r.status} ${r.headers.get("content-type") || ""} ${Math.round(tam / 1024)} KB · ${Date.now() - t0} ms | ${(x.url || "").slice(0, 90)} | ${String(x.t?.pt || "").replace(/==/g, "").slice(0, 70)}`);
+    const via = r.redirected ? ` (pelo browser: ${new URL(r.url).hostname})` : "";
+    linha(`   ${r.status}${via} ${r.headers.get("content-type") || ""} ${Math.round(tam / 1024)} KB · ${Date.now() - t0} ms | ${(x.url || "").slice(0, 80)} | img: ${comImg(x)[0]?.slice(0, 70) || "-"} | ${String(x.t?.pt || "").replace(/==/g, "").slice(0, 60)}`);
   }
-  linha("   estado:", JSON.stringify(await j("/api/noticias/imagens/estado")));
+  const est = await j("/api/noticias/imagens/estado");
+  const { ultimas = [], ...resto } = est;
+  linha("   estado:", JSON.stringify(resto));
+  for (const u of ultimas) linha(`   · ${u.ms} ms | ${u.resultado} | ${u.titulo}${u.passos?.length ? `\n       ${u.passos.join("\n       ")}` : ""}`);
+  // as mesmas páginas vistas daqui (GitHub): se aqui dão a imagem e no servidor não, o problema é a ligação do servidor
+  for (const x of fortes.filter((y) => y.url && !/news\.google\.com/.test(y.url)).slice(0, 3)) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch(x.url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36", Accept: "text/html,*/*" }, signal: AbortSignal.timeout(15000) });
+      const h = await r.text();
+      const og = h.match(/<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] || h.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image["']/i)?.[1];
+      linha(`   daqui: ${r.status} em ${Date.now() - t0} ms · og:image ${og ? og.slice(0, 90) : "nenhuma"} | ${x.url.slice(0, 80)}`);
+    } catch (e) { linha(`   daqui: ${e.message} em ${Date.now() - t0} ms | ${x.url.slice(0, 80)}`); }
+  }
 } catch (e) { linha("imagens das manchetes: erro", e.message); }

@@ -6,8 +6,33 @@ import { sleep, hash, BACKFILL_MS, lerTexto, entidades, conserta } from "../util
 
 const parser = new Parser({
   timeout: 10000,
-  customFields: { item: [["dc:date", "dcDate"], ["dcterms:created", "dctCreated"], ["published", "published"], ["updated", "updated"], ["a10:updated", "a10Updated"], ["source", "source"]] },
+  customFields: { item: [["dc:date", "dcDate"], ["dcterms:created", "dctCreated"], ["published", "published"], ["updated", "updated"], ["a10:updated", "a10Updated"], ["source", "source"],
+    ["media:content", "mediaContent", { keepArray: true }], ["media:thumbnail", "mediaThumbnail", { keepArray: true }], ["media:group", "mediaGroup"]] },
 });
+
+// A imagem que o feed dá a cada notícia: a maior de media:content, a enclosure de imagem, media:thumbnail ou a
+// primeira <img> do texto (sem os píxeis de contagem nem as miniaturas com menos de 200 píxeis de largura). O «Hoje no
+// VAR» mostra-a sem ter de abrir a página da notícia.
+const EXT_IMAGEM = /\.(jpe?g|png|webp|gif|avif)([?#]|$)/i;
+const NAO_E_FOTO = /pixel|tracker|feedburner|doubleclick|emoji|gravatar|stats\.wp|\/ads?\//i;
+export function imagemDoItem(it, base) {
+  const lista = (x) => (Array.isArray(x) ? x : x ? [x] : []);
+  const at = (x) => { const a = x && typeof x === "object" ? x.$ || x : {}; return Number(a.width) > 0 && Number(a.width) < 200 ? {} : a; };
+  const abs = (u) => { try { const x = new URL(String(u).trim().replace(/&amp;/g, "&"), base || undefined); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+  const grupo = lista(it?.mediaGroup)[0] || {};
+  const conteudos = [...lista(it?.mediaContent), ...lista(grupo["media:content"])];
+  const fotos = conteudos.map(at)
+    .filter((m) => m.url && (m.medium === "image" || /^image\//i.test(m.type || "") || (!m.medium && !m.type && EXT_IMAGEM.test(m.url))))
+    .sort((a, b) => (Number(b.width) || 0) - (Number(a.width) || 0));
+  const enc = it?.enclosure?.url && (/^image\//i.test(it.enclosure.type || "") || (!it.enclosure.type && EXT_IMAGEM.test(it.enclosure.url))) ? it.enclosure.url : null;
+  const miniatura = [...lista(it?.mediaThumbnail), ...lista(grupo["media:thumbnail"]), ...conteudos.flatMap((c) => lista(c?.["media:thumbnail"]))].map(at).find((m) => m.url)?.url;
+  const doTexto = [...`${it?.["content:encoded"] || ""} ${it?.content || ""}`.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0])
+    .filter((t) => !/\b(width|height)\s*=\s*["']?1["'\s/>]/i.test(t))
+    .map((t) => t.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1])
+    .find((u) => u && !NAO_E_FOTO.test(u));
+  for (const u of [fotos[0]?.url, enc, miniatura, doTexto]) { const a = u && !NAO_E_FOTO.test(u) && abs(u); if (a) return a; }
+  return undefined;
+}
 // alguns feeds (Sky Sports em vídeos, por exemplo) não datam os itens
 const dataDe = (it) => Date.parse(it.isoDate || it.pubDate || it.dcDate || it.dctCreated || it.published || it.updated || it.a10Updated || "") || null;
 const UA = "Mozilla/5.0 (compatible; VAR-feed/1.0; agregador de notícias de desporto)";
@@ -241,6 +266,7 @@ export function startRss(sources, onPost, log, estado = new Map()) {
               lang: s.lang,
               ts,
               tsAprox: !dt || futuro || undefined, // hora aproximada: o feed não datou o item, ou datou-o no futuro
+              img: google ? undefined : imagemDoItem(it, it.link || s.site), // no Google News não vem a imagem do jornal
             });
           }
           seen = new Set(items.map((it) => {

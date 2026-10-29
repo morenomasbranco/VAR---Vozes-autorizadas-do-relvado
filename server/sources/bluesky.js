@@ -18,6 +18,20 @@ export async function recentPosts(did, limit = 10) {
   return (body.feed || []).filter((f) => !f.reason).map((f) => ({ rkey: f.post.uri.split("/").pop(), record: f.post.record }));
 }
 
+// a imagem do post, servida pelo CDN do Bluesky: a primeira fotografia, a da ligação partilhada ou a do vídeo
+export function imagemBluesky(did, rec) {
+  const e = rec?.embed || {};
+  const m = e.media || e; // «recordWithMedia»: a citação de outro post com fotografias ou vídeo
+  const cid = (b) => b?.ref?.$link || (typeof b?.ref === "string" ? b.ref : null) || b?.cid || null;
+  const foto = cid(m.images?.[0]?.image);
+  if (foto) return `https://cdn.bsky.app/img/feed_fullsize/plain/${did}/${foto}@jpeg`;
+  const capa = cid(m.external?.thumb);
+  if (capa) return `https://cdn.bsky.app/img/feed_thumbnail/plain/${did}/${capa}@jpeg`;
+  const video = cid(m.video);
+  if (video) return `https://video.bsky.app/watch/${encodeURIComponent(did)}/${video}/thumbnail.jpg`;
+  return undefined;
+}
+
 export async function startBluesky(sources, onPost, log) {
   if (!sources.length) return;
   const byDid = new Map();
@@ -35,6 +49,7 @@ export async function startBluesky(sources, onPost, log) {
       text: rec.text.slice(0, 1500),
       lang: rec.langs?.[0] || s.lang,
       ts,
+      img: imagemBluesky(did, rec),
     });
   };
 

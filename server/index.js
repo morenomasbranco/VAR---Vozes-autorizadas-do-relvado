@@ -64,7 +64,7 @@ const AGREGADOR = new Set(RSS.filter((s) => /news\.google\.com/.test(s.site || "
 // país de cada casa editorial, para a bandeira de quem confirma
 const PAIS_CASA = new Map([...RSS, ...TELEGRAM, ...BLUESKY].filter((s) => !AGREGADOR.has(s.id)).map((s) => [store.chaveFonte(s.nome, s.id), s.pais]));
 const confDe = (post) => ({
-  src: post.src, name: post.editor || post.name, editor: post.editor, postId: post.postId, url: post.url, ts: post.ts,
+  src: post.src, name: post.editor || post.name, editor: post.editor, postId: post.postId, url: post.url, ts: post.ts, img: post.img,
   pais: (post.editor && PAIS_CASA.get(store.chaveFonte(post.editor))) || PAIS[post.src],
   agregador: AGREGADOR.has(post.src) && !post.editor,
 });
@@ -280,7 +280,10 @@ const enrich = createEnricher({ recent: () => store.recent().filter((i) => !i.pe
 const seen = new Set(); // posts já recebidos (recolha inicial, religações)
 function onPost(post) {
   post.text = conserta(String(post.text || ""));
-  if (seen.has(post.postId) || store.has(post.postId)) return;
+  if (seen.has(post.postId)) return;
+  // já publicada (as fontes voltam a dar as últimas notícias quando o servidor arranca): só se junta a imagem, se
+  // ainda não a tinha (as notícias guardadas antes de as fontes trazerem imagem)
+  if (store.has(post.postId)) { seen.add(post.postId); if (post.img) store.juntarImagem(post.postId, post.img); return; }
   if (seen.size > 20000) seen.clear();
   seen.add(post.postId);
   if (LOTARIA.test(`${post.text} ${post.url || ""}`)) { status.ignoradas++; return; } // lotarias não entram
@@ -298,7 +301,7 @@ function onPost(post) {
     // a mesma casa a repetir a notícia, ou um agregador: não é notícia nova nem confirmação
     if (conf.agregador || store.mesmaCasa(igual, conf)) { status.juntas++; return; }
   }
-  publish({ id: post.postId, src: post.src, name: post.name, editor: post.editor, via: post.via, url: post.url, ts: post.ts, text: post.text, pais: PAIS[post.src], tsAprox: post.tsAprox, pending: true, ...toItem(post, fallback(post)) });
+  publish({ id: post.postId, src: post.src, name: post.name, editor: post.editor, via: post.via, url: post.url, img: post.img, ts: post.ts, text: post.text, pais: PAIS[post.src], tsAprox: post.tsAprox, pending: true, ...toItem(post, fallback(post)) });
   status.fila++;
   enrich(post).then((ai) => { status.fila--; refine(post, ai); });
 }
@@ -457,18 +460,31 @@ app.get("/api/videos/thumb/:id", async (req, res) => {
     res.set({ "Content-Type": "image/svg+xml; charset=utf-8" }).send(cartaoSvg(null));
   }
 });
-// «Hoje no VAR» (Feed): a imagem de cada manchete, ida buscar à notícia, ao post do X ou ao do Telegram
-const imagens = createImagens({ log });
+// «Hoje no VAR» (Feed): a imagem de cada manchete (a do feed, a da mensagem do Telegram, a do post do X ou a da
+// página da notícia). Com endereço, abre-a o browser (302, sem «Referer»); com ?servidor=1 (quando não abriu no
+// browser), descarrega-a o servidor.
+const imagens = createImagens({ log, telegram: clienteTelegram });
 app.get("/api/noticias/imagem/:id", async (req, res) => {
   const it = store.get(String(req.params.id));
   if (!it) return res.status(404).end();
   try {
-    const img = await imagens.imagem(it);
-    if (!img) return res.set("Cache-Control", "public, max-age=600").status(404).end();
-    res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=3600" }).send(img.buf);
+    const img = await imagens.imagem(it, { servidor: req.query.servidor === "1" });
+    if (img?.buf) return res.set({ "Content-Type": img.tipo, "Cache-Control": "public, max-age=3600" }).send(img.buf);
+    if (img?.url) return res.set({ "Cache-Control": "public, max-age=3600", "Referrer-Policy": "no-referrer" }).redirect(302, img.url);
+    res.set("Cache-Control", "public, max-age=600").status(404).end();
   } catch { if (!res.headersSent) res.status(404).end(); }
 });
 app.get("/api/noticias/imagens/estado", (req, res) => res.json(imagens.estado()));
+// as imagens das notícias mais fortes das últimas horas procuram-se antes de alguém as pedir (a fotografia do Telegram
+// e a imagem da página levam alguns segundos): quando o «Hoje no VAR» as pede, já estão prontas
+const forca = (x) => (x.imp || 0) * 3 + Math.min(4, x.also?.length || 0) * 2 + (x.hot ? 3 : 0);
+async function aquecerImagens() {
+  const agora = Date.now();
+  const fortes = store.all(800).filter((x) => !x.score && !x.board && !x.pending && agora - x.ts < 18 * 3600e3)
+    .sort((a, b) => forca(b) - forca(a)).slice(0, 10);
+  for (const it of fortes) await imagens.imagem(it).catch(() => {});
+}
+setTimeout(() => { aquecerImagens(); setInterval(aquecerImagens, 4 * 60e3); }, 60e3);
 app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS, contaTelegram: !!clienteTelegram() }));
 // Retransmissor: um computador de casa lê o Reddit (os servidores de alojamento são bloqueados pelo Reddit)
 // e envia para aqui as publicações com vídeo. Protegido pela chave VIDEOS_RELAY_TOKEN do .env.
