@@ -368,6 +368,9 @@ try {
   const d = await j("/api/declaracoes/estado");
   linha("== IA ==", JSON.stringify({ motores: d.ia?.motores, semQuota: d.ia?.modelosSemQuota, pausados: d.ia?.pausados }));
   for (const u of (d.ia?.ultimos || []).slice(0, 12)) linha(`   ${new Date(u.ts).toISOString().slice(11, 19)} | ${u.uso} | ${u.motor} ${u.modelo || ""} | ${u.erro ? `erro: ${u.erro.slice(0, 160)}` : `ok ${u.ms} ms${u.tokens ? ` · ${u.tokens} tokens` : ""}`}`);
+  // o Prosebot (crónicas): quantas escreveu, quantas falharam e o último erro, com a hora
+  const pb = d.prosebot || {};
+  linha("   Prosebot:", JSON.stringify({ cronicas: pb.cronicas, erros: pb.erros, ultimoErro: pb.ultimoErro ? { ...pb.ultimoErro, ts: new Date(pb.ultimoErro.ts).toISOString() } : null, ultimas: pb.ultimas }));
   const t = await j("/api/tradutor/estado");
   linha("== tradutor ==", JSON.stringify({ pedidas: t.pedidas, feitas: t.feitas, semQuota: t.semQuota, viaIA: t.viaIA, viaGoogle: t.viaGoogle, viaGemini: t.viaGemini, fila: t.fila, ia: t.ia }));
   linha("   Google Tradutor:", JSON.stringify(t.googleTradutor), "· Gemini em pausa até", t.pausadoAte ? new Date(t.pausadoAte).toISOString() : "-");
