@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pedidoDaCronica, lerCronica, createProsebot, TAMANHOS, modDaCronica } from "../server/prosebot.js";
+import { pedidoDaCronica, lerCronica, createProsebot, TAMANHOS, modDaCronica, verificarFactos, fonteDosFactos } from "../server/prosebot.js";
 
 const JOGO = { casa: "FC Porto", fora: "Benfica", hs: 2, as: 1, comp: "Liga Portugal, 8.ª jornada", quando: "sábado, no Estádio do Dragão" };
 const NOTAS = "23' golo de Samu, de cabeça\n67' Pavlidis empata\n88' Rodrigo Mora decide de livre direto";
@@ -69,7 +69,8 @@ test("prosebot: escreve pelo Groq e diz quem escreveu", async () => {
     assert.equal(r.figura.nome, "Rodrigo Mora");
     assert.equal(r.motor, "Groq");
     assert.match(sistema, /crónica/);
-    assert.match(sistema, /Nunca inventas lances/);
+    assert.match(sistema, /a mais importante: não inventar nada/);
+    assert.match(sistema, /Não acrescentas nada: nem lances, minutos, marcadores/);
     assert.match(sistema, /90 caracteres/); // as regras do zerozero vão no pedido
     assert.match(sistema, /vocabulário da modalidade indicada/);
     assert.equal(p.estado().cronicas, 1);
@@ -77,4 +78,30 @@ test("prosebot: escreve pelo Groq e diz quem escreveu", async () => {
     globalThis.fetch = original;
     for (const [k, v] of [["GROQ_API_KEY", antes.g], ["IA_MOTORES", antes.m], ["GEMINI_API_KEY", antes.ge], ["ANTHROPIC_API_KEY", antes.c]]) { if (v == null) delete process.env[k]; else process.env[k] = v; }
   }
+});
+
+test("prosebot: o tamanho é um máximo e o que a crónica diz sem estar nas notas fica para confirmar", () => {
+  const p = pedidoDaCronica({ jogo: JOGO, notas: NOTAS, tamanho: "longa" });
+  assert.match(p, /Tamanho: até cerca de 700 palavras.*é um máximo.*nunca inventes para encher/);
+  const pedido = { jogo: JOGO, notas: NOTAS, figura: "Rodrigo Mora", vocabulario: "FC Porto: Dragões; Benfica: águias" };
+  const c = {
+    tituloSite: "Rodrigo Mora decide o clássico", lead: "O FC Porto vence o Benfica por 2-1, na 8.ª jornada da Liga Portugal.",
+    corpo: [
+      "Os Dragões entram melhor e Samu marca aos 23 minutos, de cabeça.",
+      "Aos 41 minutos, Otamendi vê amarelo depois de travar Pepê. Com 50 mil adeptos, o 4-3-3 asfixia as águias.",
+      "Pavlidis empata, mas Rodrigo Mora decide de livre direto, com cinco remates enquadrados.",
+    ],
+    figura: { nome: "Rodrigo Mora", texto: "Decide." },
+  };
+  const v = verificarFactos(c, fonteDosFactos(pedido));
+  const tem = (re) => assert.ok(v.some((x) => re.test(x)), `${re} em ${JSON.stringify(v)}`);
+  tem(/o 41 não está nas notas/);
+  tem(/o 50 não está nas notas/);
+  tem(/o 4 não está nas notas/);
+  tem(/«cinco remates»: o 5 não está nas notas/);
+  tem(/«Otamendi» não aparece/);
+  tem(/«Pepê» não aparece/);
+  // o que está nas notas e no pedido não se assinala
+  for (const ok of ["Samu", "Pavlidis", "Rodrigo Mora", "Dragões", "Liga Portugal", "23", "2-1"]) assert.ok(!v.some((x) => x.includes(`«${ok}»`) || x.includes(`o ${ok} não`)), ok);
+  assert.ok(!v.some((x) => /«Com»|«Aos»|«Os»/.test(x)), "as palavras do início das frases não são nomes");
 });

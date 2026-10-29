@@ -1,7 +1,8 @@
-// Os modelos de linguagem que o site usa fora do «Neste dia» (Glossário › Declarações e as curiosidades dos jogos): o
-// Groq e o Gemini (gratuitos) e o Claude, os que tiverem chave. Experimenta-se um de cada vez, pela ordem de
-// IA_MOTORES (por omissão groq, gemini, claude). O Gemini ou o Claude sem quota (429) ficam de parte uma hora; no Groq,
-// cada modelo fica de parte o tempo que o próprio Groq indicar.
+// Os modelos de linguagem que o site usa fora do «Neste dia» (Ferramentas: Declarações, Prosebot, sinónimos de frases e
+// as curiosidades dos jogos): o Groq e o Gemini (gratuitos) e o Claude (pago), os que tiverem chave. Experimenta-se um de
+// cada vez, pela ordem de IA_MOTORES (por omissão groq, gemini, claude) ou pela que cada uso pedir (as crónicas começam
+// pelo Claude). O Gemini ou o Claude sem quota (429) ficam de parte uma hora; no Groq, cada modelo fica de parte o tempo
+// que o próprio Groq indicar.
 // O JSON vem no texto da resposta (nem todos os modelos gratuitos o dão de outra maneira), e lê-se com tolerância.
 const GROQ_API = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").replace(/\/$/, "");
 const GEMINI_API = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
@@ -17,7 +18,9 @@ const GROQ_PESQUISA = () => [
   { modelo: "openai/gpt-oss-120b", ferramenta: true }, { modelo: "openai/gpt-oss-20b", ferramenta: true },
 ];
 const GEMINI_MODELO = () => process.env.IA_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-const CLAUDE_MODELO = () => process.env.IA_CLAUDE_MODEL || "claude-sonnet-5-5";
+const CLAUDE_MODELO = () => process.env.IA_CLAUDE_MODEL || "claude-opus-5-5";
+// o esforço do Claude (quanto pensa antes de responder): «medium» chega para escrever e é mais rápido
+const CLAUDE_ESFORCO = () => process.env.IA_CLAUDE_ESFORCO || "medium";
 const PRAZO = (Number(process.env.IA_PRAZO_S) || 90) * 1000;
 const PAUSA_429 = 3600e3;
 
@@ -85,12 +88,21 @@ async function groq({ sistema, pedido, pesquisa, temperatura, modelosGroq, esfor
     }
     if (res.ok) {
       const j = await res.json();
-      return { texto: j.choices?.[0]?.message?.content || "", modelo: c.modelo, tokens: j.usage?.total_tokens ?? null };
+      const texto = j.choices?.[0]?.message?.content || "";
+      // uma resposta cortada (o modelo gastou os tokens a pensar ou o texto não coube) ou sem o JSON pedido: o modelo
+      // seguinte pode conseguir
+      const fim = j.choices?.[0]?.finish_reason;
+      try { lerJson(texto); } catch {
+        ultimo = new Error(`Groq (${c.modelo}) ${fim === "length" ? "cortou a resposta no limite de tokens" : "respondeu sem o JSON pedido"} (${j.usage?.completion_tokens ?? "?"} tokens)`);
+        continue;
+      }
+      return { texto, modelo: c.modelo, tokens: j.usage?.total_tokens ?? null };
     }
     ultimo = await erro(`Groq (${c.modelo})`, res);
     if (res.status === 429) pausaModelo[c.modelo] = Date.now() + esperaDoGroq(ultimo.message);
-    // modelo que esta conta não tem, que não aceita a ferramenta ou sem quota: experimenta-se o seguinte
-    if (res.status === 404 || res.status === 429 || (res.status === 400 && /model|tool|browser_search|parsing/i.test(ultimo.message))) continue;
+    // modelo que esta conta não tem, que não aceita a ferramenta, sem quota ou com um limite por minuto mais pequeno do
+    // que o pedido (413): experimenta-se o seguinte
+    if (res.status === 404 || res.status === 413 || res.status === 429 || (res.status === 400 && /model|tool|browser_search|parsing/i.test(ultimo.message))) continue;
     throw ultimo;
   }
   throw ultimo || new Error("nenhum modelo do Groq respondeu");
@@ -114,19 +126,25 @@ async function gemini({ sistema, pedido, pesquisa, temperatura }) {
   return { texto, modelo: GEMINI_MODELO() };
 }
 
-async function claude({ sistema, pedido, pesquisa }) {
+// O Claude pensa antes de responder (o esforço diz quanto) e, se recusar um pedido, a própria API passa-o ao modelo
+// que a Anthropic recomenda para esse caso («fallbacks: "default"»)
+async function claude({ sistema, pedido, pesquisa, maxTokens }) {
   const res = await fetch(`${CLAUDE_API}/v1/messages`, {
     method: "POST", signal: AbortSignal.timeout(PRAZO * 2),
-    headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+    headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "anthropic-beta": "server-side-fallback-2026-07-01" },
     body: JSON.stringify({
-      model: CLAUDE_MODELO(), max_tokens: 8000, system: sistema,
+      model: CLAUDE_MODELO(), max_tokens: Math.max(maxTokens || 0, 16000), system: sistema,
       messages: [{ role: "user", content: pedido }],
+      output_config: { effort: CLAUDE_ESFORCO() },
+      fallbacks: "default",
       ...(pesquisa ? { tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }] } : {}),
     }),
   });
   if (!res.ok) throw await erro("Claude", res);
   const j = await res.json();
-  return { texto: (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join(""), modelo: CLAUDE_MODELO() };
+  if (j.stop_reason === "refusal") throw new Error(`o Claude recusou o pedido${j.stop_details?.category ? ` (${j.stop_details.category})` : ""}`);
+  if (j.stop_reason === "max_tokens") throw new Error("o Claude cortou a resposta no limite de tokens");
+  return { texto: (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join(""), modelo: j.model || CLAUDE_MODELO(), tokens: j.usage ? (j.usage.input_tokens || 0) + (j.usage.output_tokens || 0) : null };
 }
 
 const MOTOR = { groq, gemini, claude };
@@ -134,19 +152,23 @@ const MOTOR = { groq, gemini, claude };
 const MSG_QUOTA = "a IA gratuita chegou ao limite de hoje; volta a tentar mais tarde";
 
 // pede a um motor de cada vez até um responder com JSON; devolve { json, motor, modelo, tokens }
-// «motores» limita os motores (a tradução das notícias não usa o Claude, que é pago) e «modelosGroq» muda a ordem dos
-// modelos do Groq (cada uso gasta de preferência a quota de um modelo diferente)
-export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "", motores: so = null, modelosGroq = null, esforco = null }) {
+// «motores» limita os motores (a tradução das notícias não usa o Claude, que é pago), «ordem» muda a ordem em que se
+// experimentam (as crónicas começam pelo Claude), «modelosGroq» muda a ordem dos modelos do Groq (cada uso gasta de
+// preferência a quota de um modelo diferente) e «maxTokens» é o tamanho máximo da resposta do Claude (com o que pensa;
+// no Groq não se indica, porque o limite por minuto do plano gratuito conta-o como se fosse gasto)
+export async function pedirIA({ sistema, pedido, pesquisa = false, temperatura = 0.4, uso = "", motores: so = null, ordem = null, modelosGroq = null, esforco = null, maxTokens = null }) {
   // a pausa de um motor sem quota é por lista de modelos (a do Groq para a tradução não pára as Declarações)
   const chavePausa = (m) => (m === "groq" && modelosGroq ? `groq:${modelosGroq.join(",")}` : m);
-  const motores = motoresIA().filter((m) => !(pausa[chavePausa(m)] > Date.now()) && (!so || so.includes(m)));
+  const comChave = motoresIA();
+  const ordenados = ordem ? [...ordem.filter((m) => comChave.includes(m)), ...comChave.filter((m) => !ordem.includes(m))] : comChave;
+  const motores = ordenados.filter((m) => !(pausa[chavePausa(m)] > Date.now()) && (!so || so.includes(m)));
   if (!motoresIA().length) throw Object.assign(new Error("a IA não está configurada no servidor"), { status: 503, codigo: "sem-chave", detalhe: "não há nenhuma chave de IA no servidor (GROQ_API_KEY, GEMINI_API_KEY ou ANTHROPIC_API_KEY)" });
   if (!motores.length) throw Object.assign(new Error(MSG_QUOTA), { status: 503, codigo: "quota", detalhe: "todos os motores em pausa por falta de quota" });
   const erros = [];
   for (const m of motores) {
     const t0 = Date.now();
     try {
-      const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco });
+      const r = await MOTOR[m]({ sistema, pedido, pesquisa, temperatura, modelosGroq, esforco, maxTokens });
       const json = lerJson(r.texto);
       registar({ uso, motor: m, modelo: r.modelo, ms: Date.now() - t0, tokens: r.tokens ?? undefined });
       return { json, motor: NOME[m], modelo: r.modelo, tokens: r.tokens ?? null };

@@ -11,10 +11,11 @@ import { lista } from "./glossario/pesquisa.js";
 import { arrumar } from "./glossario/declaracoes.js";
 import { Peca, pedir } from "./Declaracoes.jsx";
 
+// o tamanho é um máximo: com poucas notas, a crónica sai mais curta (para não se inventar nada)
 const TAMANHOS = [
-  { id: "curta", nome: "Curta" },
-  { id: "normal", nome: "Normal" },
-  { id: "longa", nome: "Longa" },
+  { id: "curta", nome: "Curta", dica: "até 250 palavras" },
+  { id: "normal", nome: "Normal", dica: "até 450 palavras" },
+  { id: "longa", nome: "Longa", dica: "até 700 palavras" },
 ];
 // as modalidades da crónica (os ids dos resultados do site)
 export const MODS_CRONICA = [
@@ -196,7 +197,7 @@ export default function Prosebot({ API = "", jogos = [], jogoEscolhido = null, d
         <input value={f.contexto} onChange={(e) => muda({ contexto: e.target.value })} placeholder="Contexto (opcional): o que estava em jogo, a classificação, a série…" aria-label="Contexto" />
       </div>
       <div className="seg gfiltro" role="group" aria-label="Tamanho">
-        {TAMANHOS.map((t) => <button key={t.id} aria-pressed={f.tamanho === t.id} onClick={() => muda({ tamanho: t.id })}>{t.nome}</button>)}
+        {TAMANHOS.map((t) => <button key={t.id} aria-pressed={f.tamanho === t.id} title={`${t.dica}; com poucas notas, sai mais curta`} onClick={() => muda({ tamanho: t.id })}>{t.nome}</button>)}
       </div>
       <div className="gjogo-acoes gdacoes">
         <button className="gir" disabled={ocupado || !pronto} onClick={escrever}>{peca ? "Escrever outra vez" : "Escrever a crónica"}</button>
@@ -207,12 +208,21 @@ export default function Prosebot({ API = "", jogos = [], jogoEscolhido = null, d
       {estado?.erro && <p className="gdaviso" role="alert">Não foi possível: {estado.erro}</p>}
       {peca && (
         <Peca key={f.id} peca={peca} rotulo="Copiar a crónica" rodape={`escrita por ${peca.motor} (${peca.modelo})`}
-          extra={peca.figura && (
-            <div className="gdbloco gfigura">
-              <p className="gmod">Figura do jogo</p>
-              <p><b>{peca.figura.nome}</b>{peca.figura.texto && <> — {arrumar(peca.figura.texto)}</>}</p>
-            </div>
-          )} />
+          extra={<>
+            {peca.confirmar?.length > 0 && (
+              // o que a crónica diz e as notas não: pode ter sido inventado, confirma antes de publicar
+              <div className="gdbloco gconfirmar" role="note">
+                <p className="gmod">Confirmar antes de publicar · não está nas notas</p>
+                <ul>{peca.confirmar.map((x) => <li key={x}>{x}</li>)}</ul>
+              </div>
+            )}
+            {peca.figura && (
+              <div className="gdbloco gfigura">
+                <p className="gmod">Figura do jogo</p>
+                <p><b>{peca.figura.nome}</b>{peca.figura.texto && <> — {arrumar(peca.figura.texto)}</>}</p>
+              </div>
+            )}
+          </>} />
       )}
     </section>
   );
@@ -238,6 +248,8 @@ export const PROSE_CSS = `
 .apito .gpjogo .gpmod{flex:0 1 170px;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:7px 10px}
 .apito .gpvocab{font-size:12.5px;text-align:center;margin:0 0 8px}
 .apito .gpeventos{display:block;margin:6px auto 0;font-size:13px;font-weight:600;color:var(--hist)}
+.apito .gconfirmar{border:1px solid var(--live);border-radius:8px;padding:8px 12px;background:color-mix(in srgb,var(--live) 7%,var(--raise))}
+.apito .gconfirmar ul{margin:4px 0 0;padding-left:18px;font-size:13.5px;line-height:1.45}
 .apito .gfigura{border:1px solid var(--hist);border-radius:8px;padding:8px 12px;background:color-mix(in srgb,var(--hist) 6%,var(--raise))}
 .apito .gfigura p:last-child{margin:4px 0 0;font-size:14.5px}
 `;

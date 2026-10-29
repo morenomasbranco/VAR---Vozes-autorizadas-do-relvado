@@ -371,6 +371,7 @@ try {
   // o Prosebot (crónicas): quantas escreveu, quantas falharam e o último erro, com a hora
   const pb = d.prosebot || {};
   linha("   Prosebot:", JSON.stringify({ cronicas: pb.cronicas, erros: pb.erros, ultimoErro: pb.ultimoErro ? { ...pb.ultimoErro, ts: new Date(pb.ultimoErro.ts).toISOString() } : null, ultimas: pb.ultimas }));
+  linha("   Frases:", JSON.stringify(d.frases || null));
   const t = await j("/api/tradutor/estado");
   linha("== tradutor ==", JSON.stringify({ pedidas: t.pedidas, feitas: t.feitas, semQuota: t.semQuota, viaIA: t.viaIA, viaGoogle: t.viaGoogle, viaGemini: t.viaGemini, fila: t.fila, ia: t.ia }));
   linha("   Google Tradutor:", JSON.stringify(t.googleTradutor), "· Gemini em pausa até", t.pausadoAte ? new Date(t.pausadoAte).toISOString() : "-");

@@ -17,38 +17,57 @@ import Prosebot, { PROSE_CSS } from "./Prosebot.jsx";
 
 const bandeira = (code) => `https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/flags/4x3/${code}.svg`;
 
+// uma frase (duas ou mais palavras) procura-se de outra maneira: no glossário (as expressões que lá estão) e com a IA
+const eFrase = (t) => String(t).trim().split(/\s+/).length >= 2;
+
+// uma formulação alternativa de uma frase: um toque copia-a
+function Alternativa({ a }) {
+  const [copiada, setCopiada] = useState(false);
+  return (
+    <li>
+      <button type="button" className="gfalt" title="Copiar" onClick={() => navigator.clipboard?.writeText(a.texto).then(() => { setCopiada(true); setTimeout(() => setCopiada(false), 1500); }).catch(() => {})}>
+        {a.texto}{copiada && <span className="gfcop"> · copiada</span>}
+      </button>
+      {a.nota && <span className="muted gfnota"> — {a.nota}</span>}
+    </li>
+  );
+}
+
 function Pesquisa({ API, grupos }) {
   const [palavra, setPalavra] = useState("");
   const [tipo, setTipo] = useState("sinonimos");
-  const [pedida, setPedida] = useState(null); // { palavra, tipo }
-  const [net, setNet] = useState(null); // { estado: "a procurar" | "ok" | "erro", dados }
+  const [pedida, setPedida] = useState(null); // { palavra, tipo, frase }
+  const [net, setNet] = useState(null); // { estado: "a procurar" | "ok" | "erro", dados, erro }
   const campo = useRef(null);
   const local = useMemo(() => (pedida ? procurarLocal(grupos, pedida.palavra, pedida.tipo) : []), [grupos, pedida]);
 
+  // as palavras vão aos dicionários na internet; as frases, à IA
   const naInternet = (p, t) => {
     setNet({ estado: "a procurar" });
-    fetch(`${API}/api/glossario/palavra?p=${encodeURIComponent(p)}&tipo=${t}`)
+    const url = eFrase(p) ? `${API}/api/glossario/frase?f=${encodeURIComponent(p)}&tipo=${t}` : `${API}/api/glossario/palavra?p=${encodeURIComponent(p)}&tipo=${t}`;
+    fetch(url)
       .then((r) => r.json().then((d) => (r.ok ? d : Promise.reject(new Error(d.erro || r.status)))))
       .then((d) => setNet({ estado: "ok", dados: d }))
-      .catch(() => setNet({ estado: "erro" }));
+      .catch((e) => setNet({ estado: "erro", erro: e.message }));
   };
   const procurar = (p = palavra, t = tipo) => {
-    const limpa = String(p).trim();
+    const limpa = String(p).replace(/\s+/g, " ").trim();
     if (!limpa) return;
     setPalavra(limpa);
-    setPedida({ palavra: limpa, tipo: t });
+    setPedida({ palavra: limpa, tipo: t, frase: eFrase(limpa) });
     setNet(null);
-    // sem nada no glossário, vai logo à internet
+    // sem nada no glossário, vai logo à internet (ou à IA, se for uma frase)
     if (!procurarLocal(grupos, limpa, t).length) naInternet(limpa, t);
   };
   const mudarTipo = (t) => { setTipo(t); if (pedida) procurar(pedida.palavra, t); };
   const Palavra = ({ p }) => <button className="gpal" onClick={() => { procurar(p.replace(/\s*\([^)]*\)/g, ""), tipo); campo.current?.focus(); }}>{p}</button>;
   const nome = tipo === "sinonimos" ? "sinónimos" : "antónimos";
+  const ondeMais = pedida?.frase ? "com a IA" : "na internet";
 
   return (
     <section className="gbusca" aria-label="Sinónimos e antónimos">
       <form className="gform" onSubmit={(e) => { e.preventDefault(); procurar(); }}>
-        <input ref={campo} value={palavra} onChange={(e) => setPalavra(e.target.value)} placeholder="Escreve uma palavra (ex.: vitória, estádio, Dragões)" aria-label="Palavra" maxLength={40} />
+        <input ref={campo} value={palavra} onChange={(e) => setPalavra(e.target.value)} placeholder="Uma palavra ou uma frase (ex.: vitória, jogar em casa, perdeu por muitos)" aria-label="Palavra ou frase" maxLength={160} />
         <div className="seg" role="group" aria-label="Tipo">
           <button type="button" aria-pressed={tipo === "sinonimos"} onClick={() => mudarTipo("sinonimos")}>Sinónimos</button>
           <button type="button" aria-pressed={tipo === "antonimos"} onClick={() => mudarTipo("antonimos")}>Antónimos</button>
@@ -63,16 +82,23 @@ function Pesquisa({ API, grupos }) {
               <div className="gpals">{r.palavras.map((p) => <Palavra key={p} p={p} />)}</div>
             </div>
           ))}
-          {net?.estado === "a procurar" && <p className="muted">A procurar {nome} de «{pedida.palavra}» na internet…</p>}
-          {net?.estado === "erro" && <p className="muted">Não foi possível procurar na internet agora.{!local.length && ` O glossário não tem ${nome} de «${pedida.palavra}».`}</p>}
-          {net?.estado === "ok" && (net.dados.sentidos.length ? net.dados.sentidos.map((s, i) => (
+          {net?.estado === "a procurar" && <p className="muted">A procurar {nome} de «{pedida.palavra}» {ondeMais}…</p>}
+          {net?.estado === "erro" && <p className="muted">{pedida.frase ? `Não foi possível procurar com a IA agora${net.erro ? ` (${net.erro})` : ""}.` : "Não foi possível procurar na internet agora."}{!local.length && ` O glossário não tem ${nome} de «${pedida.palavra}».`}</p>}
+          {net?.estado === "ok" && pedida.frase && (net.dados.alternativas?.length ? (
+            <div className="gbloco">
+              <p className="gorig muted">Com a IA · {net.dados.motor}{net.dados.sentido && <span> — {net.dados.sentido}</span>}</p>
+              <ul className="gfrases">{net.dados.alternativas.map((a) => <Alternativa key={a.texto} a={a} />)}</ul>
+              <p className="muted gfdica">Um toque copia a frase. Confirma sempre o sentido antes de a usar.</p>
+            </div>
+          ) : <p className="muted">A IA não encontrou {nome} de «{pedida.palavra}».</p>)}
+          {net?.estado === "ok" && !pedida.frase && (net.dados.sentidos.length ? net.dados.sentidos.map((s, i) => (
             <div key={i} className="gbloco">
               <p className="gorig muted">Na internet · {net.dados.fonte === "pt.wiktionary.org" ? "Wikcionário" : `${net.dados.fonte} (português do Brasil)`}{s.sentido && <span> — {s.sentido}</span>}</p>
               <div className="gpals">{s.palavras.map((p) => <Palavra key={p} p={p} />)}</div>
             </div>
           )) : <p className="muted">Não há {nome} de «{pedida.palavra}» {local.length ? "na internet." : "nem no glossário nem na internet."}</p>)}
           {!net && local.length > 0 && (
-            <button className="textbtn gmais" onClick={() => naInternet(pedida.palavra, pedida.tipo)}>Procurar mais {nome} na internet</button>
+            <button className="textbtn gmais" onClick={() => naInternet(pedida.palavra, pedida.tipo)}>Procurar mais {nome} {ondeMais}</button>
           )}
         </div>
       )}
@@ -801,6 +827,12 @@ const GLOS_CSS = `
 .apito .gorig{font-size:12px;margin:0 0 4px}
 .apito .gpals{display:flex;flex-wrap:wrap;gap:6px}
 .apito .gpal{font-size:14px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;background:var(--bg)}
+.apito .gfrases{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.apito .gfalt{font:inherit;font-size:14.5px;text-align:left;color:var(--ink);padding:3px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);cursor:copy}
+.apito .gfalt:hover{border-color:var(--ink)}
+.apito .gfcop{color:var(--hist);font-size:12.5px;font-weight:600}
+.apito .gfnota{font-size:12.5px}
+.apito .gfdica{font-size:12px;margin:6px 0 0}
 .apito .gpal:hover{border-color:var(--ink)}
 .apito .gmais{margin-top:8px;font-size:13px}
 .apito .glos .gabas,.apito .glos .gmods{display:flex;width:fit-content;max-width:100%;margin:0 auto 18px;justify-content:center;flex-wrap:wrap}

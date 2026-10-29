@@ -31,6 +31,7 @@ import { createDeclaracoes, limitador } from "./declaracoes.js";
 import { estadoIA } from "./ia.js";
 import { createCuriosidades } from "./curiosidades.js";
 import { createProsebot } from "./prosebot.js";
+import { createFrases } from "./frases.js";
 import { createImagens } from "./imagens.js";
 import { createPortugal } from "./pt/index.js";
 import { restaurar, rotasCopia } from "./copia.js";
@@ -572,7 +573,10 @@ app.get("/api/glossario/curiosidades", (req, res, next) => (req.query.web ? limi
 // Glossário › Prosebot 2.0: a crónica de um jogo a partir das notas, com as regras do zerozero
 const prosebot = createProsebot({ log });
 app.post("/api/prosebot/cronica", limiteIA, express.json({ limit: "96kb" }), (req, res) => responder(res, prosebot.cronica(req.body || {})));
-app.get("/api/declaracoes/estado", (req, res) => res.json({ ...declaracoes.estado(), prosebot: prosebot.estado(), ia: estadoIA() }));
+// Ferramentas › Sinónimos/Antónimos: as frases e expressões que o glossário não tem (as palavras vão a /api/glossario/palavra)
+const frases = createFrases({ log });
+app.get("/api/glossario/frase", limiteIA, (req, res) => responder(res, frases.procurar(String(req.query.f || ""), String(req.query.tipo || ""))));
+app.get("/api/declaracoes/estado", (req, res) => res.json({ ...declaracoes.estado(), prosebot: prosebot.estado(), frases: frases.estado(), ia: estadoIA() }));
 app.get("/api/oficiais", (req, res) => res.json({ grupos: oficiais.grupos(), itens: oficiais.lista(Math.min(Number(req.query.limit) || 1500, 2500)) }));
 app.get("/api/oficiais/estado", (req, res) => res.json(oficiais.estado()));
 app.get("/api/retransmissor", (req, res) => res.json({ ...resumoRetransmissor(), encaminhamento: estadoEncaminhamento() }));
