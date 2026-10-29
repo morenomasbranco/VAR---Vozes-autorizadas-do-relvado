@@ -11,6 +11,7 @@
 //     no resto da semana, dentro de um limite diário de pedidos (PT_PESQUISA_DIA, 200 por omissão).
 // Este ficheiro só lê e normaliza; o server/pt/index.js guarda as competições e os jogos.
 import { sleep, norm } from "../util.js";
+import { lerRecusa, proximaMeiaNoitePacifico } from "../ia.js";
 import { ASSOCIACOES } from "./catalogo.js";
 
 /* ───────── ESPN ───────── */
@@ -195,24 +196,8 @@ const MODELO = () => process.env.PT_PESQUISA_MODEL || "gemini-2.5-flash";
 // PT_PESQUISA_MODELOS troca a lista (separada por vírgulas). Os que não existirem (404) ficam de lado um dia.
 export const MODELOS = () => [...new Set([MODELO(), ...(process.env.PT_PESQUISA_MODELOS || "gemini-2.5-flash,gemini-2.5-flash-lite,gemini-flash-latest,gemini-flash-lite-latest").split(/[\s,]+/)].filter(Boolean))];
 
-// A quota gratuita do Gemini volta à meia-noite da Califórnia (8 ou 9 da manhã em Lisboa)
-export function proximaMeiaNoitePacifico(agora = Date.now()) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(agora)).map((x) => [x.type, x.value]));
-  const passou = ((+p.hour * 60 + +p.minute) * 60 + +p.second) * 1000;
-  return agora - passou + 86400e3 + 60e3; // e um minuto de margem
-}
-// o que diz um 429 do Gemini: quanto esperar (RetryInfo) e se foi a quota do dia que acabou
-export function lerRecusa(texto, agora = Date.now()) {
-  let j = null;
-  try { j = JSON.parse(texto); } catch { /* texto simples */ }
-  const det = j?.error?.details || [];
-  const espera = det.map((d) => String(d.retryDelay || "").match(/^([\d.]+)s$/)?.[1]).find(Boolean);
-  const quotas = det.flatMap((d) => d.violations || []).map((v) => `${v.quotaId || ""} ${v.quotaMetric || ""}`).join(" ");
-  const diaria = /PerDay|per_day|daily/i.test(quotas) || (/quota/i.test(texto) && !espera && !/PerMinute/i.test(quotas));
-  // «limit: 0»: este modelo não tem quota gratuita nenhuma (por exemplo, a pesquisa Google nos 3.x)
-  const semQuota = /limit:\s*0\b/i.test(texto) || det.flatMap((d) => d.violations || []).some((v) => String(v.quotaValue ?? "") === "0");
-  return { diaria: diaria || semQuota, semQuota, ate: semQuota ? agora + 86400e3 : diaria ? proximaMeiaNoitePacifico(agora) : agora + Math.max(60e3, (Number(espera) || 60) * 1000) };
-}
+// as recusas do Gemini (429): quanto esperar e se foi a quota do dia (em server/ia.js, que também as usa)
+export { lerRecusa, proximaMeiaNoitePacifico };
 
 // o que se pesquisa: um pedido por organizador
 export const ALVOS = [

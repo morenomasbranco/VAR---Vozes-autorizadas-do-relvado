@@ -368,6 +368,10 @@ try {
   const d = await j("/api/declaracoes/estado");
   linha("== IA ==", JSON.stringify({ motores: d.ia?.motores, semQuota: d.ia?.modelosSemQuota, pausados: d.ia?.pausados }));
   for (const u of (d.ia?.ultimos || []).slice(0, 12)) linha(`   ${new Date(u.ts).toISOString().slice(11, 19)} | ${u.uso} | ${u.motor} ${u.modelo || ""} | ${u.erro ? `erro: ${u.erro.slice(0, 160)}` : `ok ${u.ms} ms${u.tokens ? ` · ${u.tokens} tokens` : ""}`}`);
+  // o Prosebot (crónicas): quantas escreveu, quantas falharam e o último erro, com a hora
+  const pb = d.prosebot || {};
+  linha("   Prosebot:", JSON.stringify({ cronicas: pb.cronicas, erros: pb.erros, ultimoErro: pb.ultimoErro ? { ...pb.ultimoErro, ts: new Date(pb.ultimoErro.ts).toISOString() } : null, ultimas: pb.ultimas }));
+  linha("   Frases:", JSON.stringify(d.frases || null));
   const t = await j("/api/tradutor/estado");
   linha("== tradutor ==", JSON.stringify({ pedidas: t.pedidas, feitas: t.feitas, semQuota: t.semQuota, viaIA: t.viaIA, viaGoogle: t.viaGoogle, viaGemini: t.viaGemini, fila: t.fila, ia: t.ia }));
   linha("   Google Tradutor:", JSON.stringify(t.googleTradutor), "· Gemini em pausa até", t.pausadoAte ? new Date(t.pausadoAte).toISOString() : "-");
@@ -393,13 +397,32 @@ try {
   linha("   estado:", JSON.stringify(resto));
   for (const u of ultimas) linha(`   · ${u.ms} ms | ${u.resultado} | ${u.titulo}${u.passos?.length ? `\n       ${u.passos.join("\n       ")}` : ""}`);
   // as mesmas páginas vistas daqui (GitHub): se aqui dão a imagem e no servidor não, o problema é a ligação do servidor
+  const NAV = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
   for (const x of fortes.filter((y) => y.url && !/news\.google\.com/.test(y.url)).slice(0, 3)) {
     const t0 = Date.now();
     try {
-      const r = await fetch(x.url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36", Accept: "text/html,*/*" }, signal: AbortSignal.timeout(15000) });
+      const r = await fetch(x.url, { headers: { "User-Agent": NAV, Accept: "text/html,*/*" }, signal: AbortSignal.timeout(15000) });
       const h = await r.text();
       const og = h.match(/<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] || h.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image["']/i)?.[1];
       linha(`   daqui: ${r.status} em ${Date.now() - t0} ms · og:image ${og ? og.slice(0, 90) : "nenhuma"} | ${x.url.slice(0, 80)}`);
     } catch (e) { linha(`   daqui: ${e.message} em ${Date.now() - t0} ms | ${x.url.slice(0, 80)}`); }
+  }
+  // uma ligação do Google News vista daqui: a página com a assinatura e o pedido que dá o endereço da notícia no jornal
+  const g = fortes.find((y) => /news\.google\.com\/(rss\/)?articles\//.test(y.url || ""));
+  if (g) {
+    const { idGoogleNews, assinaturaGoogleNews, pedidoGoogleNews, lerRespostaGoogleNews } = await import("../server/imagens.js");
+    const t0 = Date.now();
+    try {
+      const id = idGoogleNews(g.url);
+      const cab = { "User-Agent": NAV, Cookie: "CONSENT=YES+; SOCS=CAI" };
+      const pag = await (await fetch(`https://news.google.com/rss/articles/${id}`, { headers: cab, signal: AbortSignal.timeout(15000) })).text();
+      const a = assinaturaGoogleNews(pag);
+      let destino = null;
+      if (a) {
+        const r = await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute", { method: "POST", body: pedidoGoogleNews(id, a), headers: { ...cab, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, signal: AbortSignal.timeout(15000) });
+        destino = lerRespostaGoogleNews(await r.text());
+      }
+      linha(`   Google News daqui: assinatura ${a ? "sim" : `não (${pag.length} bytes)`} · notícia ${destino || "-"} · ${Date.now() - t0} ms`);
+    } catch (e) { linha(`   Google News daqui: ${e.message}`); }
   }
 } catch (e) { linha("imagens das manchetes: erro", e.message); }
