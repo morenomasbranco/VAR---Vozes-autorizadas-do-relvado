@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { imagemDaPagina, imagemDoTelegram, imagemDoFx, createImagens, tipoDe, temFoto } from "../server/imagens.js";
+import { imagemDaPagina, imagemDoTelegram, imagemDoFx, createImagens, tipoDe, temFoto, idGoogleNews, assinaturaGoogleNews, pedidoGoogleNews, lerRespostaGoogleNews } from "../server/imagens.js";
 import { imagemDoItem } from "../server/sources/rss.js";
 import { imagemBluesky } from "../server/sources/bluesky.js";
 
@@ -132,5 +132,41 @@ test("imagens: a do feed abre-a o browser; o servidor descarrega-a se lhe pedire
     // a notícia guardada sem imagem procura-se outra vez quando chega uma fonte com imagem
     const e = await sem.imagem({ id: "d", img: "tg:canal/9", also: [{ img: "https://cdn.record.pt/ok.jpg" }] });
     assert.equal(e.url, "https://cdn.record.pt/ok.jpg");
+  } finally { globalThis.fetch = original; }
+});
+
+test("imagens: as ligações do Google News levam à notícia no jornal, e daí à imagem", async () => {
+  const id = "CBMixgFBVV95cUxNeWoxVkppZHhW";
+  assert.equal(idGoogleNews(`https://news.google.com/rss/articles/${id}?oc=5`), id);
+  assert.equal(idGoogleNews("https://news.google.com/rss/search?q=x"), null);
+  assert.deepEqual(assinaturaGoogleNews('<c-wiz><div jscontroller="aLI87" data-n-a-sg="AZ5r3ex" data-n-a-ts="1761700000" data-n-a-id="x"></div></c-wiz>'), { sg: "AZ5r3ex", ts: "1761700000" });
+  assert.equal(assinaturaGoogleNews("<html></html>"), null);
+  const corpo = decodeURIComponent(pedidoGoogleNews(id, { sg: "AZ5r3ex", ts: "1761700000" }).slice(6));
+  const [[[rpc, args]]] = JSON.parse(corpo);
+  assert.equal(rpc, "Fbv4je");
+  assert.deepEqual(JSON.parse(args).slice(-3), [id, 1761700000, "AZ5r3ex"]);
+  const resposta = `)]}'\n\n${JSON.stringify([["wrb.fr", "Fbv4je", JSON.stringify(["garturlres", "https://apnews.com/article/messi-inter-miami", 1]), null, null, null, "generic"], ["di", 10]])}`;
+  assert.equal(lerRespostaGoogleNews(resposta), "https://apnews.com/article/messi-inter-miami");
+  assert.equal(lerRespostaGoogleNews("lixo"), null);
+
+  const original = globalThis.fetch;
+  const pedidos = [];
+  globalThis.fetch = async (url, op = {}) => {
+    const u = String(url);
+    pedidos.push(op.method === "POST" ? `POST ${u}` : u);
+    if (u === `https://news.google.com/rss/articles/${id}`) return { ok: true, url: u, text: async () => '<div jscontroller="x" data-n-a-sg="SG" data-n-a-ts="123"></div>' };
+    if (u.includes("batchexecute")) return { ok: true, url: u, text: async () => resposta };
+    if (u === "https://apnews.com/article/messi-inter-miami") return { ok: true, url: u, text: async () => '<meta property="og:image" content="https://dims.apnews.com/messi.jpg">' };
+    if (u === "https://www.kicker.de/artigo") return { ok: true, url: u, text: async () => "<html><head><title>Zustimmung erforderlich</title></head></html>" };
+    throw new Error(`pedido inesperado: ${u}`);
+  };
+  try {
+    const im = createImagens();
+    const r = await im.imagem({ id: "g1", url: `https://news.google.com/rss/articles/${id}?oc=5` });
+    assert.equal(r.url, "https://dims.apnews.com/messi.jpg");
+    assert.deepEqual(pedidos, [`https://news.google.com/rss/articles/${id}`, "POST https://news.google.com/_/DotsSplashUi/data/batchexecute", "https://apnews.com/article/messi-inter-miami"]);
+    // a página sem imagem de partilha diz o que era, para a sonda
+    assert.equal(await im.imagem({ id: "k1", url: "https://www.kicker.de/artigo" }), null);
+    assert.deepEqual(im.estado().ultimas[0].passos, ["página www.kicker.de: página sem og:image (0 KB, «Zustimmung erforderlich»)"]);
   } finally { globalThis.fetch = original; }
 });

@@ -4,7 +4,7 @@
 //   enclosure…) ou a do post do Bluesky; ou a fotografia da mensagem do Telegram («tg:canal/id»), descarregada pela
 //   conta do Telegram, que não depende de o servidor chegar aos sites;
 // - a das páginas: posts do X (API pública do FxTwitter), posts do Telegram (página pública) e notícias dos sites
-//   (a imagem de partilha, og:image).
+//   (a imagem de partilha, og:image); as ligações do Google News levam primeiro à notícia no jornal.
 // Uma imagem com endereço abre-a o próprio browser (302, sem «Referer»): é mais rápido e poupa o servidor, que nem
 // sempre chega aos sites a tempo. Se não abrir, o site pede-a outra vez com ?servidor=1 e aí é o servidor que a
 // descarrega e a serve. As imagens descarregadas ficam em memória (até IMAGENS_MB). Uma notícia sem imagem não volta a
@@ -67,18 +67,66 @@ export function imagemDoFx(j) {
 }
 
 // uma página (ou um JSON): { corpo, url } ou { falha, rede }
-async function texto(url, ms = 8000) {
+async function texto(url, ms = 8000, cabecalhos = {}) {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,application/json,*/*" }, signal: AbortSignal.timeout(ms), redirect: "follow" });
+    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,application/json,*/*", ...cabecalhos }, signal: AbortSignal.timeout(ms), redirect: "follow" });
     if (!r.ok) return { falha: `respondeu ${r.status}` };
     if (!seguro(r.url)) return { falha: "endereço interno" };
     return { corpo: (await r.text()).slice(0, 1.5e6), url: r.url };
   } catch (e) { return { falha: motivo(e), rede: true }; }
 }
 
-// o endereço da imagem de uma ligação (post do X, do Telegram ou página de uma notícia): { url } ou { falha, rede }
-async function enderecoDe(url) {
+// As ligações do Google News (news.google.com/rss/articles/…) não dizem de que jornal é a notícia: o Google dá o
+// endereço a quem lho pedir com a assinatura e a hora que vêm na página da ligação (pedido «garturlreq»). O cookie
+// diz que a escolha dos cookies já foi feita, para a página não ser a do consentimento (servidores na Europa).
+const COOKIE_GOOGLE = { Cookie: "CONSENT=YES+; SOCS=CAI" };
+export const idGoogleNews = (url) => String(url).match(/^https?:\/\/news\.google\.com\/(?:rss\/)?articles\/([\w-]+)/i)?.[1] || null;
+export function assinaturaGoogleNews(html) {
+  const sg = html.match(/data-n-a-sg="([^"]+)"/)?.[1], ts = html.match(/data-n-a-ts="([^"]+)"/)?.[1];
+  return sg && ts ? { sg, ts } : null;
+}
+export function pedidoGoogleNews(id, { sg, ts }) {
+  const pedido = [["Fbv4je", `["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"${id}",${Number(ts)},"${sg}"]`]];
+  return `f.req=${encodeURIComponent(JSON.stringify([pedido]))}`;
+}
+// a resposta: «)]}'», uma linha em branco e [["wrb.fr","Fbv4je","[\"garturlres\",\"https://…\",1]",…],…]
+export function lerRespostaGoogleNews(txt) {
+  try {
+    const linha = JSON.parse(String(txt).split("\n\n")[1]).find((x) => x[0] === "wrb.fr" && x[1] === "Fbv4je");
+    const u = JSON.parse(linha[2])[1];
+    return /^https?:\/\//i.test(u) && !/(^|\.)google\.com$/i.test(host(u)) ? u : null;
+  } catch { return null; }
+}
+async function destinoGoogleNews(id) {
+  let a = null;
+  for (const u of [`https://news.google.com/rss/articles/${id}`, `https://news.google.com/articles/${id}`]) {
+    const r = await texto(u, 8000, COOKIE_GOOGLE);
+    if (r.corpo && (a = assinaturaGoogleNews(r.corpo))) break;
+    if (r.rede) return { ...r, falha: `Google News ${r.falha}` };
+  }
+  if (!a) return { falha: "Google News sem assinatura na página da ligação" };
+  try {
+    const r = await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute", {
+      method: "POST", body: pedidoGoogleNews(id, a), signal: AbortSignal.timeout(8000),
+      headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Referer: "https://news.google.com/", ...COOKIE_GOOGLE },
+    });
+    if (!r.ok) return { falha: `Google News respondeu ${r.status}` };
+    const u = lerRespostaGoogleNews(await r.text());
+    return u ? { url: u } : { falha: "o Google News não deu o endereço da notícia" };
+  } catch (e) { return { falha: `Google News ${motivo(e)}`, rede: true }; }
+}
+
+// o endereço da imagem de uma ligação (post do X, do Telegram, ligação do Google News ou página de uma notícia):
+// { url } ou { falha, rede }
+async function enderecoDe(url, seguinte = true) {
   if (!seguro(url)) return { falha: "endereço inválido" };
+  const gn = seguinte && idGoogleNews(url);
+  if (gn) {
+    const d = await destinoGoogleNews(gn);
+    if (!d.url) return d;
+    const r = await enderecoDe(d.url, false);
+    return r.falha ? { ...r, falha: `${host(d.url)}: ${r.falha}` } : r;
+  }
   if (SEM_PAGINA.test(host(url))) return { falha: "não tem imagem própria" };
   const x = url.match(/^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([^/?#]+)\/status\/(\d+)/i);
   if (x) {
@@ -96,7 +144,10 @@ async function enderecoDe(url) {
   const r = await texto(url);
   if (r.falha) return r;
   const u = imagemDaPagina(r.corpo, r.url);
-  return u ? { url: u } : { falha: "página sem og:image" };
+  if (u) return { url: u };
+  // o que a página era (uma página de consentimento, de verificação…), para a sonda
+  const titulo = (r.corpo.match(/<title[^>]*>([^<]{0,80})/i)?.[1] || "").replace(/\s+/g, " ").trim();
+  return { falha: `página sem og:image (${Math.round(r.corpo.length / 1024)} KB${titulo ? `, «${titulo}»` : ""})` };
 }
 
 // a imagem: { buf, tipo } ou { falha, rede }
