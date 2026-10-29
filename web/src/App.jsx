@@ -1258,6 +1258,21 @@ const CSS = `
 .apito .jvstrip .lcard .lrow{font-size:14px}
 .apito .jvstrip .lcard .lrow b{font-size:17px}
 .apito .jvstrip .lcard .lfoot{margin-top:6px}
+/* Feed: os cartões dos jogos a decorrer um pouco mais compactos (mais jogos à vista na mesma largura) */
+.apito .livebar.jv:not(.dbase){margin-bottom:12px}
+.apito .livebar.jv:not(.dbase)>.livehead{margin-bottom:6px}
+.apito .livebar.jv:not(.dbase) .jvstrip{gap:7px;margin-bottom:8px;padding-bottom:5px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lcard{width:184px;padding:5px 8px 6px;border-radius:7px;border-top-width:2px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lcomp{font-size:10px;gap:5px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lcard .lrow{font-size:13px;margin-top:2px;gap:6px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lcard .lrow b{font-size:15px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lteam{gap:5px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lteam .crest{width:15px;height:15px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lcard .lfoot{margin-top:4px;gap:6px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lmin{font-size:12px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lult{font-size:11px}
+.apito .livebar.jv:not(.dbase) .jvstrip .lcard .ltv{margin-top:3px}
+.apito .livebar.jv:not(.dbase) .jvstrip .tv{font-size:11px;padding:0 6px 0 3px}
 .apito .jvstrip .lcard[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
 .apito .jvstrip .lcard:disabled{cursor:default;color:inherit}
 .apito .jvstrip .lcard.next{cursor:default}
@@ -2168,17 +2183,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colunas, minuto, lang]);
   const dataHoje = (([p, ...r]) => p.toUpperCase() + r.join(""))(new Date(now).toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Lisbon" }));
-  // a manchete escolhida no «Hoje no VAR» (por omissão, a mais recente) e as imagens que não carregaram; as imagens
-  // das cinco manchetes começam logo a carregar, para a troca ser imediata. O servidor manda o browser buscar cada
-  // imagem ao site dela (sem «Referer», como as ligações para fora); se não abrir, pede-se ao servidor que a sirva ele
-  // (?servidor=1), e só depois fica o título sobre a cor
+  // a manchete escolhida no «Hoje no VAR» (por omissão, a mais recente) e as imagens que não carregaram. Cada imagem
+  // tenta-se por esta ordem (sem «Referer», como as ligações para fora):
+  // 1) a que veio no feed da notícia, que o browser vai buscar diretamente ao site dela, sem passar pelo servidor;
+  //    sem ela, a que o servidor encontrar (a fotografia do Telegram ou a imagem da página da notícia);
+  // 2) a que o servidor descarregar e servir ele (?servidor=1);
+  // e só depois fica o título sobre a cor. As imagens das cinco manchetes começam logo a carregar (a mais recente, que
+  // é a que aparece primeiro, com prioridade), para a troca ser imediata.
   const [mSel, setMSel] = useState(null);
   const [imgFalhou, setImgFalhou] = useState(() => new Map()); // id → tentativas falhadas
-  const imagemDe = (id, servidor) => `${API}/api/noticias/imagem/${encodeURIComponent(id)}${servidor ? "?servidor=1" : ""}`;
-  const idsManchetes = manchetes.map((m) => m.it.id).join("|");
+  const imagensDe = (it) => {
+    const api = `${API}/api/noticias/imagem/${encodeURIComponent(it.id)}`;
+    const direta = [it, ...(it.also || [])].map((f) => f.img).find((u) => /^https:\/\//i.test(u || ""));
+    return [direta || api, `${api}?servidor=1`];
+  };
+  const idsManchetes = manchetes.map((m) => `${m.it.id} ${imagensDe(m.it)[0]}`).join("|");
   useEffect(() => {
-    if (section !== "destaque") return;
-    for (const m of manchetes) { const im = new Image(); im.referrerPolicy = "no-referrer"; im.src = imagemDe(m.it.id); }
+    if (section !== "destaque" || !manchetes.length) return;
+    const recente = manchetes.reduce((x, y) => (y.it.ts > x.it.ts ? y : x));
+    for (const m of manchetes) {
+      const im = new Image();
+      im.referrerPolicy = "no-referrer";
+      im.decoding = "async";
+      im.fetchPriority = m === recente ? "high" : "low";
+      im.src = imagensDe(m.it)[0];
+    }
   }, [idsManchetes, section]); // eslint-disable-line react-hooks/exhaustive-deps
   // o vídeo é de um jogo que está a decorrer?
   const doJogoAoVivo = (v) => !!v.teams && aoVivo.some(({ score: sc }) => (eqIgualT(sc.h, v.teams.home) && eqIgualT(sc.a, v.teams.away)) || (eqIgualT(sc.h, v.teams.away) && eqIgualT(sc.a, v.teams.home)));
@@ -2725,7 +2754,8 @@ export default function App() {
                   const recente = manchetes.reduce((x, y) => (y.it.ts > x.it.ts ? y : x));
                   const sel = manchetes.find((m) => m.it.id === mSel) || recente;
                   const falhas = imgFalhou.get(sel.it.id) || 0;
-                  const semImg = falhas >= 2;
+                  const fontesImg = imagensDe(sel.it);
+                  const semImg = falhas >= fontesImg.length;
                   return (
                     <section className="hoje" aria-label="Hoje no VAR">
                       <div className="hojecab">
@@ -2734,9 +2764,8 @@ export default function App() {
                       </div>
                       <div className="hojegrid">
                         <div className={`hojefoto ${semImg ? "sem" : ""}`}>
-                          {!semImg && <img key={`${sel.it.id}:${falhas}`} className="hojefoto-img" src={imagemDe(sel.it.id, falhas === 1)} alt="" referrerPolicy="no-referrer" onError={() => setImgFalhou((x) => new Map(x).set(sel.it.id, falhas + 1))} />}
+                          {!semImg && <img key={`${sel.it.id}:${falhas}`} className="hojefoto-img" src={fontesImg[falhas]} alt="" referrerPolicy="no-referrer" decoding="async" fetchpriority="high" onError={() => setImgFalhou((x) => new Map(x).set(sel.it.id, falhas + 1))} />}
                           <span className="hojefoto-txt">
-                            <span className="vheroeti">{sel === recente ? "A manchete mais recente" : `Manchete ${manchetes.indexOf(sel) + 1}`}</span>
                             <span className="hojefoto-tit"><Rich text={T(sel.it)} /></span>
                             <span className="mmeta"><Flag code={sel.col.pais} lang={lang} /> {srcName(srcOf(sel.it))} · <span translate="no">{agoText(sel.it.ts, now, ui)}</span>{sel.it.also?.length > 0 && <> · {ui.nConfirms(sel.it.also.length)}</>}</span>
                             {postUrl(sel.it) && <a className="hojeler" href={postUrl(sel.it)} target="_blank" rel="noreferrer" onClick={() => markRead(sel.it.id)}>Ler a peça em {srcName(srcOf(sel.it))} <ExternalLink size={14} /></a>}

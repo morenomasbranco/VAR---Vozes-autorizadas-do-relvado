@@ -475,6 +475,16 @@ app.get("/api/noticias/imagem/:id", async (req, res) => {
   } catch { if (!res.headersSent) res.status(404).end(); }
 });
 app.get("/api/noticias/imagens/estado", (req, res) => res.json(imagens.estado()));
+// as imagens das notícias mais fortes das últimas horas procuram-se antes de alguém as pedir (a fotografia do Telegram
+// e a imagem da página levam alguns segundos): quando o «Hoje no VAR» as pede, já estão prontas
+const forca = (x) => (x.imp || 0) * 3 + Math.min(4, x.also?.length || 0) * 2 + (x.hot ? 3 : 0);
+async function aquecerImagens() {
+  const agora = Date.now();
+  const fortes = store.all(800).filter((x) => !x.score && !x.board && !x.pending && agora - x.ts < 18 * 3600e3)
+    .sort((a, b) => forca(b) - forca(a)).slice(0, 10);
+  for (const it of fortes) await imagens.imagem(it).catch(() => {});
+}
+setTimeout(() => { aquecerImagens(); setInterval(aquecerImagens, 4 * 60e3); }, 60e3);
 app.get("/api/videos/estado", (req, res) => res.json({ ...videos.estado(), fontes: ESTADO_VIDEOS, contaTelegram: !!clienteTelegram() }));
 // Retransmissor: um computador de casa lê o Reddit (os servidores de alojamento são bloqueados pelo Reddit)
 // e envia para aqui as publicações com vídeo. Protegido pela chave VIDEOS_RELAY_TOKEN do .env.

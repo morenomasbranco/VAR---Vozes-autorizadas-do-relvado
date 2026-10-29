@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lerPagina, lerWiki, slugDe, palavraValida, createGlossario } from "../server/glossario.js";
 import { indice, procurarLocal } from "../web/src/glossario/pesquisa.js";
-import { TERMOS } from "../web/src/glossario/termos.js";
+import { TERMOS, MODS } from "../web/src/glossario/termos.js";
 import { PAISES } from "../web/src/glossario/clubes.js";
 import { GRUPOS_COMP } from "../web/src/glossario/competicoes.js";
 import { PAISES_GLOS } from "../web/src/glossario/paises.js";
@@ -155,12 +155,16 @@ test("glossário: sinónimos e antónimos no próprio glossário (termos, clubes
 });
 
 test("glossário: os dados estão completos (cada termo, clube e competição tem o que precisa)", () => {
-  const mods = new Set(["futebol", "futsal", "hoquei", "basquete", "geral", "lingua"]);
+  const mods = new Set(MODS.map((m) => m.id));
+  for (const m of ["futebol", "futsal", "hoquei", "basquete", "andebol", "voleibol", "geral", "lingua"]) assert.ok(mods.has(m), m);
   for (const x of TERMOS) {
     assert.ok(x.t && x.d, `termo sem nome ou definição: ${x.t}`);
     assert.ok(mods.has(x.m), `modalidade desconhecida em ${x.t}: ${x.m}`);
   }
-  for (const m of ["futebol", "futsal", "hoquei", "basquete"]) assert.ok(TERMOS.filter((x) => x.m === m).length >= 10, m);
+  for (const m of ["futebol", "futsal", "hoquei", "basquete", "andebol", "voleibol"]) assert.ok(TERMOS.filter((x) => x.m === m).length >= 10, m);
+  // o mesmo termo pode ter um sentido em cada modalidade («assistência» no futebol e no jornalismo), mas não dois na mesma
+  const chaves = TERMOS.map((x) => `${x.m}|${x.t}`);
+  assert.equal(new Set(chaves).size, chaves.length, `termo repetido: ${chaves.filter((t, i) => chaves.indexOf(t) !== i)}`);
   const paises = new Set(PAISES.map((p) => p.id));
   for (const p of ["pt", "en", "es", "it", "de", "fr", "br", "sa", "tr", "nl", "mundo"]) assert.ok(paises.has(p), p);
   for (const p of PAISES) for (const c of p.clubes) assert.ok(c[0] && c[1] && c[2], `clube incompleto: ${c[0]}`);
@@ -207,7 +211,7 @@ test("glossário: preparar um jogo reconhece os clubes, as seleções e a compet
   assert.equal(lisboa.length, new Set(lisboa).size);
   // todas as expressões sugeridas existem no glossário
   const termos = new Set(TERMOS.map((x) => x.t));
-  for (const mod of ["futebol", "futsal", "hoquei", "basquete"]) {
+  for (const mod of ["futebol", "futsal", "hoquei", "basquete", "andebol", "voleibol"]) {
     for (const t of termosDoJogo({ casa: null, fora: null, mod })) assert.ok(termos.has(t), `${t} não está no glossário`);
   }
   for (const t of ["dérbi", "clássico"]) assert.ok(termos.has(t), t);

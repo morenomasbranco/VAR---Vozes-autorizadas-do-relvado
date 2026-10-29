@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pedidoDaCronica, lerCronica, createProsebot, TAMANHOS } from "../server/prosebot.js";
+import { pedidoDaCronica, lerCronica, createProsebot, TAMANHOS, modDaCronica } from "../server/prosebot.js";
 
 const JOGO = { casa: "FC Porto", fora: "Benfica", hs: 2, as: 1, comp: "Liga Portugal, 8.ª jornada", quando: "sábado, no Estádio do Dragão" };
 const NOTAS = "23' golo de Samu, de cabeça\n67' Pavlidis empata\n88' Rodrigo Mora decide de livre direto";
 
 test("prosebot: o pedido leva o jogo, as notas, o tamanho e o vocabulário do glossário", () => {
   const p = pedidoDaCronica({ jogo: JOGO, notas: NOTAS, figura: "Rodrigo Mora", tamanho: "curta", vocabulario: "FC Porto: dragões, azuis e brancos" });
-  assert.match(p, /^Jogo: FC Porto 2–1 Benfica · Liga Portugal, 8\.ª jornada\./);
+  assert.match(p, /^Modalidade: futebol\. Como se conta um jogo de futebol: duas partes de 45 minutos/);
+  assert.match(p, /\nJogo: FC Porto 2–1 Benfica · Liga Portugal, 8\.ª jornada\./);
   assert.match(p, /Quando e onde: sábado, no Estádio do Dragão\./);
   assert.match(p, /Figura do jogo, para quem escreveu as notas: Rodrigo Mora\./);
   assert.ok(p.includes(TAMANHOS.curta));
@@ -17,6 +18,23 @@ test("prosebot: o pedido leva o jogo, as notas, o tamanho e o vocabulário do gl
   const q = pedidoDaCronica({ jogo: { casa: "Braga", fora: "Vitória", hs: "", as: null }, notas: NOTAS, tamanho: "enorme" });
   assert.match(q, /Braga – Vitória \(resultado não indicado/);
   assert.ok(q.includes(TAMANHOS.normal));
+});
+
+test("prosebot: cada modalidade com o seu tempo, o seu resultado e as suas expressões", () => {
+  const a = pedidoDaCronica({ jogo: { casa: "FC Porto", fora: "Sporting", hs: 31, as: 29 }, notas: NOTAS, mod: "andebol", expressoes: "sete metros (livre de sete metros); exclusão (dois minutos)" });
+  assert.match(a, /^Modalidade: andebol\./);
+  assert.match(a, /exclusão de dois minutos/);
+  assert.match(a, /Expressões próprias do andebol, do glossário .*: sete metros \(livre de sete metros\); exclusão/);
+  // no basquetebol os resultados passam dos 99 pontos; no voleibol o resultado é em sets
+  assert.match(pedidoDaCronica({ jogo: { casa: "Benfica", fora: "Sporting", hs: 102, as: 98 }, notas: NOTAS, mod: "basquetebol" }), /Jogo: Benfica 102–98 Sporting\./);
+  const v = pedidoDaCronica({ jogo: { casa: "Benfica", fora: "Sporting", hs: 3, as: 1 }, notas: NOTAS, mod: "voleibol" });
+  assert.match(v, /Jogo: Benfica 3–1 Sporting \(em sets\)\./);
+  assert.match(v, /Nunca «golo» nem minutos/);
+  // as modalidades do glossário e as desconhecidas
+  assert.equal(modDaCronica("basquete"), "basquetebol");
+  assert.equal(modDaCronica("hoquei"), "hoquei_patins");
+  assert.equal(modDaCronica("xadrez"), "futebol");
+  assert.match(pedidoDaCronica({ jogo: JOGO, notas: NOTAS, mod: "hoquei" }), /^Modalidade: hóquei em patins\./);
 });
 
 test("prosebot: sem equipas ou sem notas, o pedido é recusado (400)", () => {
@@ -53,6 +71,7 @@ test("prosebot: escreve pelo Groq e diz quem escreveu", async () => {
     assert.match(sistema, /crónica/);
     assert.match(sistema, /Nunca inventas lances/);
     assert.match(sistema, /90 caracteres/); // as regras do zerozero vão no pedido
+    assert.match(sistema, /vocabulário da modalidade indicada/);
     assert.equal(p.estado().cronicas, 1);
   } finally {
     globalThis.fetch = original;

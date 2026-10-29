@@ -124,6 +124,8 @@ export function termosDoJogo({ casa, fora, mod = "futebol" }) {
   if (mod === "basquete") t.push("triplo", "afundanço", "ressalto", "lance livre", "duplo-duplo", "buzzer beater");
   else if (mod === "futsal") t.push("pivô", "fixo", "guarda-redes avançado", "faltas acumuladas");
   else if (mod === "hoquei") t.push("stick", "rinque", "cartão azul", "livre direto (hóquei)");
+  else if (mod === "andebol") t.push("sete metros", "exclusão", "parcial", "primeira vaga", "jogo passivo", "sete contra seis");
+  else if (mod === "voleibol") t.push("set", "tie-break", "ás", "bloco (voleibol)", "ponto de set", "parcial");
   else if (mod === "hoquei_gelo" || mod === "futebol_americano") t.push("prolongamento");
   else t.push("golo", "goleada", "ponta de lança", "guarda-redes", "grande penalidade", "descontos");
   return [...new Set(t)];
